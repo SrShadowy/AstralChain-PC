@@ -2,7 +2,11 @@
  * implementation. Identity is durable; file/commit IPC is implemented separately.
  * Directory handles exclude deletion/renaming while the store is open. */
 #pragma once
+#if defined(_WIN32) // [extra]
 #include <windows.h>
+#else // [extra]
+#include "extra/hooks.h" // [extra]
+#endif // [extra]
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -65,6 +69,7 @@ static DWORD save_store_ensure(SaveStore *store,const wchar_t *root,const uint8_
  const uint8_t zero[16]={0};
  if(memcmp(identity,"ACPCSAV1",8) || !program || !memcmp(identity+24,zero,16) || !data_size ||
     data_size>INT64_MAX || journal_size>INT64_MAX-data_size || memcmp(identity+56,zero,8))return ERROR_INVALID_DATA;
+#if defined(_WIN32) // [extra]
  if(length<4 || length>220 || !((root[0]>=L'A' && root[0]<=L'Z') || (root[0]>=L'a' && root[0]<=L'z')) ||
     root[1]!=L':' || (root[2]!=L'\\' && root[2]!=L'/'))return ERROR_BAD_PATHNAME;
  wcscpy(normalized,root);
@@ -77,12 +82,19 @@ static DWORD save_store_ensure(SaveStore *store,const wchar_t *root,const uint8_
    component=i+1;
   } else if(normalized[i]<32 || wcschr(L":*?\"<>|",normalized[i]))return ERROR_BAD_PATHNAME;
  }
+#else // [extra]
+ if(length<1 || length>220 || root[0]!=L'/')return ERROR_BAD_PATHNAME; // [extra]
+ wcscpy(normalized,root); // [extra]
+#endif // [extra]
  if(store->ready)return wcscmp(store->root,normalized) || memcmp(store->identity,identity,64)?ERROR_INVALID_DATA:0;
  if(store->directory_count || store->lock || store->manifest)return ERROR_INVALID_STATE;
  DWORD error=0;wchar_t path[260],manifest[260],temporary[260];temporary[0]=0;unsigned own_temporary=0;
  wcscpy(store->root,normalized);
- /* Hold each ancestor before traversing into its child; do not follow junctions. */
+#if defined(_WIN32) // [extra]
  for(size_t i=3;i<=length;i++) if(normalized[i]==L'\\' || !normalized[i]) {
+#else // [extra]
+ for(size_t i=1;i<=length;i++) if(normalized[i]==L'/' || !normalized[i]) { // [extra]
+#endif // [extra]
   wchar_t saved=normalized[i];normalized[i]=0;
   error=save_hold_directory(store,normalized,1);normalized[i]=saved;if(error)goto failed;
  }

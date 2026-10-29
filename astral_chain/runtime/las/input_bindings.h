@@ -27,12 +27,21 @@ static const char *const ib_names[IB_ACTIONS] = {"A","B","X","Y","LSTICK","RSTIC
  "DLEFT","DUP","DRIGHT","DDOWN","LLEFT","LUP","LRIGHT","LDOWN","RLEFT","RUP","RRIGHT","RDOWN"};
 /* Astral Chain: ZR attack, ZL Legion, left stick press sprint, right stick press re-centre the camera, L Legion action,
  * R dismiss the Legion, B dodge, + IRIS, - pause, D-pad up/down weapons. */
+#ifndef _WIN32 // [extra]
+static const uint8_t ib_defaults[2][IB_ACTIONS] = {
+ {'E',0x20 /* Space */,'Q','R',0x10 /* Shift */,IB_VK_MBUTTON,'F','C',IB_VK_RBUTTON,IB_VK_LBUTTON,0x09 /* Tab */,0x1B /* Esc */,
+  '3','1','4','2','A','W','D','S','F','T','H','G'},
+ {'J','K','I','U','1','2',IB_VK_XBUTTON1,IB_VK_XBUTTON2,'Z','X',0x0D /* Enter */,0x08 /* Backspace */,
+  0x25,0x26,0x27,0x28,0,0,0,0,0,0,0,0},
+};
+#else // [extra]
 static const uint8_t ib_defaults[2][IB_ACTIONS] = {
  {'J','K','I','U',0x10 /* Shift */,IB_VK_MBUTTON,'Q','E',IB_VK_RBUTTON,IB_VK_LBUTTON,0x0D /* Enter */,0x08 /* Backspace */,
   0x25,0x26,0x27,0x28 /* arrows */,'A','W','D','S','F','T','H','G'},
  {0,0x20 /* Space */,0,0,'1','2',IB_VK_XBUTTON1,IB_VK_XBUTTON2,'Z','C',0x09 /* Tab */,0x1B /* Esc */,
   0,IB_VK_WHEEL_UP,0,IB_VK_WHEEL_DOWN,0,0,0,0,0,0,0,0},
 };
+#endif // [extra]
 
 /* map[slot][action]: the defaults, then AC_KEYS (slot 0) and AC_KEYS2 (slot 1). Returns 1 if either variable was set. */
 static int ib_load(uint8_t map[2][IB_ACTIONS]) {

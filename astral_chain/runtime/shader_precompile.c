@@ -18,7 +18,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#if defined(_WIN32) // [extra]
 #include <windows.h>
+#else // [extra]
+#include "extra/hooks.h" // [extra]
+#endif // [extra]
 #include "shader.h"
 
 uint32_t *vk_glsl_to_spirv(const char *src, int stage, const char *name, size_t *nwords);

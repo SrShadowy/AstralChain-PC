@@ -26,6 +26,9 @@ static const struct {const char *name;NvnHostFunction host;} nvn_host_table[]={
 /* Vendored LASRecomp NVN implementations (runtime/las) register through COFF
  * section .hle$m. These markers sort before and after it within .hle. */
 typedef struct {const char *name;NvnHostFunction fn;} NvnLinkedEntry;
+#ifdef __ELF__ // [extra]
+static NvnHostFunction nvn_linked_lookup(const char *name) { return (NvnHostFunction)extra_nvn_linked_lookup(name); } // [extra]
+#else // [extra]
 __attribute__((used,section(".hle$a"))) static const NvnLinkedEntry nvn_linked_first={0,0};
 __attribute__((used,section(".hle$z"))) static const NvnLinkedEntry nvn_linked_last={0,0};
 static NvnHostFunction nvn_linked_lookup(const char *name) {
@@ -33,6 +36,7 @@ static NvnHostFunction nvn_linked_lookup(const char *name) {
   if(e->name && e->fn && !strcmp(e->name,name))return e->fn;
  return NULL;
 }
+#endif // [extra]
 /* Bounded NUL-terminated guest string inside one readable region. */
 static int nvn_guest_name(uint64_t address,char *out) {
  if(!address)return 0;
@@ -262,6 +266,9 @@ static void track_harvest(uint64_t lo,uint64_t hi) {
  static uint64_t written[65536];
  LARGE_INTEGER ww0;QueryPerformanceCounter(&ww0);prof_ww_calls++;prof_ww_pages+=(hi-lo)>>12;
  track_ready();uint32_t g=++track_clock;
+#ifndef _WIN32 // [extra]
+ for(uint64_t a=lo;a<hi;a+=4096) track_gen[(a-heap_base)>>12]=g; // [extra]
+#else // [extra]
  for(uint64_t a=lo;a<hi;) {
   uint64_t e=hi-a>(256ull<<20) ? a+(256ull<<20) : hi; /* 65536 pages: the buffer never overflows */
   ULONG_PTR n=65536;ULONG granularity=4096;
@@ -270,10 +277,15 @@ static void track_harvest(uint64_t lo,uint64_t hi) {
   for(ULONG_PTR i=0;i<n;i++) track_gen[(written[i]-heap_base)>>12]=g;
   a=e;
  }
+#endif // [extra]
  static LARGE_INTEGER wwf;if(!wwf.QuadPart) QueryPerformanceFrequency(&wwf);
  LARGE_INTEGER ww1;QueryPerformanceCounter(&ww1);prof_ww_qpc+=(uint64_t)(ww1.QuadPart-ww0.QuadPart)*1000000000ull/(uint64_t)wwf.QuadPart;
 }
 static int written_pages(uint64_t addr,uint64_t size,uint64_t *pages,int max,uint64_t *page,int harvest) {
+#ifndef _WIN32 // [extra]
+ (void)addr; (void)size; (void)pages; (void)max; (void)page; (void)harvest; // [extra]
+ return -1; // [extra]
+#else // [extra]
  if(max<=0 || addr<heap_base || size>HEAP_LIMIT || addr-heap_base>HEAP_LIMIT-size) return -1;
  uint64_t lo=addr&~4095ull,hi=(addr+size+4095)&~4095ull;
  if(hi-heap_base>HEAP_LIMIT) hi=heap_base+HEAP_LIMIT;
@@ -284,6 +296,7 @@ static int written_pages(uint64_t addr,uint64_t size,uint64_t *pages,int max,uin
   if(track_gen[i]!=track_api_seen[i]) {track_api_seen[i]=track_gen[i];if(n<max) pages[n]=a;n++;}
  }
  return n>max ? max : n; /* n == max: the caller treats the whole range as written */
+#endif // [extra]
 }
 static int plat_written_pages_u(uint64_t addr,uint64_t size,uint64_t *pages,int max,uint64_t *page) {
  return written_pages(addr,size,pages,max,page,1);
@@ -505,6 +518,7 @@ void nvn_heap_finish_import(int imported) {
  }
  nvn_import_saved_count=0;
 }
+#if defined(_WIN32) // [extra]
 /* AC_PROFILE=1: sample the guest host thread's instruction pointer about every
  * millisecond; every 10 s write profile-<n>.txt (address count, most frequent
  * first) in the run directory for offline symbolization (pdb). */
@@ -597,6 +611,9 @@ static void prof_attach(unsigned thread) {
  HANDLE t=CreateThread(NULL,0,prof_thread,NULL,0,NULL);if(t)CloseHandle(t);
  printf("PROFILE sampling the host thread of guest thread %u\n",thread);
 }
+#else // [extra]
+static void prof_attach(unsigned thread) { (void)thread; } // [extra]
+#endif // [extra]
 static void prof_start(void) {prof_attach(0);}
 /* Park the calling guest thread until done(seq) (a GPU submission finished).
  * Returns 0 when no other guest context exists; the caller then blocks. */

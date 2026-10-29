@@ -1,15 +1,119 @@
-# Everything made from your own dump, plus downloaded tools. Never commit or share these.
+# ==============================================================================
+# Game Dumps, Firmware, Keys & Content (Never commit or distribute copyright data)
+# ==============================================================================
 /game/
-/build/
-/tools/
-/userdata/
-/reports/
-/.venv/
-__pycache__/
-*.pyc
-# Dumps and keys, in case they are placed here
+game
+/dump/
+/dumps/
+/rom/
+/roms/
 *.xci
 *.nsp
+*.nsz
 *.nca
+*.xcz
+*.romfs
+*.exefs
 *.keys
+prod.keys
+title.keys
+*.tik
+*.cert
+
+# ==============================================================================
+# User Data, Saves & Shaders (Saves, logs, launcher config, captures)
+# ==============================================================================
+/userdata/
+/cache/
+/frames/
+frame_*.png
+*.sav
+*.save
+*.spv
+
+# ==============================================================================
+# Build Directories & Compilation Artifacts
+# ==============================================================================
+/build/
+/build-*/
+/build_*/
+/cmake-build-*/
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.so.*
+*.dylib
+*.dll
+*.exe
+!Astral Chain Launcher.exe
+*.ninja
+ninja.log
+.ninja_deps
+.ninja_log
+
+# ==============================================================================
+# Python Virtual Environments, Tools & Caches
+# ==============================================================================
+/tools/
+/.venv/
+/venv/
+/env/
+.env
+.env.*
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ==============================================================================
+# Logs, Reports & Crash Dumps
+# ==============================================================================
+*.log
+*.log.*
+/reports/
 /setup-test.log
+core
+core.*
+vgcore.*
+*.dmp
+*.crash
+
+# ==============================================================================
+# IDEs, Editors & Machine-Specific Configs
+# ==============================================================================
+/.vscode/
+/.idea/
+/.cache/
+/.clangd/
+compile_commands.json
+.ccls-cache/
+CMakeUserPresets.json
+*.creator
+*.creator.user*
+*.files
+*.includes
+*.kdev4
+*~
+*.swp
+*.swo
+*.tmp
+*.temp
+
+# OS generated files
+.DS_Store
+Thumbs.db
+desktop.ini
+.directory
+
+# ==============================================================================
+# Put ur IA or agents here if want
+# ==============================================================================
+/.agents/
+/.gemini/
+/.claude/
+/.chatgpt/
+AGENTS.md

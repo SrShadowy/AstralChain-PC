@@ -2,6 +2,7 @@
  * fallback-success path. Serialize control calls and keep WaveOutput at a stable
  * address until close ends. A failed close must be retried before reuse. */
 #pragma once
+#if defined(_WIN32) // [extra]
 #include <windows.h>
 #include <mmsystem.h>
 #include <stdint.h>
@@ -237,3 +238,6 @@ static MMRESULT wave_output_close(WaveOutput *output) {
  if(output->closed)CloseHandle(output->closed);
  memset(output,0,sizeof(*output));return MMSYSERR_NOERROR;
 }
+#else // [extra]
+#include "extra/hooks.h" // [extra]
+#endif // [extra]

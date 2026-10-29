@@ -656,7 +656,17 @@ static void upload_texture(NvnTexture *t, TexBackend *b) {
     // checked every frame (one query, no hashing unless written); the 8-frame rule stays for untracked memory.
     static int watch = -1;
     if (watch < 0) { const char *e = getenv("LARECOMP_VK_TEX_WATCH"); watch = !e || atoi(e) != 0; }
+#ifndef _WIN32 // [extra]
+    if (b->uploaded && !b->dynamic && (!watch || !b->wgen)) {
+        const uint8_t *mem = (const uint8_t *)(uintptr_t)t->addr;
+        uint64_t total = tegra_total_size(&t->layout);
+        uint64_t sh = fnv_sample(mem, total);
+        if (sh == b->sample_hash && ((frame + ((uintptr_t)b >> 6)) & 7)) return;
+        if (sh != b->sample_hash) b->dynamic = true;
+    }
+#else // [extra]
     if (b->uploaded && !b->dynamic && (!watch || !b->wgen) && ((frame + ((uintptr_t)b >> 6)) & 7)) return;
+#endif // [extra]
     const FormatInfo *fi = t->layout.fmt;
     if (!fi || !fi->bpb) return;
     VkFmt mf = fmt_of(t->format);

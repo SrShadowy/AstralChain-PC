@@ -84,7 +84,9 @@ def main() -> None:
     parser.add_argument('--files', default='profile-*.txt')
     parser.add_argument('--guest', help='function name: list its hot guest instruction addresses')
     args = parser.parse_args()
-    exe = args.run/'round-00'/'trace.exe'
+    exe = args.run/'round-00'/'trace'
+    if not exe.is_file() and (args.run/'round-00'/'trace.exe').is_file():
+        exe = args.run/'round-00'/'trace.exe'
     sym = Symbolizer(exe)
     functions, modules = collections.Counter(), collections.Counter()
     callers = collections.defaultdict(collections.Counter)
@@ -111,7 +113,7 @@ def main() -> None:
             module_of[address] = module  # (sample lines precede the call lines in each file)
             total += count
             modules[module] += count
-            if module == 'trace.exe' and base is not None:
+            if module in ('trace', 'trace.exe') and base is not None:
                 functions[sym.name(address - base)] += count
                 if args.guest and sym.name(address - base) == args.guest:
                     pc = sym.guest_pc(address - base)

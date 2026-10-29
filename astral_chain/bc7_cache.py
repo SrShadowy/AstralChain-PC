@@ -44,11 +44,11 @@ def tool_digest() -> str:
 
 def build_tool(zig: Path, build: Path) -> Path:
     out = build/'bc7-convert'/tool_digest()
-    dll = out/'bc7_convert.dll'
+    dll = out/'libbc7_convert.so'
     if dll.is_file():
         return dll
     out.mkdir(parents=True, exist_ok=True)
-    subprocess.run([str(zig), 'cc', '-target', 'x86_64-windows-gnu', '-O2', '-shared', '-I', str(RUNTIME),
+    subprocess.run([str(zig), 'cc', '-target', 'x86_64-linux-gnu', '-O2', '-shared', '-fPIC', '-I', str(RUNTIME),
                     '-I', str(RUNTIME/'las'), '-I', str(BC7ENC), *map(str, SOURCES), '-o', str(dll)], check=True)
     return dll
 
@@ -228,7 +228,7 @@ def main():
     parser.add_argument('--only', help='(tests) only the textures whose hashes this file lists, one per line')
     parser.add_argument('--out', default=str(PROJECT/'build'/'game'/'cache'/'bc7'))
     args = parser.parse_args()
-    dll = build_tool(PROJECT/'tools'/'zig'/'zig.exe', PROJECT/'build')
+    dll = build_tool(PROJECT/'tools'/'zig'/'zig', PROJECT/'build')
     only = {int(x, 16) for x in open(args.only)} if args.only else None
     n, size, secs = build(PROJECT/'game'/'romfs.bin', Path(args.out), dll, args.quality, args.limit, args.keys,
                           lambda s: print(s, flush=True), only)

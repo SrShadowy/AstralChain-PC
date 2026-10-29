@@ -63,7 +63,11 @@ static void pl_load_fonts(void) {
  static int loaded;if(loaded) return;loaded=1;
  char custom[MAX_PATH];DWORD n=GetEnvironmentVariableA("AC_FONT",custom,sizeof(custom));
  const char *standard[]={n && n<sizeof(custom) ? custom : NULL,
-  "C:/Windows/Fonts/YuGothR.ttc","C:/Windows/Fonts/YuGothM.ttc","C:/Windows/Fonts/arial.ttf"};
+  "C:/Windows/Fonts/YuGothR.ttc","C:/Windows/Fonts/YuGothM.ttc","C:/Windows/Fonts/arial.ttf", // [extra]
+  "/usr/share/fonts/TTF/DejaVuSans.ttf",
+  "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+  "/usr/share/fonts/noto/NotoSans-Regular.ttf",
+  "/usr/share/fonts/liberation/LiberationSans-Regular.ttf"}; // [extra]
  for(size_t i=0;i<sizeof(standard)/sizeof(standard[0]) && !pl_fonts[0].data;i++) if(standard[i]) pl_load(standard[i],&pl_fonts[0]);
  if(!pl_fonts[0].data) boundary("pl-no-system-font",&state,state.pc);
  n=GetEnvironmentVariableA("AC_FONT_EXT",custom,sizeof(custom));

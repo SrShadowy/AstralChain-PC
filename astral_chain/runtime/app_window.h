@@ -81,6 +81,7 @@ static DWORD WINAPI app_exit_watchdog(LPVOID unused) {
  * size and the picture keeps its aspect ratio, device.c). F11 or Alt+Enter toggles it (unless the key is a game key in
  * the launcher's Controls); AC_FULLSCREEN=1 starts in it (nvn_host_window). */
 static int app_fullscreen;static WINDOWPLACEMENT app_windowed_place={sizeof(WINDOWPLACEMENT)};
+#if defined(_WIN32) // [extra]
 static void app_set_fullscreen(HWND window,int on) {
  if(!window || on==app_fullscreen) return;
  if(on) {
@@ -97,6 +98,9 @@ static void app_set_fullscreen(HWND window,int on) {
  app_fullscreen=on;
  printf("[app] %s\n",on ? "fullscreen" : "windowed");
 }
+#else // [extra]
+static void app_set_fullscreen(HWND window,int on) { (void)window; extra_app_set_fullscreen(&app_fullscreen, on); } // [extra]
+#endif // [extra]
 static LRESULT CALLBACK app_window_proc(HWND window,UINT message,WPARAM wparam,LPARAM lparam) {
  /* Dragging by the title bar is done here: Windows' own move loop runs inside this call, on the game's main thread
   * and under the kernel lock, and held the whole game (sound included) for as long as the button was down. */
@@ -175,8 +179,8 @@ static LRESULT CALLBACK app_window_proc(HWND window,UINT message,WPARAM wparam,L
  }
  return DefWindowProcW(window,message,wparam,lparam);
 }
-/* The host thread that created the window: only it can pump the window's messages (parallel mode). */
-static DWORD app_window_thread;
+static DWORD app_window_thread; // [extra]
+#if defined(_WIN32) // [extra]
 static void app_pump(void) {
  if(!app_window || GetCurrentThreadId()!=app_window_thread) return;
  MSG message;
@@ -202,6 +206,44 @@ static void app_pump(void) {
  double ms=1000.0*(double)(b.QuadPart-a.QuadPart)/(double)f.QuadPart;
  if(ms>30.0) printf("PUMP input read took %.0f ms\n",ms);
 }
+#else // [extra]
+static void app_key_cb(uint8_t vk, int down) { // [extra]
+    if (vk < 256) { // [extra]
+        hid_keys[vk] = down; // [extra]
+        keyboard_event((unsigned)vk, 0, down); // [extra]
+    } // [extra]
+} // [extra]
+static void app_mouse_motion_cb(float dx, float dy) { // [extra]
+    mouse_acc_x += dx; // [extra]
+    mouse_acc_y += dy; // [extra]
+    mouse_dx += (int32_t)dx; // [extra]
+    mouse_dy += (int32_t)dy; // [extra]
+    mouse_publish(rt_ticks(), 1); // [extra]
+} // [extra]
+static void app_mouse_button_cb(uint8_t btn, int down) { // [extra]
+    uint8_t vk = 0; // [extra]
+    if (btn == 1) vk = IB_VK_LBUTTON; // [extra]
+    else if (btn == 3) vk = IB_VK_RBUTTON; // [extra]
+    else if (btn == 2) vk = IB_VK_MBUTTON; // [extra]
+    else if (btn == 4) vk = IB_VK_XBUTTON1; // [extra]
+    else if (btn == 5) vk = IB_VK_XBUTTON2; // [extra]
+    if (vk) hid_keys[vk] = down; // [extra]
+    if (btn == 1 && down && !mouse_captured) { // [extra]
+        mouse_captured = 1; // [extra]
+        extra_window_set_mouse_capture(1); // [extra]
+    } // [extra]
+    mouse_publish(rt_ticks(), 1); // [extra]
+} // [extra]
+static void app_mouse_wheel_cb(int y) { // [extra]
+    if (y > 0 && mouse_wheel_queue[0] < 8) mouse_wheel_queue[0]++; // [extra]
+    else if (y < 0 && mouse_wheel_queue[1] < 8) mouse_wheel_queue[1]++; // [extra]
+    mouse_wheel_step(rt_ticks()); // [extra]
+} // [extra]
+static void app_pump(void) { // [extra]
+    extra_window_poll_events(app_key_cb, app_mouse_motion_cb, app_mouse_button_cb, app_mouse_wheel_cb); // [extra]
+    hid_poll(1); // [extra]
+} // [extra]
+#endif // [extra]
 static void app_checkpoint(void) {
  clock_refresh();
  app_pump();
@@ -227,6 +269,7 @@ static void app_checkpoint(void) {
   if(app_resume_notifications && !app_exit_requested) app_enqueue(16);
  }
 }
+#if defined(_WIN32) // [extra]
 static void app_open(void) {
  if(app_window) return;
  if(!app_message_event) {
@@ -249,6 +292,9 @@ static void app_open(void) {
  /* Publish initial application state even if no size transition occurred. */
  if(!app_message_count) app_enqueue(15);
 }
+#else // [extra]
+static void app_open(void) { if(!app_window) { app_window=(HWND)extra_app_open_window(app_message_event,&app_focus,&app_message_count,app_enqueue); if(!app_window) boundary("host-window-create",&state,state.pc); } } // [extra]
+#endif // [extra]
 static DWORD app_wait(DWORD count,const HANDLE *handles,DWORD timeout) {
  if(!app_window) return WaitForMultipleObjects(count,handles,FALSE,timeout);
  ULONGLONG start=GetTickCount64();

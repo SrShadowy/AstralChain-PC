@@ -374,7 +374,7 @@ def main():
     if args.optimize:
         # Shared list: native_build and nvn_build key their caches on it.
         from . import native_build
-        native_build.FLAGS[:]=['-target','x86_64-windows-gnu','-O2','-mcpu=x86_64_v3','-mcx16']
+        native_build.FLAGS[:]=['-target','native','-O2','-mcpu=x86_64_v3','-mcx16']
     if args.nvn_backend and not args.nvn_hle:
         parser.error('--nvn-backend requires --nvn-hle')
     if args.build=='cached' and args.dispatch!='pages':
@@ -522,9 +522,11 @@ execute(c); return 0; }}
         nvn_objects,nvn_link=build_nvn_objects(args.compiler,reference,output.parent/'native-objects',args.nvn_backend) if args.nvn_backend else ([],[])
         folder = output/f'round-{iteration:02d}'
         folder.mkdir()
-        (folder/'trace.c').write_text(source, encoding='utf-8')
-        command = [str(args.compiler.resolve()), 'cc', '-target', 'x86_64-windows-gnu', '-O1','-mcx16',
-                   '-I', str(Path(__file__).parent/'runtime'), '-I', str(reference/'runtime'), str(folder/'trace.c'), *(str(o) for o in nvn_objects), *nvn_link, '-lbcrypt', '-luser32', '-o', str(folder/'trace.exe')]
+        root = Path(__file__).parent.parent # [extra]
+        vk_headers = root/'third_party/Vulkan-Headers/include' # [extra]
+        command = [str(args.compiler.resolve()), 'cc', '-target', 'native', '-O1','-mcx16', # [extra]
+                   '-I', str(root), '-I', str(vk_headers), '-I', str(Path(__file__).parent/'runtime'), '-I', str(reference/'runtime'), str(folder/'trace.c'), *(str(o) for o in nvn_objects), *nvn_link, # [extra]
+                   '-lvulkan', '-lSDL3', '-lpthread', '-lm', '-ldl', '-Wl,-z,stack-size=67108864', '-o', str(folder/'trace')]
         compile_started=perf_counter()
         try:
             if units is not None:
@@ -545,11 +547,15 @@ execute(c); return 0; }}
             checkpoint('compile-failed',translation,compile_result.returncode)
         compile_result.check_returncode()
         if args.build_only:
-            if args.nvn_hle:  # build-specific run variables for run_guarded.ps1 (the SDK's base follows main's size)
+            if args.nvn_hle:  # build-specific run variables for run_guarded.sh (the SDK's base follows main's size)
                 hle=';'.join(f'{name}={image.symbols[name][0]:#x}' for name in HLE_SYMBOLS if name in image.symbols)
-                (output/'run-env.txt').write_text(f"AC_NVN_HLE_BOOTSTRAP={image.symbols['nvnBootstrapLoader'][0]:#x}\n"
-                                                  f"AC_HLE_SYMBOLS={hle}\n",encoding='utf-8')
-            print(f'Built {folder/"trace.exe"} (compile {compile_seconds:.1f}s); not run',flush=True)
+                env_text = f"AC_NVN_HLE_BOOTSTRAP={image.symbols['nvnBootstrapLoader'][0]:#x}\nAC_HLE_SYMBOLS={hle}\n"
+                if args.nvn_backend:
+                    env_text += f"AC_NVN_HLE_LINKED={args.nvn_backend}\n"
+                if args.nvn_backend == 'vulkan':
+                    env_text += f"AC_GLSLANG={GLSLANG}\n"
+                (output/'run-env.txt').write_text(env_text, encoding='utf-8')
+            print(f'Built {folder/"trace"} (compile {compile_seconds:.1f}s); not run',flush=True)
             checkpoint('built',translation)
             return
         checkpoint('running',translation)
@@ -577,12 +583,12 @@ execute(c); return 0; }}
                         run_env[variable]=str(found[0])
             if args.unbounded:
                 with (folder/'trace.log').open('w',encoding='utf-8',errors='replace') as log:
-                    played=subprocess.run([str(folder/'trace.exe'), str(folder/'relocations.bin')], cwd=output, stdout=log, stderr=subprocess.STDOUT, timeout=args.run_timeout,env=run_env)
+                    played=subprocess.run([str(folder/'trace'), str(folder/'relocations.bin')], cwd=output, stdout=log, stderr=subprocess.STDOUT, timeout=args.run_timeout,env=run_env)
                 lines=(folder/'trace.log').read_text(encoding='utf-8',errors='replace').splitlines()
                 stop=next((l for l in reversed(lines) if l.startswith('STOP ')),lines[-1] if lines else '')
                 run=subprocess.CompletedProcess(played.args,played.returncode,stop+'\n','')
             else:
-                run = subprocess.run([str(folder/'trace.exe'), str(folder/'relocations.bin')], cwd=output, capture_output=True, text=True, timeout=args.run_timeout,env=run_env)
+                run = subprocess.run([str(folder/'trace'), str(folder/'relocations.bin')], cwd=output, capture_output=True, text=True, timeout=args.run_timeout,env=run_env)
         except subprocess.TimeoutExpired as error:
             captured=''.join(part.decode('utf-8',errors='replace') if isinstance(part,bytes) else (part or '')
                              for part in (error.stdout,error.stderr))

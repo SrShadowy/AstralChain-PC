@@ -1,6 +1,15 @@
 /* Guest execution is serialized. The scheduler clears both pair and scalar
  * exclusive monitors on every context switch. Concurrent DMA is unsupported. */
+#if defined(_WIN32) // [extra]
 #include <intrin.h>
+#else // [extra]
+#include <cpuid.h> // [extra]
+#include <x86intrin.h> // [extra]
+static inline void __msvc_cpuid(int info[4], int leaf) { __cpuid_count(leaf, 0, info[0], info[1], info[2], info[3]); } // [extra]
+#undef __cpuid // [extra]
+#define __cpuid(info, leaf) __msvc_cpuid(info, leaf) // [extra]
+#define _InterlockedCompareExchange64(dest, exch, comp) __sync_val_compare_and_swap(dest, comp, exch) // [extra]
+#endif // [extra]
 static int pair_compare_exchange(uint64_t address,uint64_t low,uint64_t high,uint64_t expected[2]) {
  unsigned __int128 before=((unsigned __int128)expected[1]<<64)|expected[0];
  unsigned __int128 after=((unsigned __int128)high<<64)|low;

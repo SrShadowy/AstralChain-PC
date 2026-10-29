@@ -55,6 +55,7 @@ static uint64_t thread_allocate_tls(void) {
   if(space.kind || space.size-(tls-space.base)<alignment) {
    next=space.base+space.size;
   } else {
+#if defined(_WIN32) // [extra]
    MEMORY_BASIC_INFORMATION host;
    if(!VirtualQuery((void*)(uintptr_t)tls,&host,sizeof(host))) return 0;
    uint64_t host_end=(uint64_t)(uintptr_t)host.BaseAddress+host.RegionSize;
@@ -68,6 +69,9 @@ static uint64_t thread_allocate_tls(void) {
      * failures are resource errors, not reasons to scan the whole arena. */
     if(error!=ERROR_INVALID_ADDRESS) return 0;
    }
+#else // [extra]
+   uint64_t res = extra_allocate_tls(tls, alignment); if (res) return res; // [extra]
+#endif // [extra]
   }
   if(next>=end) break;
   next=(next+alignment-1)&~(alignment-1);
@@ -347,6 +351,7 @@ static DWORD WINAPI parallel_thread_main(LPVOID parameter) {
  klock();guest_threads[i].status=THREAD_EXITED;kunlock();
  return 0;
 }
+#if defined(_WIN32) // [extra]
 static void parallel_start(unsigned i) {
  /* 16 MB reserved: translated page functions nest along guest calls */
  HANDLE h=CreateThread(NULL,16u<<20,parallel_thread_main,(LPVOID)(uintptr_t)i,STACK_SIZE_PARAM_IS_A_RESERVATION,NULL);
@@ -354,6 +359,9 @@ static void parallel_start(unsigned i) {
  printf("PARALLEL guest thread %u on host thread %lu\n",i,(unsigned long)GetThreadId(h));
  CloseHandle(h);
 }
+#else // [extra]
+static void parallel_start(unsigned i) { extra_parallel_start(i, (void*(*)(void*))parallel_thread_main); } // [extra]
+#endif // [extra]
 /* Nonzero while host code runs a nested guest callback on this host stack. */
 static __thread unsigned thread_switch_locked;
 static int thread_checkpoint(Cpu *c,uint64_t step) {

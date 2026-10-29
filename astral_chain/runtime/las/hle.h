@@ -8,12 +8,17 @@
 typedef struct { const char *name; HostFn fn; } HleImplEntry;
 #define HLE_CAT2(a, b) a##b
 #define HLE_CAT(a, b) HLE_CAT2(a, b)
+#ifdef __ELF__ // [extra]
+#define HLE_SECTION "hle_entries" // [extra]
+#define HLE_FUNC(sym, fn) static void fn(Cpu *c); __attribute__((used, retain, section(HLE_SECTION))) static const HleImplEntry HLE_CAT(hle_entry_, __LINE__) = {sym, fn}; static void fn(Cpu *c) // [extra]
+#else // [extra]
 #define HLE_SECTION ".hle$m"
 #define HLE_FUNC(sym, fn)                                                                   \
     static void fn(Cpu *c);                                                                 \
     __attribute__((used, section(HLE_SECTION))) static const HleImplEntry                   \
         HLE_CAT(hle_entry_, __LINE__) = {sym, fn};                                          \
     static void fn(Cpu *c)
+#endif // [extra]
 /* No in-place reboot in this runtime: reset hooks are compiled but never run. */
 typedef void (*ResetFn)(void);
 #define RT_ON_RESET(fn) __attribute__((unused)) static void fn(void)

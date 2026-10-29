@@ -5,7 +5,11 @@
  *
  * Hooks of textures.c (texpatch.h): texpatch_identify finds the atlas by its contents, texpatch_apply repaints its
  * level 0 before upload. AC_PROMPTS=switch keeps the original icons. */
+#if defined(_WIN32) // [extra]
 #include <windows.h>
+#else // [extra]
+#include "extra/hooks.h" // [extra]
+#endif // [extra]
 #include <math.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -52,7 +56,11 @@ static int enabled(void) {
     static int on = -1;
     if (on < 0) {
         const char *e = getenv("AC_PROMPTS");
+#if defined(_WIN32) // [extra]
         on = !(e && (!strcmp(e, "switch") || !strcmp(e, "0")));
+#else // [extra]
+        on = extra_prompts_enabled(e);
+#endif // [extra]
         ib_load(map);
         e = getenv("AC_MOUSE_LOOK");
         mouse_look = !(e && *e == '0');
@@ -102,6 +110,7 @@ static void fill_arrow(Canvas *cv, float cx, float cy, float s, int d, uint8_t v
 
 /* ------------------------------------------------------------------------------------------------- text (GDI) */
 /* gdi32 is loaded at run time (the game's link line has no gdi32; app_window.h does the same for StretchDIBits). */
+#if defined(_WIN32) // [extra]
 static struct {
     HDC (WINAPI *CreateCompatibleDC)(HDC);
     HBITMAP (WINAPI *CreateDIBSection)(HDC, const BITMAPINFO *, UINT, void **, HANDLE, DWORD);
@@ -177,6 +186,11 @@ static void cut_text(Canvas *cv, const wchar_t *text, float bx0, float by0, floa
     gdi.DeleteObject(bmp);
     gdi.DeleteDC(dc);
 }
+#else // [extra]
+static void cut_text(Canvas *cv, const wchar_t *text, float bx0, float by0, float bx1, float by1) {
+    extra_cut_text(cv->w, cv->h, cv->c, text, bx0, by0, bx1, by1);
+}
+#endif // [extra]
 
 /* ------------------------------------------------------------------------------------------------------- glyphs */
 static const wchar_t *key_label(unsigned vk, wchar_t buf[8]) {
@@ -320,7 +334,12 @@ static void draw_slot(Canvas *cv, const Slot *sl) {
 /* ---------------------------------------------------------------------------------------------------- the hooks */
 int texpatch_identify(const void *texture) {
     const NvnTexture *t = texture;
+#ifndef _WIN32 // [extra]
+    enabled();
+    if (t->format != 0x25 || t->layout.width != ATLAS_W || t->layout.height != ATLAS_H || !t->addr) return -1;
+#else // [extra]
     if (t->format != 0x25 || t->layout.width != ATLAS_W || t->layout.height != ATLAS_H || !t->addr || !enabled()) return -1;
+#endif // [extra]
     uint64_t total = tegra_total_size(&t->layout);
     if (total != (uint64_t)ATLAS_W * ATLAS_H * 4) return -1;
     /* (a texture of the same size that is not the atlas is asked about at every check: hash it again only when a
@@ -336,10 +355,17 @@ int texpatch_identify(const void *texture) {
     return 0;
 }
 
+#ifndef _WIN32 // [extra]
+uint32_t texpatch_generation(void) { return extra_prompt_generation(); }
+#else // [extra]
 uint32_t texpatch_generation(void) { return 1; }
+#endif // [extra]
 
 void texpatch_apply(int id, uint32_t level, uint8_t *data, uint32_t w, uint32_t h, uint32_t row) {
     if (id != 0 || level != 0 || w != ATLAS_W || h != ATLAS_H) return;
+#ifndef _WIN32 // [extra]
+    if (!extra_prompts_active()) return;
+#endif // [extra]
     for (unsigned i = 0; i < sizeof slots / sizeof slots[0]; i++) {
         const Slot *sl = &slots[i];
         int sw = sl->x1 - sl->x0 + 1, sh = sl->y1 - sl->y0 + 1;

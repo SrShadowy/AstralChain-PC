@@ -133,6 +133,10 @@ static DWORD WINAPI xinput_probe(void *argument) {
  return 0;
 }
 static void hid_xinput(HidSample *sample) {
+#ifndef _WIN32 // [extra]
+ extra_poll_gamepad(&sample->buttons, &sample->lx, &sample->ly, &sample->rx, &sample->ry);
+ return;
+#else // [extra]
  static int loaded;
  if(!loaded) {
   loaded=1;HMODULE x=LoadLibraryExW(L"xinput1_4.dll",NULL,LOAD_LIBRARY_SEARCH_SYSTEM32);
@@ -156,6 +160,7 @@ static void hid_xinput(HidSample *sample) {
   long long m=(long long)in[k][0]*in[k][0]+(long long)in[k][1]*in[k][1];
   if(m>8000ll*8000 && !*out[k][0] && !*out[k][1]) {*out[k][0]=in[k][0]<-32767?-32767:in[k][0];*out[k][1]=in[k][1]<-32767?-32767:in[k][1];}
  }
+#endif // [extra]
 }
 /* Test automation: AC_INPUT_SCRIPT="t0-t1:mask;..." holds Switch button mask
  * (bit 0 A ... bit 9 ZR, hex) from t0 to t1 seconds after the first sample.

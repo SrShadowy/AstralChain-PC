@@ -121,6 +121,11 @@ static uint32_t *no_contraction(uint32_t *spv, size_t *nwords) {
 // driver optimises anyway. LARECOMP_VK_OPT=1 turns it back on (experiments).
 uint32_t *vk_glsl_to_spirv(const char *src, int stage, const char *name, size_t *nwords) {
     uint64_t h = src_hash(src, stage);
+    if (getenv("LARECOMP_DUMP_GLSL")) { // [extra]
+        char dp[128]; mkdir("/tmp/glsl", 0755); // [extra]
+        snprintf(dp, sizeof dp, "/tmp/glsl/%s_%016llx.glsl", name ? name : "shader", (unsigned long long)h); // [extra]
+        FILE *df = fopen(dp, "w"); if (df) { fputs(src, df); fclose(df); } // [extra]
+    } // [extra]
     static int nocache = -1;
     if (nocache < 0) nocache = getenv("LARECOMP_VK_NO_SPIRV_CACHE") != NULL;
     uint32_t *out = nocache ? NULL : cache_load(h, nwords);

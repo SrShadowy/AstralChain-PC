@@ -7,7 +7,7 @@ import subprocess
 
 from .containers import FormatError
 
-FLAGS=['-target','x86_64-windows-gnu','-O1','-mcx16']
+FLAGS=['-target','native','-O1','-mcx16']
 SUPPORT='''#include "cpu.h"
 extern __thread uint64_t native_executed_steps;  /* per host thread (parallel mode: a shared counter bounced between cores) */
 extern const uint64_t native_instruction_limit;
@@ -52,7 +52,6 @@ def run_compiler(command,timeout=300):
         try:
             stdout,stderr=process.communicate(timeout=timeout)
         except subprocess.TimeoutExpired:
-            subprocess.run(['taskkill','/PID',str(process.pid),'/T','/F'],capture_output=True,timeout=15)
             process.kill();process.communicate(timeout=15)
             raise
         return subprocess.CompletedProcess(command,process.returncode,stdout,stderr)
@@ -96,13 +95,17 @@ def build(compiler,reference,units,source,folder,cache,workers=4,extra_objects=(
     with ThreadPoolExecutor(max_workers=workers) as executor:
         compiled=list(executor.map(compile_unit,sorted(units.items())))
     src=folder/'trace.c';src.write_text(source,encoding='utf-8')
-    command=[str(compiler),'cc',*FLAGS,'-I',str(Path(__file__).parent/'runtime'),'-I',str(reference/'runtime'),str(src),
-             *(str(obj) for _,obj,_ in compiled),*(str(obj) for obj in extra_objects),'-lbcrypt','-luser32',
-             '-Wl,--stack,67108864',  # 64 MB main-thread stack: direct calls nest page functions along guest calls
-             '-o',str(folder/'trace.exe')]
+    root=Path(__file__).parent.parent
+    vk_headers=root/'third_party/Vulkan-Headers/include'
+    command=[str(compiler),'cc',*FLAGS,'-I',str(root),'-I',str(vk_headers),'-I',str(Path(__file__).parent/'runtime'),'-I',str(reference/'runtime'),str(src),
+             *(str(obj) for _,obj,_ in compiled),*(str(obj) for obj in extra_objects),
+             '-lvulkan','-lSDL3','-lpthread','-lm','-ldl',
+             '-Wl,-z,stack-size=67108864',  # 64 MB main-thread stack: direct calls nest page functions along guest calls
+             '-o',str(folder/'trace')]
     result=run_compiler(command)
     (folder/'compiler.log').write_text(result.stdout+result.stderr,encoding='utf-8')
     stats={'units':len(compiled),'reused':sum(hit for _,_,hit in compiled),'compiled':sum(not hit for _,_,hit in compiled)}
     (folder/'build.json').write_text(json.dumps(stats,indent=2)+'\n',encoding='utf-8')
+    (folder/'unit_objects.json').write_text(json.dumps([str(obj.resolve()) for _,obj,_ in compiled],indent=2)+'\n',encoding='utf-8')
     result.check_returncode()
     return stats

@@ -168,4 +168,5 @@ static bool ext_compute_only(Ctx *c, const char *what, uint32_t pc) {
             fail(c, "LEA.HI variant %016llx at %#x", (unsigned long long)w, pc);
         sprintf(u, "(%s + uint((ulong(%s) << 32 | ulong(%s)) >> %du))", R(b), R(hi), R(a), 32 - sh);
         set_reg(c, d, u);
+#include "extra/core/maxwell_extra.h" // [extra]
 #endif

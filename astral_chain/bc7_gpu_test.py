@@ -12,15 +12,15 @@ import sys
 
 PROJECT = Path(__file__).resolve().parent.parent
 RUNTIME = PROJECT/'astral_chain'/'runtime'
-ZIG = PROJECT/'tools'/'zig'/'zig.exe'
-GLSLANG = PROJECT/'tools'/'glslang'/'bin'/'glslang.exe'
+ZIG = PROJECT/'tools'/'zig'/'zig'
+GLSLANG = PROJECT/'tools'/'glslang'/'bin'/'glslang'
 
 
 def main():
     work = PROJECT/'build'/'bc7-test'
     work.mkdir(parents=True, exist_ok=True)
-    exe = work/'bc7_gpu_test.exe'
-    subprocess.run([str(ZIG), 'cc', '-target', 'x86_64-windows-gnu', '-O2', '-I', str(RUNTIME), '-I', str(RUNTIME/'las'),
+    exe = work/'bc7_gpu_test'
+    subprocess.run([str(ZIG), 'cc', '-target', 'x86_64-linux-gnu', '-O2', '-I', str(RUNTIME), '-I', str(RUNTIME/'las'),
                     '-I', str(PROJECT/'third_party'/'Vulkan-Headers'/'include'), str(RUNTIME/'bc7_gpu_test.c'),
                     str(RUNTIME/'las'/'nvn'/'astc.c'), '-o', str(exe)], check=True)
     sys.exit(subprocess.run([str(exe), str(GLSLANG), str(work), *sys.argv[1:]]).returncode)

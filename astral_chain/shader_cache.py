@@ -132,17 +132,20 @@ def tool_digest() -> str:
 
 
 def build_tool(zig: Path, build: Path) -> Path:
-    """shader_precompile.exe, rebuilt when its sources or the translator patches change."""
+    """shader_precompile, rebuilt when its sources or the translator patches change."""
     folder = build/'shader-precompile'/tool_digest()
-    exe = folder/'shader_precompile.exe'
+    exe = folder/'shader_precompile'
     if exe.is_file():
         return exe
     translator = prepare_translator(LASRECOMP, folder/'translator')
     las = RUNTIME/'las'
-    command = [str(zig), 'cc', '-target', 'x86_64-windows-gnu', '-O2', '-include', str(las/'las_compat.h'),
+    command = [str(zig), 'cc', '-target', 'native', '-O2', '-include', str(las/'las_compat.h'),
+               '-I', str(PROJECT), # [extra]
+               '-I', str(PROJECT/'third_party'/'Vulkan-Headers'/'include'), # [extra]
                '-I', str(las), '-I', str(las/'shim'), '-I', str(LASRECOMP/'runtime'),
                '-I', str(LASRECOMP/'runtime'/'nvn'/'maxwell'), *map(str, TOOL_SOURCES), str(translator),
-               '-Wl,--stack,67108864', '-o', str(exe)]
+               '-lvulkan', '-lSDL3', '-lpthread', '-ldl', '-lm', # [extra]
+               '-Wl,-z,stack-size=67108864', '-o', str(exe)]
     result = subprocess.run(command, capture_output=True, text=True)
     if result.returncode:
         raise RuntimeError('shader precompiler build failed:\n' + result.stdout + result.stderr)
@@ -301,7 +304,7 @@ def warm_gpu(game_build: Path, shaders: Path, glslang: Path) -> None:
     vk_gpu_warm): shader libraries for every shader, the recorded programs and pipelines, into the driver's cache and
     cache/vk_pipelines.bin. It skips itself when nothing changed (game build, records, GPU, driver), and compiles
     only the records added since when only they changed."""
-    exe = game_build/'round-00'/'trace.exe'
+    exe = game_build/'round-00'/'trace'
     if not exe.is_file():
         return
     env = dict(os.environ, AC_GPU_WARM=str(shaders.resolve()), AC_GPU_WARM_STATE=_warm_state(game_build),

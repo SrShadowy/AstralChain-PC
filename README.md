@@ -1,309 +1,162 @@
-# Astral Chain PC
-
+# Astral Chain PC (Linux Port)
 
 > [!IMPORTANT]
-> **This project was built entirely with AI.** All of the code, tooling, reverse engineering and
-> documentation in this repository was written by an AI model (Anthropic's Claude, through Claude Code, and Codex), directed,
-> tested and reviewed by the project's owner. It is shared as is, as a fan project. If you prefer not to use
-> AI-written code, you are free to skip it. As with any code from the internet, you build and run it at your own
-> discretion.
+> **Original Project Disclosure:** The upstream Astral Chain PC port was originally developed by Puddz with AI models (Anthropic's Claude through Claude Code and Codex), directed, tested and reviewed by the original project owner. This Linux adaptation builds directly upon that foundation, transitioning the runtime from Windows/Win32 to native Linux (Qt6, SDL3, and Vulkan 1.3) through modular hooks and trampolines. It is shared as-is as a fan project for educational and research purposes.
 
-An unofficial, experimental native Windows port of *Astral Chain* (Nintendo Switch, PlatinumGames, 2019), made by
-**static recompilation**. The game's ARM64 code is translated to C and compiled into an ordinary Windows x64
-program, and its NVN graphics calls run on Vulkan. There is no emulator or JIT.
+An unofficial, experimental native Linux port of *Astral Chain* (Nintendo Switch, PlatinumGames, 2019), achieved via **static recompilation**. The game's ARM64 machine code is translated to C and compiled into an ordinary native Linux x86_64 binary, and its NVN graphics calls run natively on Vulkan. There is no emulator or JIT involved.
 
-You build it yourself from **your own** legally dumped game and keys. This repository contains no game code, assets,
-shaders, keys or firmware, and never will. Everything the setup produces comes from your dump: do not share the
-`build/`, `game/` or `userdata/` folders.
+You build it yourself from **your own** legally dumped game and keys. This repository contains no game code, assets, shaders, keys or firmware, and never will. Everything produced during setup originates from your dump: do not distribute the `build/`, `game/` or `userdata/` directories.
 
-> **AI disclosure.** Most of the code, tooling, reverse engineering and documentation here was written by Claude
-> (Anthropic) through Claude Code, directed and tested by the repository owner. It is shared as-is as a fan project.
+---
 
 ## Status
 
-| | |
+| Component | Status |
 | --- | --- |
-| Tested | Title, menus, opening cutscene, character creation, the highway chase and File 01 up to its boss fight (played by the owner) |
-| Frame rate | 60 fps target, cutscenes included (Dynamic-FPS patch, game speed correct at any frame rate). RTX 4090 / Ryzen 7 7800X3D: 57-60 fps. `AC_CUTSCENE_FPS=30` plays cutscenes exactly as the original does |
-| Stability | Driver watchdog plus a GPU hang stop. No driver resets since 2026-10-19 across dozens of test runs |
-| Saving | Works (tested in File 01) |
-| Shader pauses | Shaders are compiled for your GPU before the game starts. Simulated first play of an area never recorded: 7 pauses over 50 ms, 0.49 s in total (26 and 8.0 s before 2026-10-21) |
-| Not yet tested | The File 01 boss fight with the fix of its crash, and everything after it |
+| Platform | Linux x86_64 (tested on modern distributions with Vulkan 1.3 and SDL3) |
+| Graphics | NVN layer rendered via Vulkan 1.3; window and surface managed by SDL3 |
+| Audio | Output managed via SDL3 Audio Stream (float32 interleaved, replacing legacy waveOut) |
+| Memory Management | POSIX `mmap` (`MAP_NORESERVE | MAP_FIXED_NOREPLACE`), `mprotect`, and `SIGSEGV` lazy write-back handler |
+| Synchronization | POSIX `pthread_mutex`, `pthread_cond` and monotonic clock timers |
+| Launcher | Native C++20 Qt6 application with configuration management, game art cycling, and controls rebinding |
+| Frame Rate | 60 fps target, cutscenes included (Dynamic-FPS patch). Set `AC_CUTSCENE_FPS=30` to run cutscenes at original 30 fps |
+| Shaders | Precompiled ahead of time for your specific GPU using native glslang and Vulkan pipeline cache |
 
-Known issues are listed under [Known issues](#known-issues).
-
-## What's new
-
-Fixes marked *not yet confirmed* were tested in scripted runs, but not yet confirmed in play.
-
-**2026-10-25**
-
-- **Mouse support.** Click in the game window to give it the mouse: it turns the camera, left click attacks (ZR),
-  right click calls the Legion (ZL), the wheel changes weapons. Hold Alt to get the cursor back. Sensitivity and
-  invert in **Settings > Mouse and keyboard**.
-- **Keyboard and mouse button icons in the game.** The button prompts show the keys and mouse buttons you set instead
-  of the Switch buttons (**Settings > Mouse and keyboard > Button icons** to keep the Switch ones).
-- **Controls**: two bindings per action (main and alternative), mouse buttons and wheel included. New defaults:
-  Shift sprints, Space dodges, Tab is IRIS, Esc the pause menu (the old keys stay as alternatives). Keys you had
-  changed in Controls stay on their actions; a new default that would clash with one of them is left empty.
-
-**2026-10-24**
-
-- **Flickering light in the opening helicopter cutscene**: the whole picture jumped between two brightnesses. The
-  game asks for depth clamping, which was ignored, so an effect card it places right in front of the camera was
-  cut away in some frames and drawn in others. Depth clamping is now on. On a test save, that stretch of the
-  cutscene went from 150-200 brightness jumps per 500 frames to 1-2 (camera cuts). The cutscene now stays at the
-  darker of the two brightnesses. *Not yet confirmed in play.*
-- **Setup after picking the wrong file**: once a wrong base game or update had been picked, every retry failed with
-  the same "belongs to program" message. Setup now extracts again for any other file, and says which file to pick.
-- **Experimental features on a separate branch**: [`upscaling`](https://github.com/Puddz/AstralChain-PC/tree/upscaling)
-  has an AMD FSR 1 upscaling option, render resolutions from 1920x1080 to 3840x2160, and ultrawide sizes (21:9 and
-  32:9). They are not part of this version yet; see that branch's README.
-
-**2026-10-23**
-
-- **Shorter wait before the game after a play session.** The game records the shader combinations it meets in
-  play; the next Play then redid all of "Preparing shaders" and "Compiling for your GPU". Now only what was added
-  since the last time is done. On the test PC, with about 15% new records, the wait went from about 3 s to under
-  1 s (the saving is larger on slower PCs). A new version still prepares everything once.
-- **Fullscreen** (issue #5): **F11** or **Alt+Enter** switches between a window and borderless fullscreen on the
-  window's monitor (the display mode is not changed). **Settings > Display > Start in fullscreen** starts in it.
-
-**2026-10-22**
-
-- **Python no longer needs to be installed** (issue #3). Setup downloads its own Python 3.14 into `tools\python`
-  (pinned, checked by SHA-256), so the version installed on your PC, if any, does not matter. An existing `.venv`
-  that works is kept.
-- **Setup from a ZIP download** stopped at "unreviewed Maxwell translator identity" (issue #2): a file check
-  depended on line endings. Fixed; confirmed by the reporter.
-- **Green flashes in the title movie** (and noise or green in the tutorial clips): video frames were sometimes
-  drawn before the decoded picture reached the GPU, for up to 8 frames. Textures written by the CPU are now
-  checked every frame. In a recorded start, the title movie had about 50 green frames before and none after.
-  *Not yet confirmed in play; the tutorial clips are untested.*
-- **Handheld mode** (Settings > Display, off by default; issue #4): the game runs as on a Switch out of its dock
-  and renders at 1280x720 instead of 1600x900 (36% fewer pixels), for GPUs that cannot hold 60 fps. The picture
-  is scaled to the window as before. *Its frame rate gain was not measured: the test PC's GPU is not the limit.*
-
-**2026-10-21**
-
-- **Keyboard controls can be changed**: **Controls** in the launcher (click a key, press the new one).
-- **Optional BC7 texture compression** (Settings, off by default), in two versions: converted on the GPU while
-  playing, or prepared once at setup. Both save about 2.5 GB of video memory; see
-  [Texture compression](#texture-compression-bc7) for what each costs. *Not yet confirmed in play.*
-- **Launcher.** `Astral Chain Launcher.exe`: install, compile shaders, play without console windows, play with
-  diagnostics and create a bug report, and settings for every option, over original key art (six backgrounds to
-  pick from with the arrows at the top right). See [Playing](#playing).
-- **Shaders compiled for your GPU before the game starts** ("Compiling for your GPU", about 10 s the first time).
-  In-game, pipelines are linked from those compiled shaders instead of being compiled whole, and the recorded
-  ones are built before their first draw. Most shader pauses in new areas are gone (see Status). *Not yet
-  confirmed.*
-- **ASTC textures are decoded on the GPU** instead of the CPU: no more 60-240 ms pauses when large textures load.
-  Checked byte for byte against the CPU decoder.
-- **Crash at the File 01 boss** (when it throws a container): the game stopped on a rumble value out of range. It
-  now ignores such values. *Not yet confirmed.*
-- **NSP base games** stopped setup at the RomFS step (issue #1). Setup now gives NSTool both the base game's and
-  the update's title keys. *Not yet confirmed by the reporter.*
-- A failed rebuild no longer loses the shader cache.
-- Crash dumps in diagnostics mode; the watchdog script now records the game's exit code.
-
-**2026-10-20**
-
-- All of the game's shaders are translated before the first launch ("Preparing shaders").
-- NVN's alpha test is emulated: defeated enemies no longer leave a dark tentacle mass. *Not yet confirmed.*
-- Cutscene cuts keep their time at 60 fps, and sound skips gaps after a stall, so sound stays with the picture.
-  *Not yet confirmed.* `AC_CUTSCENE_FPS=30` plays cutscenes at 30 fps as on the Switch.
-- Dragging the window by its title bar no longer freezes the game; closing hides the window at once.
-- Each save is also copied to a backup folder (the newest 30 are kept).
-- Textures are uploaded ahead of first use on loading screens; the pipeline cache is kept between sessions.
-- Fixed wrong textures on faces and armour, and a rare crash in the GPU write-back handler.
+---
 
 ## Requirements
 
-- Windows 10 or 11, 64-bit.
-- A GPU with Vulkan 1.3. Developed on an NVIDIA RTX 4090; other GPUs are untested.
-- About **35 GB** free during setup. About 11 GB stays afterwards.
-- An internet connection for the one-time setup. It downloads Python, Zig, glslang and NSTool at pinned
-  versions, checked by SHA-256. No Python install is needed.
-- Your own dump:
-  - the **base game** (title ID `01007300020FA000`), as an XCI or an NSP;
-  - the **v1.0.1 update** NSP. Exactly v1.0.1 is required;
-  - your console's **`prod.keys`**.
+- **Operating System:** 64-bit Linux distribution (Arch Linux, Ubuntu 24.04+, Fedora 40+, etc.).
+- **GPU & Driver:** GPU supporting Vulkan 1.3 with up-to-date proprietary or Mesa drivers.
+- **System Libraries:**
+  - `SDL3` (`libsdl3`)
+  - `Vulkan Loader` (`libvulkan`)
+  - `Qt6` (Core, Gui, Widgets for the launcher)
+  - `CMake` (3.20+) and `Ninja` / `GCC` or `Clang` with C++20 support
+  - `Python 3.10+` with virtual environment (`python3-venv`)
+- **Disk Space:**
+  - Approximately **35 GB** free during setup (about 11 GB retained after temporary file cleanup).
+- **Your Own Dump:**
+  - The **base game** (title ID `01007300020FA000`), as an XCI or NSP;
+  - The **v1.0.1 update** NSP (exactly v1.0.1 is required);
+  - Your console's **`prod.keys`**.
 
-How to dump games and keys from your Switch is not covered here.
+---
 
-## Setup
+## Quick Start
 
-1. Download this repository: **Code → Download ZIP**, or `git clone`. Put it in a folder you own, for example
-   `C:\Games\AstralChain-PC`. The path should be short, and not on a network drive.
-2. Start **`Astral Chain Launcher.exe`** in that folder and press **Install game**. Pick, when asked:
-   1. your `prod.keys`;
-   2. the base game (XCI or NSP);
-   3. the v1.0.1 update NSP.
-3. Wait. Setup extracts the game data, packs it into `game\romfs.bin`, then translates and compiles the game and
-   its shaders. The first time takes roughly **15-40 minutes**, depending on your CPU and disk. Temporary files are
-   removed at the end. The launcher shows the progress; **Cancel** stops it.
+### 1. Dependencies Installation
 
-The game is installed in the launcher's folder. Once it is, **Install game** is greyed out.
+On Arch Linux / CachyOS / Manjaro:
+```bash
+sudo pacman -S base-devel cmake ninja sdl3 vulkan-tools vulkan-icd-loader qt6-base python
+```
 
-If a step fails, fix the cause and press **Install game** again: finished steps are skipped.
+On Ubuntu / Debian:
+```bash
+sudo apt install build-essential cmake ninja-build libsdl3-dev libvulkan-dev qt6-base-dev python3 python3-venv
+```
 
-Without the launcher, `setup.cmd` does the same in a console window. It also takes the files directly:
-`setup.cmd --keys X:\prod.keys --base X:\AstralChain.xci --update X:\AstralChain-v1.0.1.nsp`.
+On Fedora:
+```bash
+sudo dnf install cmake ninja-build sdl3-devel vulkan-loader-devel qt6-qtbase-devel python3
+```
 
-Windows SmartScreen may warn about the launcher because it is not signed. Its source is `launcher\Launcher.cs`;
-`python launcher\build.py` builds it again with the C# compiler that comes with Windows.
+### 2. Setup the Game
 
-## Playing
+Run the setup script:
+```bash
+./setup.sh
+```
+The script creates a Python virtual environment, installs the required packages, downloads the pinned Linux toolchain (Zig, glslang, NSTool), prompts you for your `prod.keys`, base game, and v1.0.1 update, extracts the data, and compiles the native game and initial shaders.
 
-Start **`Astral Chain Launcher.exe`**:
+You can also pass arguments directly:
+```bash
+./setup.sh --keys /path/to/prod.keys --base /path/to/base.nsp --update /path/to/update.nsp
+```
 
-![The launcher](docs/images/launcher.jpg)
+### 3. Launch the Game
 
-The arrows at the top right (**BACKGROUND ‹ 1 / 6 ›**) switch between six backgrounds; the choice is remembered.
+#### Option A: Native Qt6 Launcher
+```bash
+./launcher.sh
+```
+Or launch directly from `build-launcher/astral_chain_launcher`.
+The launcher allows launching the game, running with diagnostics, configuring graphics and audio settings, rebinding controls, and precompiling shaders.
 
-| Button | What it does |
+#### Option B: Terminal / Script Runners
+- **Standard execution:**
+  ```bash
+  ./play.sh
+  ```
+- **Execution with profiling and diagnostics:**
+  ```bash
+  ./play-diagnostics.sh
+  ```
+
+---
+
+## Controls
+
+The port supports both keyboard/mouse and gamepad input:
+- **Default bindings:**
+  - Left click: Attack / Action (ZR)
+  - Right click: Call / Dismiss Legion (ZL)
+  - Mouse movement: Camera control
+  - `W` / `A` / `S` / `D`: Character movement (Left Stick)
+  - `Shift`: Sprint
+  - `Space`: Dodge / Evade (Right Stick click)
+  - `I` / `J` / `K` / `L`: Face buttons (`X`, `Y`, `B`, `A`)
+  - `Tab`: IRIS scan (`Minus`)
+  - `Enter`: Pause menu (`Plus`)
+- Rebinding can be performed via the **Controls** dialog in `./launcher.sh` or edited directly in `userdata/launcher.ini`.
+
+---
+
+## Architecture & Project Structure
+
+The codebase is organized to maintain modularity and ease upstream merges with the original Windows repository:
+
+| Path | Description |
 | --- | --- |
-| **Play** | Starts the game, without console windows. After an update of this project it first rebuilds the game (about a minute) and its shaders |
-| **Play with diagnostics** | The same, plus a log of where the time of each slow frame went and a crash dump if the game crashes. Afterwards it offers to create a report |
-| **Compile shaders** | Prepares every shader for your GPU now. It says *(Already compiled)* when nothing changed, and *(Needs recompiling)* after an update of the game build, new recorded shader combinations, or a settings change that affects them. Play does this too when needed |
-| **Settings** | Cutscene frame rate, pausing while minimized, save backups, sound resync, fullscreen, presentation mode, handheld mode (1280x720), texture compression (BC7, see below), shader options and troubleshooting switches. Each one is explained in the window |
-| **Controls** | The keyboard keys for every button, stick direction and the D-pad. Click a key, then press the new one; a key already in use swaps places |
-| **Create report** | Packs the last session's logs, the crash dump if there is one, and your Windows, CPU and GPU versions into `reports\`, for a bug report. No game files; your Windows user name is removed from the logs' paths |
+| `extra/core/` | Modular platform hooks and trampolines (`sync`, `memory`, `window`, `vulkan`, `audio`, `storage`, `platform_posix`) |
+| `extra/ui/launcher/` | Native Qt6 C++20 launcher (`ac::launcher` namespace, modular classes <= 250 lines) |
+| `extra/tools/` | Verification and compliance audit scripts (`audit.sh`) |
+| `extra/hooks.h` | Downstream master re-export header for non-intrusive upstream hooks |
+| `launcher.sh` | Build and execution helper for the Qt6 launcher |
+| `setup.sh` | Linux virtual environment setup and game data unpacker |
+| `play.sh`, `play-diagnostics.sh` | Linux game runners with environment guards |
+| `astral_chain/runtime/hooks/` | Upstream forwarding headers preserving historical include paths |
+| `astral_chain/` | Native lifter driver, build system, and game runtime |
+| `astral_chain/patches/` | Pchtxt code patches (Dynamic-FPS, cutscene sync) |
+| `third_party/` | Submodules and vendored components (LASRecomp, Vulkan-Headers, VulkanMemoryAllocator) |
+| `SHADOW_CHANGES.md` | Upstream Touch Ledger and modular code architecture rules |
 
-`Play Astral Chain.cmd` and `Play Astral Chain (diagnostics).cmd` still work, with console windows.
+---
 
-Default keys and mouse buttons (change them with **Controls**; every action has a main and an alternative binding):
+## Legal Notice
 
-| Switch | What it does | Main | Alternative |
-| --- | --- | --- | --- |
-| ZR | Attack | Left click | C |
-| ZL | Legion (summon, send, recall; hold to steer it) | Right click | Z |
-| A / B / X / Y | Interact / dodge / item / switch Legion | J / K / I / U | B: Space |
-| L / R | Legion action / dismiss Legion | Q / E | Mouse back / forward |
-| + / - | IRIS / pause menu | Enter / Backspace | Tab / Esc |
-| Left stick | Move | W A S D | |
-| Right stick | Camera | Mouse (see below) and T F G H | |
-| Left / right stick press | Sprint or crouch / re-centre the camera | Shift / Middle click | 1 / 2 |
-| D-pad | Up and down: weapons | Arrow keys | Up and down: mouse wheel |
+This is an unofficial fan project, not affiliated with, endorsed by, or sponsored by Nintendo or PlatinumGames. *Astral Chain* is a registered trademark of Nintendo. No copyrighted game code, assets, ROMs, shaders, keys, or firmware files are included or distributed in this repository.
 
-**Mouse.** Click in the game window to give it the mouse: the cursor hides and the mouse turns the camera (and
-steers your Legion while ZL is held). Hold **Alt**, or switch to another window, to get the cursor back; click again
-to resume. Sensitivity and invert are in **Settings > Mouse and keyboard**.
+The code modifications for Linux compatibility are provided under the same MIT License as the original project (see `LICENSE`). Vendored components retain their respective licenses, detailed in `THIRD_PARTY_NOTICES.md`.
 
-**Button icons.** The game's button prompts show your keys and mouse buttons instead of the Switch buttons (the main
-binding of each action). **Settings > Mouse and keyboard > Button icons** brings back the Switch icons for playing with
-a controller.
+---
 
-F11 or Alt+Enter: fullscreen on or off (F11 and Alt stay game keys if you assign them in **Controls**).
+## Credits & Acknowledgments
 
-### Texture compression (BC7)
-
-For GPUs with 8 GB of video memory or less. Most of the game's textures are ASTC, which PC GPUs cannot read, so
-they are unpacked to 4 bytes per pixel. **Settings > Texture compression (BC7)** stores them as BC7 instead, a
-quarter of that size. Off by default. Measured on a fresh install, highway chase, 3 runs each (RTX 4090):
-
-| | Off (default) | **On: converted on the GPU** | **On: prepared at setup (best)** |
-| --- | --- | --- | --- |
-| What it does | Textures unpacked as before | Each texture is converted on the GPU as it loads | Every texture is converted once, on the CPU, and stored on disk; the game loads those |
-| Video memory (average / peak) | 7.2 / 8.7 GB | 4.7 / 5.2 GB | 4.7 / 5.1 GB |
-| Preparation | None | None | About 12 minutes, once (at the next Play) |
-| Disk space | None | None | 16 GB (`build\game\cache\bc7`) |
-| Short pauses per run | 6-8 | 11-12: about 5 more, of 60-100 ms, while an area loads | 6-7 |
-| Picture | Original | Slightly less detail on some surfaces (bumps, reflections) | Very close to the original |
-
-Picture quality measured on 300 of the game's textures (PSNR against the original, higher is better): 46 dB
-average on the GPU, 51 dB prepared at setup; the GPU's worst texture was 27 dB, setup's 34 dB.
-
-Switching to *prepared at setup* says when the preparation will run; switching away offers to delete the 16 GB.
-With less than 20 GB free, setup skips the preparation and the game converts on the GPU instead.
-
-XInput controllers (Xbox pads and compatibles) work too. The game pauses while its window is minimized, as on
-the Switch's home menu (Settings: *Keep running while the game window is minimized*). In another window, the game
-keeps running but takes no keyboard input.
-
-- **Saves** are in `userdata\saves\` (the launcher's *Saves folder* link). Each save is also copied next to it
-  (the newest 30 are kept); still, back that folder up from time to time.
-- **Logs** of the last session are in `build\game\round-00\` (`trace.log`, `stderr.log`).
-- **Shaders.** Before the game starts the first time, setup translates all of the game's shaders ("Preparing
-  shaders", about 20 s on a 16-thread CPU), then compiles them for your GPU and driver ("Compiling for your GPU"),
-  together with the render-state combinations recorded so far. Later launches skip both unless something changed
-  (a game update or a new graphics driver); new combinations recorded in play are done alone at the next launch. A combination never seen before is linked
-  from the compiled shaders when first drawn, without a long pause. The cache is in `build\game\cache\`.
-
-### Safety
-
-The game always runs under `astral_chain\run_guarded.ps1`, from the launcher too. It closes the game on the first
-GPU driver error that Windows logs. The game also stops itself if the GPU stays busy for more than 1.2 s, before Windows would reset the driver.
-
-### Updating
-
-Download the new version over the old one, or `git pull`. The next **Play** rebuilds the game once, in about a
-minute. Your saves, game data and shader cache are kept.
-
-## Known issues
-
-- Dark, shadow-like patches on scenery when fighting close to it were reported. Under investigation: a screenshot
-  helps.
-- Some short pauses remain when entering new areas: the game loading its own data, not shader compiling.
-- Defeated enemies left a large dark tentacle mass for about two seconds. Cause found: the chimera blood effect
-  dissolves through NVN's alpha test, which was not emulated. It now is (test runs of the highway chase show no
-  mass), not yet confirmed in play.
-- In-game cutscenes were reported with the sound behind the picture after camera cuts (the 60 fps mod's known limit:
-  each cut ended up to a frame early). Cut ends now keep their time: the cutscene after the highway chase lasts
-  35.192 s, as at the original 30 fps (35.193 s; 35.077 s before). Sound gaps after stalls are skipped to stay in
-  sync. Not yet confirmed fixed.
-- Rarely the game closes right at startup (`STOP host-shared-placeholder-reserve` in `trace.log`). Start it again.
-- Save-slot thumbnails are not captured (`nvnTextureReadTexels` is not implemented).
-
-Reports are welcome. The easiest way: play with **Play with diagnostics** in the launcher until the problem
-happens, then attach the zip that **Create report** makes. Otherwise include `build\game\round-00\stderr.log` and
-`trace.log` and your GPU and driver version, but no game files.
-
-## Folder layout
-
-| Path | What |
-| --- | --- |
-| `Astral Chain Launcher.exe` | The launcher (source in `launcher/`) |
-| `setup.cmd`, `Play Astral Chain.cmd` | The same steps from a console window |
-| `astral_chain/` | Translator driver, build system and Windows runtime (C) |
-| `astral_chain/patches/` | Code patches of this project (pchtxt) |
-| `third_party/` | Vendored sources: LASRecomp, Vulkan-Headers, VulkanMemoryAllocator, Dynamic-FPS patch |
-| `docs/` | How it works, troubleshooting, development notes |
-| `tools/` | *(created by setup)* Python, Zig, glslang, NSTool |
-| `game/` | *(created by setup)* your extracted update code, metadata and `romfs.bin` |
-| `build/` | *(created by setup)* the compiled game and its shader cache |
-| `userdata/` | *(created by setup)* saves, account profile, setup choices, launcher settings (`launcher.ini`) |
-| `reports/` | *(created by the launcher)* reports made with **Create report** |
-
-## Documentation
-
-- [How it works](docs/how-it-works.md)
-- [Troubleshooting](docs/troubleshooting.md)
-- [Development notes](docs/development.md)
-
-## Legal
-
-This is an unofficial fan project, not affiliated with or endorsed by Nintendo or PlatinumGames. *Astral Chain* is
-a trademark of Nintendo. No game code, assets, shaders, keys or firmware are distributed. Requests for them will be
-closed.
-
-The original code in this repository is under the MIT License (see `LICENSE`). Vendored third-party components keep
-their own licenses, listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
-
-## Credits
-
-- [LASRecomp](https://github.com/peiikai/LASRecomp) (MIT): the ARM64 lifter, the NVN-on-Vulkan layer and the
-  Maxwell shader translator this port builds on.
-- [AstralChain-Dynamic-FPS](https://github.com/yogesh1239/AstralChain-Dynamic-FPS) by yogesh1239 (MIT): the
-  60 fps patch.
-- [astral-extractor](https://github.com/cabalex/astral-extractor) by cabalex: format research.
-- The launcher's backgrounds and icon (`launcher/art/`, `launcher/icon.ico`) are original AI-generated images in the
-  style of the game, without official artwork. The default (`1-visor.jpg`) was chosen by the project's owner; the
-  other five and the icon were made with OpenAI Codex's image generation for this project.
-- [AC-Recomp](https://github.com/swaymun/AC-Recomp): the macOS recompilation, whose setup flow inspired this one.
-- [AMD FidelityFX Super Resolution 1](https://github.com/GPUOpen-Effects/FidelityFX-FSR) (MIT): the EASU and RCAS
-  shaders of the FSR 1 path (through LASRecomp), used by the experimental upscaling option.
-- [NSTool](https://github.com/jakcron/nstool), [Zig](https://ziglang.org/),
-  [glslang](https://github.com/KhronosGroup/glslang), [Vulkan-Headers](https://github.com/KhronosGroup/Vulkan-Headers),
-  [VulkanMemoryAllocator](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator),
-  [Capstone](https://www.capstone-engine.org/), [lz4](https://github.com/python-lz4/python-lz4).
+- **[Puddz](https://github.com/Puddz/AstralChain-PC)**: Author and creator of the original Astral Chain PC port and recompilation pipeline.
+- **Anthropic Claude & OpenAI Codex**: AI models utilized in authoring, reverse engineering, and documenting the original implementation.
+- **[LASRecomp](https://github.com/peiikai/LASRecomp)** (MIT): The ARM64 static lifter, NVN-on-Vulkan translation layer, and Maxwell shader translator upon which this port is built.
+- **[AstralChain-Dynamic-FPS](https://github.com/yogesh1239/AstralChain-Dynamic-FPS)** by yogesh1239 (MIT): The 60 fps dynamic timing patch.
+- **[astral-extractor](https://github.com/cabalex/astral-extractor)** by cabalex: PlatinumGames PKZ / DAT archive research and format specifications.
+- **[AC-Recomp](https://github.com/swaymun/AC-Recomp)**: The macOS recompilation project whose setup pipeline inspired the CLI workflow.
+- **[SDL (Simple DirectMedia Layer)](https://github.com/libsdl-org/SDL)**: Cross-platform windowing, event handling, and audio streaming for Linux.
+- **[The Qt Project](https://www.qt.io/)**: Modern C++ application framework powering the Linux launcher.
+- **Tooling & Libraries:**
+  - [Zig](https://ziglang.org/)
+  - [glslang](https://github.com/KhronosGroup/glslang)
+  - [NSTool](https://github.com/jakcron/nstool)
+  - [Vulkan-Headers](https://github.com/KhronosGroup/Vulkan-Headers)
+  - [VulkanMemoryAllocator](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator)
+  - [Capstone Engine](https://www.capstone-engine.org/)
+  - [lz4](https://github.com/python-lz4/python-lz4)

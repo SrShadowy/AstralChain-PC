@@ -3061,7 +3061,11 @@ static void gmem_writeback_apply(uint64_t done) {
     static int lazy_on = -1;
     if (lazy_on < 0) {
         const char *e = getenv("LARECOMP_VK_LAZY_WB");
+#if defined(_WIN32) // [extra]
         lazy_on = !e || atoi(e) != 0;
+#else // [extra]
+        lazy_on = e ? atoi(e) != 0 : 0;
+#endif // [extra]
         if (lazy_on) { nvn_lazy_fault_hook = lazy_fault; nvn_lazy_flush_hook = lazy_flush; }
     }
     pthread_mutex_lock(&lazy_lock);
@@ -3512,7 +3516,14 @@ void vc_flush(void) {
 // forces copies.
 static bool guest_direct(uint64_t addr, uint64_t size, VkBuffer *buf, VkDeviceSize *off) {
     static int copy = -1;
-    if (copy < 0) copy = getenv("LARECOMP_VK_COPY_VERTICES") != NULL;
+    if (copy < 0) { // [extra]
+        const char *e = getenv("LARECOMP_VK_COPY_VERTICES");
+#ifndef _WIN32
+        copy = e ? (atoi(e) != 0) : 0;
+#else
+        copy = e ? (atoi(e) != 0) : !pt_init();
+#endif
+    } // [extra]
     if (copy || addr < HEAP_BASE) return false;
     if (addr + size > HEAP_BASE + gmem_size && kernel_heap_size() != gmem_tried) { gmem_tried = kernel_heap_size(); gmem_info(); }
     if (!gmem_buf || addr + size > HEAP_BASE + gmem_size) return false;
@@ -4875,11 +4886,15 @@ void vk_present_draw(VkCommandBuffer cb, TexBackend *b, float vx, float vy, floa
     vkCmdBindPipeline(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, p);
     vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, present_layout, 0, 1, &ds, 0, NULL);
     VkViewport vp = {vx, vy, vw, vh, 0, 1};
+    VkRect2D sc = {(int32_t)vx, (int32_t)vy, (uint32_t)vw, (uint32_t)vh}; // [extra]
     vkCmdSetViewport(cb, 0, 1, &vp);
+    vkCmdSetScissor(cb, 0, 1, &sc); // [extra]
     vkCmdPushConstants(cb, present_layout, VK_SHADER_STAGE_VERTEX_BIT, 0, 32, pv);
     vkCmdDraw(cb, 3, 1, 0, 0);
     VkViewport full = {0, 0, (float)g_vk.sc_extent.width, (float)g_vk.sc_extent.height, 0, 1};
+    VkRect2D full_sc = {{0, 0}, g_vk.sc_extent}; // [extra]
     vkCmdSetViewport(cb, 0, 1, &full);
+    vkCmdSetScissor(cb, 0, 1, &full_sc); // [extra]
 }
 
 // Screenshot of a game texture (presented crop applied to build/frame_* shots), via the present shader into RGBA8.

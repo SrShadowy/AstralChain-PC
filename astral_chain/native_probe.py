@@ -138,14 +138,14 @@ def main():
     args.output.mkdir(parents=True, exist_ok=False)
     output = args.output.resolve()
     (output / "probe.c").write_text(source, encoding="utf-8")
-    command = [str(args.compiler.resolve()), "cc", "-target", "x86_64-windows-gnu", "-O2", "-shared",
-               "-I", str(reference / "runtime"), str(output / "probe.c"), "-o", str(output / "probe.dll")]
+    command = [str(args.compiler.resolve()), "cc", "-target", "x86_64-linux-gnu", "-O2", "-shared",
+               "-I", str(reference / "runtime"), str(output / "probe.c"), "-o", str(output / "probe.so")]
     compiled = subprocess.run(command, capture_output=True, text=True, timeout=180)
     (output / "compiler.log").write_text(compiled.stdout+compiled.stderr, encoding="utf-8")
     compiled.check_returncode()
-    counts = validate(nso, output / "probe.dll")
+    counts = validate(nso, output / "probe.so")
     report = {"main_sha256": nso.sha256, "build_id": nso.build_id, "las_commit": LAS_COMMIT,
-              "host_target": "x86_64-windows-gnu", "compiler_command": command,
+              "host_target": "x86_64-linux-gnu", "compiler_command": command,
               "routines": manifest, "validation": counts,
               "scope": "Register-only native routine validation; ARM interpreter used only as test oracle; no game startup."}
     (output / "report.json").write_text(json.dumps(report, indent=2)+"\n", encoding="utf-8")

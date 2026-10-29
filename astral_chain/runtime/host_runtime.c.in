@@ -1,6 +1,10 @@
+#if defined(_WIN32) // [extra]
 #include <windows.h>
 #include <bcrypt.h>
 #include <dbghelp.h>
+#else // [extra]
+#include "extra/hooks.h" // [extra]
+#endif // [extra]
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
@@ -296,6 +300,7 @@ static uint64_t static_memory_size(void) {
  * prepare the range first. The hooks stay null with other backends. */
 void (*nvn_lazy_flush_hook)(uint64_t addr,uint64_t size);
 int (*nvn_lazy_fault_hook)(uint64_t addr);
+#if defined(_WIN32) // [extra]
 static LONG CALLBACK nvn_lazy_vectored(PEXCEPTION_POINTERS info) {
  if(info->ExceptionRecord->ExceptionCode!=EXCEPTION_ACCESS_VIOLATION || info->ExceptionRecord->NumberParameters<2 || !nvn_lazy_fault_hook)
   return EXCEPTION_CONTINUE_SEARCH;
@@ -313,6 +318,10 @@ int nvn_page_state(uint64_t addr) {
  if(!VirtualQuery((void*)(uintptr_t)addr,&info,sizeof(info)) || info.State!=MEM_COMMIT) return 0;
  return info.Protect&PAGE_NOACCESS ? 2 : 1;
 }
+#else // [extra]
+int nvn_page_protect(uint64_t addr,uint64_t size,int noaccess) { extra_set_lazy_fault_handler(nvn_lazy_fault_hook); return extra_protect_pages(addr, size, noaccess); } // [extra]
+int nvn_page_state(uint64_t addr) { (void)addr; return 1; } // [extra]
+#endif // [extra]
 static void guest_io_prepare(uint64_t addr,uint64_t size) {if(nvn_lazy_flush_hook && size) nvn_lazy_flush_hook(addr,size);}
 #include "exclusive_pair.h"
 static int reserve_heap_range(void) {

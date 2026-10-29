@@ -2,6 +2,7 @@
  * AC_GLSLANG names glslang.exe; native_trace sets it to the pinned local copy.
  * Thread-safe: each compile uses its own temporary files. The NVN backend keeps
  * its own on-disk SPIR-V cache, so each distinct shader compiles once. */
+#ifdef _WIN32 // [extra]
 #include <windows.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -133,3 +134,6 @@ void shaderc_result_release(shaderc_compilation_result_t r) {
     free(r->message);
     free(r);
 }
+#else // [extra]
+#include "extra/core/shaderc_posix.h" // [extra]
+#endif // [extra]

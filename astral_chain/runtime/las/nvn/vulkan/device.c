@@ -1,9 +1,13 @@
 // Vulkan device, window, swapchain and presentation (counterpart of the window/present half of metal.m).
 // Astral Chain: presents into the runtime's Win32 window (nvn_host_window) instead of an SDL window; the
 // Link's Awakening widescreen, menu, output-scale and test hooks are removed (see runtime/las/README.md).
+#if defined(_WIN32) // [extra]
 #include <windows.h>
 #define VK_USE_PLATFORM_WIN32_KHR
 #include <vulkan/vulkan.h>
+#else // [extra]
+#include "extra/hooks.h" // [extra]
+#endif // [extra]
 #include <math.h>
 #include <stdatomic.h>
 #include <pthread.h>
@@ -23,10 +27,14 @@ void *nvn_host_window(void);  // runtime nvn_hle.h: the application window (HWND
 static HWND window;
 static VkDebugUtilsMessengerEXT messenger;
 static void window_size(int *w, int *h) {
+#if defined(_WIN32) // [extra]
     RECT r;
     if (!window || !GetClientRect(window, &r) || IsIconic(window)) { *w = *h = 0; return; }
     *w = r.right - r.left;
     *h = r.bottom - r.top;
+#else // [extra]
+    extra_window_get_size_hwnd(window, w, h); // [extra]
+#endif // [extra]
 }
 
 // ================================================================== instance / device
@@ -40,10 +48,14 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debug_cb(VkDebugUtilsMessageSeverityFlagBi
 
 // LARECOMP_VK_VALIDATION=1: Khronos validation layer (MSYS2 package vulkan-validation-layers)
 static void create_instance(void) {
+#if defined(_WIN32) // [extra]
     const char *ext[16];
     uint32_t n_ext = 0;
     ext[n_ext++] = VK_KHR_SURFACE_EXTENSION_NAME;
     ext[n_ext++] = VK_KHR_WIN32_SURFACE_EXTENSION_NAME;
+#else // [extra]
+    const char *ext[32]; uint32_t n_ext = extra_vk_collect_instance_extensions(ext, 30); // [extra]
+#endif // [extra]
     bool validate = getenv("LARECOMP_VK_VALIDATION") != NULL;
     if (validate) ext[n_ext++] = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
     const char *layers[] = {"VK_LAYER_KHRONOS_validation"};
@@ -657,6 +669,9 @@ void backend_present(NvnTexture *t) {
         }
         memcpy(g_shot_crop, uv, sizeof uv);
         double k = dw / gw < dh / gh ? dw / gw : dh / gh, vw = gw * k, vh = gh * k, vx = (dw - vw) / 2, vy = (dh - vh) / 2;
+        static int p_log = 0; // [extra]
+        if (p_log++ < 5) LOG("[present] sc=%ux%u tex=%ux%u crop=[%d,%d,%d,%d] v=(%.1f,%.1f,%.1f,%.1f)\n", // [extra]
+            g_vk.sc_extent.width, g_vk.sc_extent.height, t->width, t->height, cr[0], cr[1], cr[2], cr[3], vx, vy, vw, vh); // [extra]
         renderer_set_scale(1.0f, 1.0f);
         VkCommandBuffer cb = vk_cmd();
         float pv[8] = {renderer_origin_lower_left() ? 1.0f : 0.0f, 0, 0, 0, uv[0], uv[1], uv[2], uv[3]};
@@ -810,13 +825,18 @@ static void exit_handler(void) {
 
 static void window_init(void) {
     if (window) return;
+    settings_load(); // [extra]
     window = (HWND)nvn_host_window();
     if (!window) FATAL("no host window for Vulkan presentation\n");
     atexit(exit_handler);
     create_instance();
+#if defined(_WIN32) // [extra]
     VkWin32SurfaceCreateInfoKHR si = {.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
                                       .hinstance = GetModuleHandleW(NULL), .hwnd = window};
     VK_CHECK(vkCreateWin32SurfaceKHR(g_vk.inst, &si, NULL, &g_vk.surface));
+#else // [extra]
+    if (!extra_vk_create_surface(g_vk.inst, window, &g_vk.surface)) FATAL("extra_vk_create_surface failed\n"); // [extra]
+#endif // [extra]
     pick_device();
     create_device();
     create_swapchain();
@@ -826,6 +846,7 @@ static void window_init(void) {
 
 // Every file below folder, recursively (exec.c vk_gpu_warm: the game's shader files).
 void vk_walk_files(const char *folder, void (*fn)(const char *path, void *ctx), void *ctx) {
+#if defined(_WIN32) // [extra]
     char pattern[MAX_PATH];
     snprintf(pattern, sizeof pattern, "%s/*", folder);
     WIN32_FIND_DATAA fd;
@@ -839,12 +860,16 @@ void vk_walk_files(const char *folder, void (*fn)(const char *path, void *ctx), 
         else fn(path, ctx);
     } while (FindNextFileA(h, &fd));
     FindClose(h);
+#else // [extra]
+    extra_storage_walk_files(folder, fn, ctx); // [extra]
+#endif // [extra]
 }
 
 // AC_GPU_WARM (exec.c vk_gpu_warm): Vulkan on the GPU the game uses, without the game's window or a swapchain (a
 // hidden window gives the surface the device choice checks presentation against).
 void vk_init_for_warm(void) {
     if (window) return;
+#if defined(_WIN32) // [extra]
     WNDCLASSW wc = {.lpfnWndProc = DefWindowProcW, .hInstance = GetModuleHandleW(NULL), .lpszClassName = L"AstralChainGpuWarm"};
     RegisterClassW(&wc);
     window = CreateWindowExW(0, wc.lpszClassName, L"", WS_POPUP, 0, 0, 16, 16, NULL, NULL, wc.hInstance, NULL);
@@ -853,6 +878,9 @@ void vk_init_for_warm(void) {
     VkWin32SurfaceCreateInfoKHR si = {.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
                                       .hinstance = GetModuleHandleW(NULL), .hwnd = window};
     VK_CHECK(vkCreateWin32SurfaceKHR(g_vk.inst, &si, NULL, &g_vk.surface));
+#else // [extra]
+    window = extra_vk_init_warm(g_vk.inst, &g_vk.surface, create_instance); // [extra]
+#endif // [extra]
     pick_device();
     create_device();
     vk_exec_init();

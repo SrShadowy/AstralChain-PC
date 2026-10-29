@@ -196,7 +196,7 @@ def main() -> None:
     subprocess.run([str(args.compiler.resolve()), 'cc', '-O1', '-I',
                     str(reference/'runtime/nvn/maxwell'), '-I', str(Path(__file__).parent/'runtime/las'),
                     str(Path(__file__).parent/'runtime/shader_probe.c'), str(source),
-                    '-o', str(output/'shader-probe.exe')], check=True)
+                    '-o', str(output/'shader-probe')], check=True)
 
 
 if __name__ == '__main__':

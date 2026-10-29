@@ -22,7 +22,7 @@ STAGES = {'vs': 'vert', 'fs': 'frag', 'cs': 'comp'}
 
 def build_replay(reference: Path, compiler: Path, output: Path) -> Path:
     source = prepare_translator(reference, output/'translator')
-    exe = output/'shader-replay.exe'
+    exe = output/'shader-replay'
     subprocess.run([str(compiler), 'cc', '-O1', '-I', str(reference/'runtime/nvn/maxwell'),
                     '-I', str(Path(__file__).parent/'runtime/las'),
                     str(Path(__file__).parent/'runtime/shader_replay.c'), str(source), '-o', str(exe)], check=True)
@@ -51,7 +51,7 @@ def main() -> None:
     parser.add_argument('captures', type=Path, nargs='+', help='build/glsl folders of LARECOMP_SAVE_MSL runs')
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--reference', type=Path, default=PROJECT/'third_party/LASRecomp')
-    parser.add_argument('--compiler', type=Path, default=PROJECT/'tools/zig/zig.exe')
+    parser.add_argument('--compiler', type=Path, default=PROJECT/'tools/zig/zig')
     parser.add_argument('--only', help='regular expression on <addr>_<stage>')
     args = parser.parse_args()
     output = args.output.resolve()

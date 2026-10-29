@@ -18,10 +18,19 @@ static DWORD save_resolve(SaveStore *store,const char *input,size_t extent,wchar
  if(!extent || extent>769)return ERROR_BAD_PATHNAME;
  const char *end=memchr(input,0,extent);
  if(!end || end==input || input[0]!='/')return ERROR_BAD_PATHNAME;
+#if defined(_WIN32) // [extra]
  swprintf(path,1100,L"\\\\?\\%ls\\data",store->root);
+#else // [extra]
+ swprintf(path,1100,L"%ls/data",store->root); // [extra]
+#endif // [extra]
  if(end-input==1) {*kind=SAVE_DIRECTORY;return 0;}
  wchar_t relative[769];
+#if defined(_WIN32) // [extra]
  int count=MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,input+1,(int)(end-input-1),relative,768);
+#else // [extra]
+ int count=(int)mbstowcs(relative,input+1,768); // [extra]
+ if(count<0) count=0; // [extra]
+#endif // [extra]
  if(!count)return ERROR_BAD_PATHNAME;
  relative[count]=0;
  if(relative[count-1]==L'/')relative[--count]=0; /* trailing separator on directories */
