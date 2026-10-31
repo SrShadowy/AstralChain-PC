@@ -76,7 +76,7 @@ __pycache__/
 *.log.*
 /reports/
 /setup-test.log
-core
+/core
 core.*
 vgcore.*
 *.dmp

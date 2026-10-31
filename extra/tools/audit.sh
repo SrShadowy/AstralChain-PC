@@ -7,7 +7,7 @@ cd "$ROOT_DIR"
 echo "=== Downstream Audit ==="
 
 echo "--- 1. Marker Audit (Region Start/End or Single-Line Hook) ---"
-UNMARKED=$(git diff --unified=0 HEAD -- ':!extra' ':!*.py' ':!*.md' ':!*.sh' ':!*.txt' ':!*.json' ':!*.gitignore' ':!*.cmd' ':!*.ps1' ':!*.cs' ':!*.manifest' ':!*.exe' | awk '
+UNMARKED=$(git -c diff.algorithm=histogram diff --unified=0 HEAD -- ':!extra' ':!*.py' ':!*.md' ':!*.sh' ':!*.txt' ':!*.json' ':!*.gitignore' ':!*.cmd' ':!*.ps1' ':!*.cs' ':!*.manifest' ':!*.exe' | awk '
 function check_hunk() {
     if (n == 1) {
         if (lines[1] !~ /\/\/ \[extra\][[:space:]]*$/) {

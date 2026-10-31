@@ -7,7 +7,15 @@ cd "$ROOT_DIR"
 
 SECONDS_RUN="${1:-20}"
 SHOT_FRAME="${2:-550}"
-INPUT_SEQ="${AC_INPUT_SCRIPT:-10.0-14.0:300}"
+if [ -z "${AC_INPUT_SCRIPT:-}" ]; then
+    if [ "$SECONDS_RUN" -gt 30 ]; then
+        INPUT_SEQ="10-13:300;18-21:300;24-25:1;27-28:1;30-32:11000;33-34:1;35-37:11000;38-39:1;40-42:11000;43-44:1;46-47:400;48-49:400;51-52:1"
+    else
+        INPUT_SEQ="10.0-14.0:300;18.0-21.0:300"
+    fi
+else
+    INPUT_SEQ="$AC_INPUT_SCRIPT"
+fi
 
 echo "===================================================="
 echo " [ponytail-qa] 1/4: Auditoria de Código & Arquitetura"
@@ -19,7 +27,11 @@ echo "===================================================="
 echo " [ponytail-qa] 2/4: Verificação de Fast-Relink / Build"
 echo "===================================================="
 T0=$(date +%s)
-python3 -m astral_chain.setup_game --rebuild-if-stale
+PYTHON="python3"
+if [ -f ".venv/bin/python3" ]; then
+    PYTHON=".venv/bin/python3"
+fi
+$PYTHON -m astral_chain.setup_game --rebuild-if-stale
 T1=$(date +%s)
 echo "PASSED: Build/Relink verificado em $((T1 - T0))s."
 
@@ -36,7 +48,8 @@ LOG_FILE="/tmp/ac_qa_run.log"
 rm -f "$LOG_FILE" "./build/game/frames/frame_$(printf '%05d' "$SHOT_FRAME").png" "./frames/frame_$(printf '%05d' "$SHOT_FRAME").png"
 
 set +e
-AC_INPUT_SCRIPT="$INPUT_SEQ" LARECOMP_SHOT_AT="$SHOT_FRAME" \
+AC_ASYNC_SUBMIT="${AC_ASYNC_SUBMIT:-1}" LARECOMP_VK_PRESENT="${LARECOMP_VK_PRESENT:-fifo}" \
+    AC_INPUT_SCRIPT="$INPUT_SEQ" LARECOMP_SHOT_AT="$SHOT_FRAME" \
     stdbuf -oL -eL ./astral_chain/run_guarded.sh --run build/game --seconds "$SECONDS_RUN" > "$LOG_FILE" 2>&1
 EXIT_CODE=$?
 set -e

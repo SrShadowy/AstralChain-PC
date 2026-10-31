@@ -30,12 +30,8 @@
 | `astral_chain/runtime/app_window.h` | `app_set_fullscreen` | `extra/core/window_trampoline.h` | Alternância de tela cheia via SDL3 | 3 lines |
 | `astral_chain/runtime/app_window.h` | `app_pump` | `extra/core/window_trampoline.h` | Bombeamento de eventos de entrada via SDL3 | 3 lines |
 | `astral_chain/runtime/app_window.h` | `app_open` | `extra/core/window_trampoline.h` | Criação de janela de inicialização via SDL3 | 3 lines |
-| `astral_chain/runtime/las/nvn/vulkan/device.c` | `#include "extra/hooks.h"` | `extra/hooks.h` | Inclusão de cabeçalho unificado de hooks | 3 lines |
-| `astral_chain/runtime/las/nvn/vulkan/device.c` | `window_size` | `extra/core/window_trampoline.h` | Obtenção de dimensões em pixels da janela | 3 lines |
-| `astral_chain/runtime/las/nvn/vulkan/device.c` | `create_instance` | `extra/core/vulkan_trampoline.h` | Consulta de extensões Vulkan do SDL3 | 3 lines |
-| `astral_chain/runtime/las/nvn/vulkan/device.c` | `window_init` | `extra/core/vulkan_trampoline.h` | Criação de superfície Vulkan via SDL3 | 3 lines |
-| `astral_chain/runtime/las/nvn/vulkan/device.c` | `vk_walk_files` | `extra/core/storage_trampoline.h` | Enumeração recursiva de arquivos via POSIX | 3 lines |
-| `astral_chain/runtime/las/nvn/vulkan/device.c` | `vk_init_for_warm` | `extra/core/vulkan_trampoline.h` | Janela oculta para aquecimento de shaders | 3 lines |
+| `astral_chain/runtime/las/nvn/vulkan/device.c` | `backend_init` / `backend_clear_window` | `device.c` | Orquestrador enxuto (~20 linhas) integrando submódulos de domínio em `device/` | 19 lines |
+| `astral_chain/runtime/las/nvn/vulkan/device/` | `instance`, `physical_device`, `logical_device`, `surface`, `swapchain`, `present`, `postprocess` | `device/` | Separação do backend Vulkan por ciclo de vida, responsabilidade funcional e telemetria P50/P95/P99 | 7 modules |
 | `astral_chain/runtime/guest_threads.h` | `guest_tls_allocate` | `extra/core/sync_trampoline.h` | Alocação de página TLS para threads hóspedes | 3 lines |
 | `astral_chain/runtime/guest_threads.h` | `guest_parallel_start` | `extra/core/sync_trampoline.h` | Inicialização de threads hóspedes em paralelo | 3 lines |
 | `astral_chain/runtime/wave_output.h` | `#include "extra/hooks.h"` | `extra/core/audio_trampoline.h` | Redirecionamento da API WaveOutput para SDL3 | 3 lines |
@@ -49,13 +45,13 @@
 | `astral_chain/runtime/save_fs.h` | `save_resolve` | `extra/core/storage_trampoline.h` | Formatação de caminhos e conversão mbstowcs | 6 lines |
 | `astral_chain/runtime/las/las_compat.h` | `#ifndef _WIN32` | `extra/core/storage_trampoline.h` | Inclusão de rotinas de compatibilidade POSIX | 4 lines |
 | `astral_chain/native_trace.py` | `run-env.txt` | `run_guarded.sh` | Exportação de backend vinculado e glslang | 4 lines |
-| `astral_chain/runtime/las/nvn/vulkan/exec.c` | `gmem_writeback_apply` / `guest_direct` / `vk_present_draw` | `extra/core/vulkan_trampoline.h` | Eager writeback no Linux (0 faltas SIGSEGV), bypass de cópia de vértices e scissor dinâmico | 8 lines |
+| `astral_chain/runtime/las/nvn/vulkan/exec.c` | `guest_copy_vtx` / `vcopy` / `draw` | `exec.c` | Cache isolado de cópia de vértices e índices (`vcopy`), eliminando gargalo de 20 GB/s de memcpy entre draws e flushes de uniform buffers | 22 lines |
 | `astral_chain/runtime/las/nvn/vulkan/textures.c` | `mark_dynamic` | `extra/core/vulkan_trampoline.h` | Amostragem FNV para texturas de vídeo dinâmicas | 5 lines |
 | `astral_chain/runtime/las/settings.h` | `settings_load` | `extra/ui/launcher` | Suporte a variável de ambiente `AC_UPSCALER=fsr1` | 4 lines |
 | `astral_chain/runtime/hid_service.h` | `hid_xinput` | `extra/core/window_trampoline.h` | Leitura de gamepad via SDL3 no Linux | 4 lines |
 | `astral_chain/runtime/pl_hle.h` | `pl_load_fonts` | `extra/core/platform_posix.h` | Caminhos de fontes padrão do sistema Linux | 5 lines |
-| `astral_chain/setup_game.py` | `fingerprint` / `try_fast_relink` | `extra/tools/qa_runner.sh` | Vinculação incremental rápida e hash de `extra/` | 8 lines |
 | `astral_chain/runtime/las/maxwell_ext.h` | `#include "extra/core/maxwell_extra.h"` | `extra/core/maxwell_extra.h` | Tradução de instruções compute Maxwell (família LEA) | 1 line |
+| `extra/ui/launcher/` | `presentMode` / `LARECOMP_VK_PRESENT` / `asyncSubmit` | `extra/ui/launcher` | Seletor de sincronização de monitor (FIFO, Mailbox, Immediate) e submissão gráfica assíncrona | 25 lines |
 
 ---
 
@@ -236,5 +232,10 @@
 ### Ícones Visuais de Botões no Painel de Controles (`extra/ui/launcher/src/ControlsDialog.cpp`)
 - Identificação gráfica com ícones de botões e sticks na tabela de remapeamento de controles do Launcher 
 - Preservação integral das chaves do arquivo `.ini` e compatibilidade total com o sistema de bindings upstream.
+
+### Submissão Gráfica Assíncrona e Controle de Apresentação (`Config`, `SettingsDialog`, `AC_ASYNC_SUBMIT=1`, `LARECOMP_VK_PRESENT_MODE`)
+- Exposição da opção de submissão gráfica assíncrona na aba Avançado do Launcher Qt6 com persistência em `userdata/launcher.ini`.
+- Injeção de `AC_ASYNC_SUBMIT=1` no ambiente de lançamento, desacoplando a gravação de command buffers da execução, fences e apresentação Vulkan na GPU.
+- Vinculação do ajuste de VSync ao modo de apresentação `LARECOMP_VK_PRESENT_MODE=fifo` (prevenindo que o modo `mailbox` consuma 85% de GPU em execuções sem pacing) e controle limpo de cópia dinâmica de vértices sem corrupção de atlas de texturas.
 
 

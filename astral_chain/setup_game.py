@@ -413,6 +413,8 @@ def try_fast_relink():
     res = run_compiler(command)
     (round_dir/'compiler.log').write_text(res.stdout + res.stderr, encoding='utf-8')
     if res.returncode == 0:
+        if not (GAME_BUILD/'run-env.txt').is_file() and (BUILD/'game-old'/'run-env.txt').is_file(): # [extra]
+            shutil.copy2(BUILD/'game-old'/'run-env.txt', GAME_BUILD/'run-env.txt') # [extra]
         FINGERPRINT.write_text(fingerprint() + '\n', encoding='ascii')
         GUEST_FINGERPRINT.write_text(guest_fingerprint() + '\n', encoding='ascii')
         print(f'Fast relink succeeded: {round_dir / "trace"} updated.', flush=True)

@@ -81,6 +81,11 @@ QWidget* SettingsDialog::createGraphicsTab()
     m_fullscreenCheck = new QCheckBox("Exclusive / Borderless Fullscreen", page);
     m_vsyncCheck = new QCheckBox("Enable VSync", page);
 
+    m_presentModeCombo = new QComboBox(page);
+    m_presentModeCombo->addItem("FIFO (VSync Travado / Estável - Recomendado)", "fifo");
+    m_presentModeCombo->addItem("Mailbox (Sem Tearing / Baixa Latência)", "mailbox");
+    m_presentModeCombo->addItem("Immediate (Sem Sincronização / Tearing)", "immediate");
+
     m_fpsSpin = new QSpinBox(page);
     m_fpsSpin->setRange(30, 240);
     m_fpsSpin->setValue(60);
@@ -95,6 +100,7 @@ QWidget* SettingsDialog::createGraphicsTab()
     layout->addRow("Resolution:", m_resolutionCombo);
     layout->addRow("", m_fullscreenCheck);
     layout->addRow("", m_vsyncCheck);
+    layout->addRow("Sync Mode:", m_presentModeCombo);
     layout->addRow("Target FPS:", m_fpsSpin);
     layout->addRow("Internal Scale:", m_scaleCombo);
     layout->addRow("Upscaler:", m_upscalerCombo);
@@ -134,11 +140,13 @@ QWidget* SettingsDialog::createAdvancedTab()
     m_forceShadersCheck = new QCheckBox("Force Full Shader Cache Recompilation On Launch", page);
     m_verboseLogCheck = new QCheckBox("Habilitar Log Detalhado do Motor (AC_VERBOSE=1)", page);
     m_cutscene30Check = new QCheckBox("Travar Cutscenes em 30 FPS nativo (AC_CUTSCENE_FPS=30 para A/V sync estrito)", page);
+    m_asyncSubmitCheck = new QCheckBox("Submissão Gráfica Assíncrona (AC_ASYNC_SUBMIT=1 - Maior FPS)", page);
 
     layout->addWidget(m_bc7Check);
     layout->addWidget(m_forceShadersCheck);
     layout->addWidget(m_verboseLogCheck);
     layout->addWidget(m_cutscene30Check);
+    layout->addWidget(m_asyncSubmitCheck);
 
     auto* form = new QFormLayout();
     m_wrapperEdit = new QLineEdit(page);
@@ -163,6 +171,8 @@ void SettingsDialog::loadFromConfig()
 
     m_fullscreenCheck->setChecked(g.fullscreen);
     m_vsyncCheck->setChecked(g.vsync);
+    const int pIdx = m_presentModeCombo->findData(g.presentMode);
+    if (pIdx >= 0) m_presentModeCombo->setCurrentIndex(pIdx);
     m_fpsSpin->setValue(g.fpsLimit);
 
     for (int i = 0; i < m_scaleCombo->count(); ++i) {
@@ -187,6 +197,7 @@ void SettingsDialog::loadFromConfig()
     m_forceShadersCheck->setChecked(gm.forceShaders);
     m_verboseLogCheck->setChecked(gm.verboseLog);
     m_cutscene30Check->setChecked(gm.cutscene30Fps);
+    m_asyncSubmitCheck->setChecked(gm.asyncSubmit);
     m_wrapperEdit->setText(gm.commandWrapper);
     m_customEnvEdit->setText(gm.customEnv);
     const int prIdx = m_promptsCombo->findData(gm.buttonPrompts);
@@ -203,6 +214,7 @@ void SettingsDialog::writeToConfig()
     }
     g.fullscreen = m_fullscreenCheck->isChecked();
     g.vsync = m_vsyncCheck->isChecked();
+    g.presentMode = m_presentModeCombo->currentData().toString();
     g.fpsLimit = m_fpsSpin->value();
     g.upscaler = m_upscalerCombo->currentData().toString();
 
@@ -218,6 +230,7 @@ void SettingsDialog::writeToConfig()
     gm.forceShaders = m_forceShadersCheck->isChecked();
     gm.verboseLog = m_verboseLogCheck->isChecked();
     gm.cutscene30Fps = m_cutscene30Check->isChecked();
+    gm.asyncSubmit = m_asyncSubmitCheck->isChecked();
     gm.commandWrapper = m_wrapperEdit->text().trimmed();
     gm.customEnv = m_customEnvEdit->text().trimmed();
 

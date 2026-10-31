@@ -12,6 +12,7 @@ struct GraphicsSettings {
     int height{1080};
     bool fullscreen{false};
     bool vsync{true};
+    QString presentMode{"fifo"};
     int fpsLimit{60};
     double renderScale{1.0};
     QString upscaler{"bilinear"};
@@ -29,6 +30,7 @@ struct GameSettings {
     bool forceShaders{false};
     bool verboseLog{false};
     bool cutscene30Fps{false};
+    bool asyncSubmit{true};
     QString buttonPrompts{"auto"};
     QString commandWrapper{""};
     QString customEnv{""};

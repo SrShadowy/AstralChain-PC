@@ -20,6 +20,7 @@ void Config::load()
     m_graphics.height = s.value("height", 1080).toInt();
     m_graphics.fullscreen = s.value("fullscreen", false).toBool();
     m_graphics.vsync = s.value("vsync", true).toBool();
+    m_graphics.presentMode = s.value("present_mode", "fifo").toString();
     m_graphics.fpsLimit = s.value("fps_limit", 60).toInt();
     m_graphics.renderScale = s.value("render_scale", 1.0).toDouble();
     m_graphics.upscaler = s.value("upscaler", "bilinear").toString();
@@ -37,6 +38,7 @@ void Config::load()
     m_game.forceShaders = s.value("force_shaders", false).toBool();
     m_game.verboseLog = s.value("verbose_log", false).toBool();
     m_game.cutscene30Fps = s.value("cutscene_30fps", false).toBool();
+    m_game.asyncSubmit = s.value("async_submit", true).toBool();
     m_game.buttonPrompts = s.value("button_prompts", "auto").toString();
     m_game.commandWrapper = s.value("command_wrapper", "").toString();
     m_game.customEnv = s.value("custom_env", "").toString();
@@ -62,6 +64,7 @@ void Config::save()
     s.setValue("height", m_graphics.height);
     s.setValue("fullscreen", m_graphics.fullscreen);
     s.setValue("vsync", m_graphics.vsync);
+    s.setValue("present_mode", m_graphics.presentMode);
     s.setValue("fps_limit", m_graphics.fpsLimit);
     s.setValue("render_scale", m_graphics.renderScale);
     s.setValue("upscaler", m_graphics.upscaler);
@@ -79,6 +82,7 @@ void Config::save()
     s.setValue("force_shaders", m_game.forceShaders);
     s.setValue("verbose_log", m_game.verboseLog);
     s.setValue("cutscene_30fps", m_game.cutscene30Fps);
+    s.setValue("async_submit", m_game.asyncSubmit);
     s.setValue("button_prompts", m_game.buttonPrompts);
     s.setValue("command_wrapper", m_game.commandWrapper);
     s.setValue("custom_env", m_game.customEnv);
@@ -153,17 +157,26 @@ QString Config::buildLaunchEnv() const
     QStringList env;
     if (m_game.parallelThreads) env << "AC_PARALLEL=1";
     if (m_game.ignoreFocus) env << "AC_IGNORE_FOCUS=1";
-    if (m_game.bc7Precompute) env << "AC_BC7_PRECOMPUTE=1";
+    if (m_game.bc7Precompute) {
+        env << "AC_BC7_PRECOMPUTE=1";
+        env << "LARECOMP_BC7=1";
+    }
     if (m_graphics.fullscreen) env << "AC_FULLSCREEN=1";
     if (m_graphics.upscaler == "fsr1") env << "AC_UPSCALER=fsr1";
     if (m_game.verboseLog) env << "AC_VERBOSE=1";
     if (m_game.cutscene30Fps) env << "AC_CUTSCENE_FPS=30";
+    if (m_game.asyncSubmit) env << "AC_ASYNC_SUBMIT=1";
     if (m_game.buttonPrompts == "switch") env << "AC_PROMPTS=switch";
     else if (m_game.buttonPrompts == "keyboard") env << "AC_PROMPTS=keyboard";
     else env << "AC_PROMPTS=auto";
     env << "AC_AUDIO_RESYNC=1";
     env << "LARECOMP_VK_LAZY_WB=0";
-    env << "LARECOMP_VK_COPY_VERTICES=0";
+    if (!m_graphics.vsync) {
+        env << "LARECOMP_VK_PRESENT=mailbox";
+    } else {
+        const QString mode = m_graphics.presentMode.isEmpty() ? "fifo" : m_graphics.presentMode.toLower();
+        env << QString("LARECOMP_VK_PRESENT=%1").arg(mode);
+    }
     env << "AC_PRESENT_INTERVAL=1";
     env << QString("AC_WIDTH=%1").arg(m_graphics.width);
     env << QString("AC_HEIGHT=%1").arg(m_graphics.height);

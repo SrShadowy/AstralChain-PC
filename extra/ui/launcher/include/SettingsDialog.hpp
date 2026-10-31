@@ -45,6 +45,7 @@ private:
     QComboBox* m_resolutionCombo{nullptr};
     QCheckBox* m_fullscreenCheck{nullptr};
     QCheckBox* m_vsyncCheck{nullptr};
+    QComboBox* m_presentModeCombo{nullptr};
     QSpinBox* m_fpsSpin{nullptr};
     QComboBox* m_scaleCombo{nullptr};
     QComboBox* m_upscalerCombo{nullptr};
@@ -59,6 +60,7 @@ private:
     QCheckBox* m_forceShadersCheck{nullptr};
     QCheckBox* m_verboseLogCheck{nullptr};
     QCheckBox* m_cutscene30Check{nullptr};
+    QCheckBox* m_asyncSubmitCheck{nullptr};
     QLineEdit* m_wrapperEdit{nullptr};
     QLineEdit* m_customEnvEdit{nullptr};
 };

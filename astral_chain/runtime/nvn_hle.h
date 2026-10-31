@@ -263,12 +263,12 @@ static int track_ready(void) {
 /* (LARECOMP_VK_PROF line: write tracking queries, their time (ns) and pages, by caller) */
 uint64_t prof_ww_calls,prof_ww_qpc,prof_ww_pages,prof_ww_mirror,prof_ww_clean;
 static void track_harvest(uint64_t lo,uint64_t hi) {
+#ifndef _WIN32 // [extra]
+ (void)lo; (void)hi; // [extra]
+#else // [extra]
  static uint64_t written[65536];
  LARGE_INTEGER ww0;QueryPerformanceCounter(&ww0);prof_ww_calls++;prof_ww_pages+=(hi-lo)>>12;
  track_ready();uint32_t g=++track_clock;
-#ifndef _WIN32 // [extra]
- for(uint64_t a=lo;a<hi;a+=4096) track_gen[(a-heap_base)>>12]=g; // [extra]
-#else // [extra]
  for(uint64_t a=lo;a<hi;) {
   uint64_t e=hi-a>(256ull<<20) ? a+(256ull<<20) : hi; /* 65536 pages: the buffer never overflows */
   ULONG_PTR n=65536;ULONG granularity=4096;
@@ -277,9 +277,9 @@ static void track_harvest(uint64_t lo,uint64_t hi) {
   for(ULONG_PTR i=0;i<n;i++) track_gen[(written[i]-heap_base)>>12]=g;
   a=e;
  }
-#endif // [extra]
  static LARGE_INTEGER wwf;if(!wwf.QuadPart) QueryPerformanceFrequency(&wwf);
  LARGE_INTEGER ww1;QueryPerformanceCounter(&ww1);prof_ww_qpc+=(uint64_t)(ww1.QuadPart-ww0.QuadPart)*1000000000ull/(uint64_t)wwf.QuadPart;
+#endif // [extra]
 }
 static int written_pages(uint64_t addr,uint64_t size,uint64_t *pages,int max,uint64_t *page,int harvest) {
 #ifndef _WIN32 // [extra]
