@@ -430,46 +430,10 @@ void *nvn_host_window(void) {
 /* Display pacing: 60 Hz vsync grid in rt_ticks (19.2 MHz). Each present waits for
  * the first vsync at least `interval` refreshes after the previous present.
  * AC_PRESENT_INTERVAL overrides the game's interval (experiments, e.g. 1). */
-void nvn_present_pace(int interval) {
- static int override=-2;
- if(override==-2) {char v[16];DWORD n=GetEnvironmentVariableA("AC_PRESENT_INTERVAL",v,sizeof(v));override=n && n<sizeof(v) ? atoi(v) : -1;}
- static unsigned presents;
- if(!(++presents%60)) {fflush(stdout);fflush(stderr);} /* long runs end by timeout; keep the log current */
- static int logged_interval=-1;
- if(interval!=logged_interval) {printf("NVN present interval=%d override=%d\n",interval,override);logged_interval=interval;}
- if(override>=0) interval=override;
- /* AC_CUTSCENE_FPS=30: cutscenes at 30 FPS, as in the unmodified game (svc #0xB1 in host_runtime.c.in). */
- extern int cutscene_mode;
- if(cutscene_mode && interval>0 && interval<2) interval=2;
- if(interval<=0) return;
- static uint64_t origin,last_vsync;
- const uint64_t period=320000; /* 19.2 MHz / 60 Hz */
- uint64_t now=rt_ticks();
- if(!origin) {origin=now;last_vsync=0;return;}
- /* Adaptive: a frame that missed its slot (last + interval) is shown at once
-  * rather than held to the next refresh, which would only add idle time. The cadence is kept: the next frame is due
-  * an interval after the missed slot, not after the late present (resynchronized only when more than 4 slots
-  * behind). Restarting the cadence at each late frame lost up to a slot each time: 30 FPS cutscenes ran at 29.0. */
- uint64_t due=last_vsync+(uint64_t)interval;
- if(now-origin>due*period) {
-  last_vsync=now-origin>(due+4)*period ? (now-origin)/period : due;
-  return;
- }
- uint64_t vsync=(now-origin+period-1)/period;
- if(vsync<due) vsync=due;
- last_vsync=vsync;
- uint64_t target=origin+vsync*period;
- if(target<=now) return;
- klock();threads_initialize();
- unsigned others=0;
- for(unsigned i=0;i<33;i++) if(i!=current_thread && guest_threads[i].status!=THREAD_UNUSED &&
-    guest_threads[i].status!=THREAD_CREATED && guest_threads[i].status!=THREAD_EXITED) others++;
- if(!others) {kunlock();while(rt_ticks()<target) Sleep(0);return;}
- guest_threads[current_thread].wake_tick=target;
- guest_threads[current_thread].status=THREAD_SLEEPING;
- (parallel_mode ? 0 : (thread_reschedule=1));
- kunlock();
-}
+#include "extra/core/pace_trampoline.h" // [extra]
+void nvn_present_pace(int interval) { // [extra]
+    extra_nvn_present_pace(interval); // [extra]
+} // [extra]
 /* Diagnostic: regions of the guest heap that are not committed PAGE_READWRITE
  * (such pages prevent pinning the heap for Vulkan host-memory import). */
 void nvn_report_heap_protection(uint64_t size) {

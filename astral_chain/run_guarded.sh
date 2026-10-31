@@ -61,7 +61,7 @@ if [ -n "$EXTRA_ENV" ]; then
     done
 fi
 
-export LARECOMP_VK_PRESENT="${LARECOMP_VK_PRESENT:-fifo}"
+export LARECOMP_VK_PRESENT="${LARECOMP_VK_PRESENT:-mailbox}"
 
 if [ -n "$INPUT_SCRIPT" ]; then
     export AC_INPUT_SCRIPT="$INPUT_SCRIPT"

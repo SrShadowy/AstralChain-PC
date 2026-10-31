@@ -45,13 +45,20 @@
 | `astral_chain/runtime/save_fs.h` | `save_resolve` | `extra/core/storage_trampoline.h` | Formatação de caminhos e conversão mbstowcs | 6 lines |
 | `astral_chain/runtime/las/las_compat.h` | `#ifndef _WIN32` | `extra/core/storage_trampoline.h` | Inclusão de rotinas de compatibilidade POSIX | 4 lines |
 | `astral_chain/native_trace.py` | `run-env.txt` | `run_guarded.sh` | Exportação de backend vinculado e glslang | 4 lines |
-| `astral_chain/runtime/las/nvn/vulkan/exec.c` | `guest_copy_vtx` / `vcopy` / `draw` | `exec.c` | Deduplicação cirúrgica de cópias de vértices (`vcopy` com correspondência estrita de tamanho e dispersão de hash) e isolamento de index buffers | 22 lines |
+| `astral_chain/runtime/las/nvn/vulkan/exec.c` | `vk_exec_reset` | `exec.c` | Inclusão de `guest_vcopy_flush()` no reset do backend Vulkan | 1 line |
+| `astral_chain/runtime/las/nvn/vulkan/exec/cache/vcache.c` | `guest_direct` (`min_direct`) | `vcache.c` | Fallback adaptativo de buffers dinâmicos de interface (≤ 512 KB) para cópia da RAM do host no Linux | 11 lines |
+| `astral_chain/runtime/las/nvn/vulkan/exec/cache/gcopy.c` | `guest_copy_flush` | `gcopy.c` | Desacoplamento da invalidação do cache de vértices de atualizações de cbuf | 2 lines |
+| `astral_chain/runtime/las/nvn/vulkan/exec/cache/vcopy.c` | `guest_copy_vtx` | `vcopy.c` | Hash de 64-bit incluindo `size` e correspondência estrita `size == size` | 4 lines |
+| `astral_chain/runtime/las/nvn/vulkan/exec/commands/draw.c` | `draw_` (streams & IB) | `draw.c` | Unificação de chave de cópia para buffers ≤ 512 KB e cópia transiente isolada de índices | 27 lines |
+| `astral_chain/runtime/las/nvn/vulkan/exec/commands/present.c` | `vk_present_draw` / `post_pass` | `present.c` | Sincronização de scissor filter via `ss_forget()` eliminando corte retangular escuro | 7 lines |
+| `astral_chain/runtime/las/nvn/objects.c` | `register_texture` | `objects.c` | Invalidação do gerador de views de textura (`vk_view_gen++`) no registro de pools | 1 line |
 | `astral_chain/runtime/las/nvn/vulkan/textures.c` | `mark_dynamic` | `extra/core/vulkan_trampoline.h` | Amostragem FNV para texturas de vídeo dinâmicas | 5 lines |
 | `astral_chain/runtime/las/settings.h` | `settings_load` | `extra/ui/launcher` | Suporte a variável de ambiente `AC_UPSCALER=fsr1` | 4 lines |
 | `astral_chain/runtime/hid_service.h` | `hid_xinput` | `extra/core/window_trampoline.h` | Leitura de gamepad via SDL3 no Linux | 4 lines |
 | `astral_chain/runtime/pl_hle.h` | `pl_load_fonts` | `extra/core/platform_posix.h` | Caminhos de fontes padrão do sistema Linux | 5 lines |
 | `astral_chain/runtime/las/maxwell_ext.h` | `#include "extra/core/maxwell_extra.h"` | `extra/core/maxwell_extra.h` | Tradução de instruções compute Maxwell (família LEA) | 1 line |
 | `extra/ui/launcher/` | `presentMode` / `LARECOMP_VK_PRESENT` / `asyncSubmit` | `extra/ui/launcher` | Seletor de sincronização de monitor (FIFO, Mailbox, Immediate) e submissão gráfica assíncrona | 25 lines |
+| `astral_chain/runtime/nvn_hle.h` | `nvn_present_pace` | `extra/core/pace_trampoline.h` | Suporte dinâmico a taxa de quadros alvo (AC_FPS e pacing customizado) | 4 lines |
 
 ---
 
@@ -238,16 +245,93 @@
 - Injeção de `AC_ASYNC_SUBMIT=1` no ambiente de lançamento, desacoplando a gravação de command buffers da execução, fences e apresentação Vulkan na GPU.
 - Vinculação do ajuste de VSync ao modo de apresentação `LARECOMP_VK_PRESENT_MODE=fifo` (prevenindo que o modo `mailbox` consuma 85% de GPU em execuções sem pacing) e controle limpo de cópia dinâmica de vértices sem corrupção de atlas de texturas.
 
-### Correção de Artefatos de HUD, Scissor Escuro e Alinhamento de Viewport (`vcopy.c`, `draw.c`, `present.c`)
-- Correção da chave de cache em `vcopy.c`: correspondência estrita de tamanho (`vcopy[slot].size == size`) e inclusão de `size` no hash de 64 bits, eliminando alocações colidentes de scratch memory que carimbavam glifos de HUD nas geometrias do chão 3D.
-- Reversão da cópia dinâmica de índices em `draw.c` para `vk_transient_copy(src, size, 4)`, eliminando corrupção de malhas e corte de caracteres em textos de interface ("LOADIN" -> "LOADING").
-- Sincronização do filtro de estado Vulkan (`StateFilter ss`) em `present.c`: remoção de chamadas manuais espúrias de scissor em `vk_present_draw` e emissão de `ss_forget()` ao término de operações de apresentação e pós-processamento, erradicando a caixa retangular escura que cortava elementos da cena 3D.
+### Arquitetura de Memória Gráfica no Linux e Resolução Integral de HUD, Menus e Projeção de Quadrantes
 
-### Resolução de Bugs de HUD, Menus e Quadrantes no Linux (`vcache.c`, `gcopy.c`, `draw.c`, `objects.c`, `exec.c`)
-- **Fallback Automático para Vértices Dinâmicos de CPU (`vcache.c`)**: No Linux, a ausência de write tracking (`GetWriteWatch`) deixava o espelho de dispositivo (`gmem_buf`) defasado para escritas de CPU após a carga inicial. Implementado limiar adaptativo `min_direct` (512 KB, configurável via `LARECOMP_VK_DIRECT_MIN_SIZE`), redirecionando buffers dinâmicos de interface, menus e tela de título para cópias limpas via host RAM (`guest_copy_vtx`), mantendo malhas 3D estáticas no espelho direto de VRAM a 60 FPS.
-- **Desacoplamento de Invalidação de Cache (`gcopy.c`, `exec.c`)**: Remoção de `guest_vcopy_flush()` de dentro de `guest_copy_flush()`. Atualizações de uniform buffers (`CMD_UPDATE_UNIFORM_BUFFER`) não mais descartam cópias de vértices no meio da submissão, eliminando overhead redundante de cópia. `guest_vcopy_flush()` é acionado adequadamente em resets globais (`vk_exec_reset()`).
-- **Chave de Cache Unificada para Interface (`draw.c`)**: Para buffers $\le 512$ KB, a cópia usa o tamanho integral `v.size`, garantindo que múltiplos draws desenhando elementos da mesma folha de sprites ou atlas de UI acertem o mesmo slot do cache `vcopy`.
-- **Invalidação de Descritores no Registro de Texturas (`objects.c`)**: Incremento de `vk_view_gen` em `register_texture` ao registrar novas entradas no `NvnDescPool`, impedindo que views cacheadas em `descriptors.c` persistam incorretamente para geometrias 3D subsequentes.
+#### 1. Divergência Arquitetural de Memória (Windows vs. Linux First)
+- **Upstream Windows Original**: A arquitetura original do emulador NVN no Windows apoiava-se na API `GetWriteWatch(WRITE_WATCH_FLAG_RESET, ...)` do Win32. Através de `pt_init()` e `track_harvest()`, o runtime monitorava continuamente quais páginas de 4 KB do heap de 3 GB haviam sido gravadas pela CPU. Antes de cada submissão Vulkan, a rotina `gmem_sync()` executava o espelhamento incremental das páginas sujas (`stat_mirror_bytes`) para o buffer `gmem_buf` em VRAM.
+- **Limitação no Linux Nativo**: No Linux, a API `GetWriteWatch` não existe nativamente, e a implementação de `track_harvest()` em `nvn_hle.h` era um no-op (`(void)lo; (void)hi;`), resultando em `pt_init() == false`. Adicionalmente, a tentativa de importação direta de ponteiro de host via extensão Vulkan (`VK_EXT_external_memory_host`) falhava no driver AMD RADV com o erro `-1000072003` (`VK_ERROR_INVALID_EXTERNAL_HANDLE_KHR`) ao tentar fixar a alocação de ~2.85 GB. Consequentemente, o backend recorria obrigatoriamente a um espelho privado em VRAM (`gmem_mirror` / `gmem_alloc != NULL`).
+- **Falha de Coerência de Memória**: Como `track_harvest()` não atualizava `track_gen`, a função `nvn_heap_mirror_dirty()` retornava 0 páginas após o boot inicial. O buffer `gmem_buf` em VRAM permanecia perpetuamente congelado com os dados da primeira amostragem, nunca refletindo as escritas dinâmicas subsequentes executadas pela CPU.
 
+#### 2. Mecânica do Colapso de Projeção no Quadrante Inferior Direito (Tela de Título)
+- **Ocorrência**: A tela de título (Frame 800) e os elementos de menu eram exibidos estritamente restritos ao quadrante inferior direito ($X \in [800, 1600], Y \in [450, 900]$), enquanto os outros 3 quadrantes permaneciam em escuridão total (`TL=0.0, TR=0.0, BL=0.0, BR=47.3`).
+- **Causa Analítica**: O vertex shader de tela cheia `72ac5a8400_vs.glsl` lê as coordenadas de quad dinâmico a partir do buffer hóspede `0x7223a0dc00`. No Windows, essas coordenadas são calculadas a cada quadro pela CPU. No Linux, `guest_direct()` presumia `copy = 0`, vinculando o shader diretamente ao endereço congelado `0x7223a0dc00 - HEAP_BASE` dentro de `gmem_buf`. Como a área em `gmem_buf` continha zeros, o valor de atributo $W$ resultava em $0.0$, anulando a coluna de translação da matriz de projeção ortográfica e mapeando as coordenadas normalizadas de $[-1, 1]$ para o espaço de tela $[0, 1] \times [-1, 0]$, forçando o desenho no quadrante 4.
 
+#### 3. Mecânica das Falhas de Menus e HUD
+- **Sintomas**: Textos de caixas de diálogo e menus truncados ou ausentes, retículas de mira não atualizadas e indicadores gráficos vazios.
+- **Causa Analítica**: Elementos dinâmicos de interface (fontes renderizadas via FreeType, layouts de HUD e janelas de menu) são alocados pelo jogo em pools circulares / heaps de memória scratch da CPU. Por compartilharem o mesmo heap hóspede sem write tracking, a leitura direta de `gmem_buf` lia buffers estagnados do quadro 1, corrompendo a geometria de cada glifo e elemento 2D.
 
+#### 4. Solução: Fallback Adaptativo Cirúrgico (`min_direct` em `vcache.c`)
+- **Princípio**: Não é necessário copiar gigabytes de geometria 3D estática para manter a interface funcional. Elementos dinâmicos de interface (quads, texto, HUD) possuem footprint volumétrico reduzido (sempre $\le 512$ KB por buffer), enquanto malhas de ambiente 3D, personagens e cenários estáticos possuem múltiplos megabytes e já foram devidamente sincronizados para VRAM no carregamento de fase.
+- **Implementação**:
+  - Em `vcache.c` (`guest_direct`), adicionada verificação de limiar adaptativo:
+    ```c
+    #ifndef _WIN32 // [extra]
+        static uint64_t min_direct = 0;
+        if (!min_direct) {
+            const char *m = getenv("LARECOMP_VK_DIRECT_MIN_SIZE");
+            min_direct = m ? (uint64_t)strtoull(m, NULL, 0) : (512ull * 1024);
+        }
+        if (size < min_direct) return false;
+    #endif // [extra]
+    ```
+  - Buffers de UI, HUD e menus ($< 512$ KB) rejeitam `guest_direct()` e realizam fallback imediato para `guest_copy_vtx()`, lendo dados frescos da RAM do host.
+  - Malhas estáticas pesadas ($\ge 512$ KB) continuam vinculadas em `gmem_buf` em VRAM, garantindo taxa sustentada de 60 FPS com zero consumo de PCIe.
+  - O limiar pode ser ajustado em tempo de execução via variável de ambiente `LARECOMP_VK_DIRECT_MIN_SIZE` (padrão 524288 bytes).
+
+#### 5. Desacoplamento do Cache de Vértices e Resolução de Upload Throttling (`gcopy.c`, `exec.c`, `draw.c`)
+- **Problema de Throttling**: A ativação global de cópia de vértices (`LARECOMP_VK_COPY_VERTICES=1`) provocava queda brusca de performance para ~13 FPS com consumo brutal de 37 GB/s de PCIe na cena in-game (HQ).
+- **Causa Raiz**: O módulo `gcopy.c` foi concebido para buffers de constantes (`cbuf` / uniform buffers). A rotina `guest_copy_flush()` continha uma chamada espúria a `guest_vcopy_flush()`. Como cada draw call in-game emite atualizações frequentes de uniform buffers (`CMD_UPDATE_UNIFORM_BUFFER`), a geração `vcopy_gen` era incrementada dezenas de vezes por quadro, invalidando todo o cache `vcopy` e forçando re-cópia integral de malhas em cada chamada de desenho.
+- **Resoluções**:
+  1. **Desacoplamento em `gcopy.c`**: Remoção de `guest_vcopy_flush()` de dentro de `guest_copy_flush()`. Atualizações de cbuf não mais afetam o cache de vértices.
+  2. **Ciclo de Vida Correto em `exec.c`**: Inclusão de `guest_vcopy_flush()` exclusivamente em `vk_exec_reset()`.
+  3. **Unificação de Chave de Cache em `draw.c`**: Para buffers dinâmicos $\le 512$ KB, a cópia utiliza o tamanho integral vinculado `v.size` em vez de um `need` variável derivado de `max_index`. Isso unifica a chave `(addr, size)` no hash de 64-bit de `vcopy.c`, elevando a taxa de acertos de cache para quase 100% em múltiplos draws do mesmo atlas de UI.
+
+#### 6. Erradicação de Projeções de HUD no Chão 3D e Memoização de Texturas (`objects.c`, `vcopy.c`)
+- **Problema**: Ícones e miras de HUD apareciam ocasionalmente texturizados sobre as geometrias do chão da delegacia.
+- **Causas e Correções**:
+  1. Em `vcopy.c`, a condição frouxa `vcopy[slot].size >= size` permitia que alocações subsequentes de scratch memory de tamanho menor reutilizassem slots pertencentes a draws de HUD. Corrigido com correspondência estrita `vcopy[slot].size == size` e inclusão de `size` no hash de 64 bits.
+  2. Em `objects.c` (`register_texture`), a reconfiguração de entradas em `NvnDescPool` não invalidava a tabela de memoização de views de textura em `descriptors.c`. Adicionado `extern uint32_t vk_view_gen; vk_view_gen++; // [extra]`, forçando a reavaliação de descritores no Vulkan sempre que o jogo remapeia um índice de textura.
+
+#### 7. Sincronização do Filtro de Estado Vulkan e Eliminação de Seams (`present.c`)
+- **Problema**: Caixa retangular escura cortando o quadrante inferior direito da delegacia no frame 3200.
+- **Causa**: `present.c` emitia `vkCmdSetScissor` manuais ao final do quadro para operações de apresentação e screenshot sem atualizar a estrutura `StateFilter ss`. No quadro seguinte, draws 3D acreditavam que o scissor cobria a tela toda e não o reemitiam, resultando no vazamento do scissor restrito.
+- **Correção**: Remoção das chamadas manuais de scissor e adição de `ss_forget() // [extra]` nos pós-passes (`post_pass`, `vk_present_draw`, `renderer_save_texture_tex`), restabelecendo a coerência de estado entre o motor e o command buffer Vulkan.
+
+#### 8. Pacing Dinâmico e Controle de Taxa de Quadros (`extra/core/pace_trampoline.h`, `AC_FPS`, `Config`, `SettingsDialog`)
+- **Problema**: Alterar o Target FPS no launcher (para cima ou para baixo de 60) não surtia efeito: a taxa de quadros permanecia fixa em 60 FPS mesmo em modo imediato (`Present Mode: IMMEDIATE`).
+- **Causas**:
+  1. A rotina de apresentação `nvn_present_pace` em `astral_chain/runtime/nvn_hle.h` utilizava uma grade rígida de 60 Hz (`period = 320000` ticks @ 19.2 MHz) que forçava cada quadro a esperar pelo menos 1 slot de 1/60s.
+  2. A rotina `Config::buildLaunchEnv()` injetava `AC_PRESENT_INTERVAL=1` de forma fixa e não propagava a propriedade `m_graphics.fpsLimit`.
+- **Resoluções**:
+  1. Criação do trampoline desacoplado `extra/core/pace_trampoline.h` com leitura de `AC_FPS` / `AC_TARGET_FPS` e cálculo dinâmico do período de quadro (`19200000 / current_fps`), suportando taxas arbitrárias (30..240 FPS) ou desativação de pacing (`AC_FPS=0`).
+  2. Preservação da taxa fixa de 30 FPS em cutscenes quando `AC_CUTSCENE_FPS=30` está ativado, com reinício limpo de cadência (`prev_period != period`).
+  3. Atualização de `Config::buildLaunchEnv()` para exportar `AC_FPS=<fpsLimit>` (e `AC_PRESENT_INTERVAL=0` quando 0).
+  4. Extensão do controle de Target FPS em `SettingsDialog` para permitir `0` (exibindo "0 (Ilimitado)").
+
+#### 9. Modos de Apresentação Vulkan no Launcher e Runtime (`swapchain.c`, `run_guarded.sh`, `SettingsDialog`, `Config`)
+- **Problema**: O launcher não oferecia os modos de apresentação de forma consistente, `run_guarded.sh:64` forçava `LARECOMP_VK_PRESENT="fifo"`, conflitando com o padrão do emulador (`mailbox`) e introduzindo fence waits e latência no compositor Wayland/X11. Modos como `FIFO Relaxed` (VSync Adaptativo) não eram suportados no runtime.
+- **Resoluções**:
+  1. Suporte a `VK_PRESENT_MODE_FIFO_RELAXED_KHR` em `astral_chain/runtime/las/nvn/vulkan/device/swapchain.c` (`fifo_relaxed` e `fifo-relaxed`).
+  2. Atualização de `extra/ui/launcher/src/SettingsDialog.cpp` expondo claramente os modos de apresentação:
+     - `Mailbox (Sem Tearing / Baixa Latência - Recomendado)` (`mailbox`)
+     - `FIFO (VSync Estrito / 60 Hz Travado)` (`fifo`)
+     - `FIFO Relaxed (VSync Adaptativo / Sem Stutter)` (`fifo_relaxed`)
+     - `Immediate (Sem Sincronização / Menor Latência)` (`immediate`)
+  3. Sincronização entre a caixa de seleção de VSync e o modo de apresentação, e propagação direta de `LARECOMP_VK_PRESENT=<mode>` em `Config::buildLaunchEnv()`.
+  4. Alinhamento de `astral_chain/run_guarded.sh` para usar `mailbox` como padrão.
+
+#### 10. Refatoração de Heap Mirror e Eliminação de Cópias Inúteis de Compute (`extra/core/heap_mirror_extra.h`, `heap_mirror.c`, `platform_posix.h`, `pace_trampoline.h`)
+- **Problema**: Telemetria registrava `write-back 3939 MB in 2226` a cada 2 segundos (~2 GB/s de tráfego de PCIe contínuo e `memcpy` na CPU). Toda submissão com shaders compute (estágio 5) gravando em storage buffers (listas de agrupamento de luzes de 9.6 MB e 16.8 MB, culling) alocava staging buffers via `vmaCreateBuffer` e copiava esses dados de volta para a memória guest, mesmo que o CPU do jogo nunca lesse esses dados (eles são consumidos exclusivamente por fragment shaders na GPU). Adicionalmente, `Sleep(0)` mapeado para `usleep(0)` em `platform_posix.h` girava sem ceder CPU, queimando mais de 2 núcleos no pacing.
+- **Resoluções**:
+  1. **Constantes Arquiteturais e Anotações Válidas (`extra/core/heap_mirror_extra.h`)**:
+     - Definição de constantes limpas (`EXTRA_PAGE_SIZE_4K`, `EXTRA_PAGE_MASK_4K`, `EXTRA_PAGE_SHIFT_4K`, `EXTRA_MAX_DIRTY_PAGES`, `EXTRA_MAX_WB_PENDING`, `EXTRA_MAX_WB_FLIGHT`, etc.), eliminando números mágicos espalhados.
+     - Documentação técnica detalhada sobre o pipeline de espelhamento e controle de coerência.
+  2. **Eliminação de Cópias Redundantes (`extra_wb_should_skip`, `LARECOMP_VK_WB`)**:
+     - Implementação de filtro ativo em `gmem_wb_note`: buffers de compute $\ge 1\text{ MB}$ (como as listas de luzes de 9.6 MB e 16.8 MB) são ignorados para write-back, pois seus dados já residem no buffer `gmem_buf` da GPU.
+     - Redução medida do volume de write-back de **3.939 MB para 9-11 MB a cada 2 s** (**redução de 99.72%**), eliminando ~2 GB/s de PCIe e CPU memcpy.
+     - Suporte a controle dinâmico via `LARECOMP_VK_WB` (`0`/`none`/`off` para desativação total, `all`/`legacy` para comportamento legado) e `LARECOMP_VK_WB_THRESHOLD`.
+  3. **Fast-Path Sem Contenção de Lock (`gmem_writeback_apply`)**:
+     - Verificação antecipada com `extra_wb_has_work`, evitando aquisição desnecessária de `lazy_lock` em submissões sem write-back pendente.
+  4. **Semântica POSIX de Espera e Hybrid Pacing (`platform_posix.h`, `pace_trampoline.h`)**:
+     - Correção de `Sleep(0)` para `sched_yield()` e `Sleep(ms>0)` para `nanosleep` bloqueante real em `extra/core/platform_posix.h`.
+     - Implementação de hybrid wait em `extra/core/pace_trampoline.h`, dormindo via `nanosleep` quando restam $> 300\,\mu\text{s}$ e aplicando spin curto nos últimos microssegundos para precisão sub-milissegundo, recuperando mais de 2 núcleos de CPU.

@@ -82,12 +82,29 @@ QWidget* SettingsDialog::createGraphicsTab()
     m_vsyncCheck = new QCheckBox("Enable VSync", page);
 
     m_presentModeCombo = new QComboBox(page);
-    m_presentModeCombo->addItem("FIFO (VSync Travado / Estável - Recomendado)", "fifo");
-    m_presentModeCombo->addItem("Mailbox (Sem Tearing / Baixa Latência)", "mailbox");
-    m_presentModeCombo->addItem("Immediate (Sem Sincronização / Tearing)", "immediate");
+    m_presentModeCombo->addItem("Mailbox (Sem Tearing / Baixa Latência - Recomendado)", "mailbox");
+    m_presentModeCombo->addItem("FIFO (VSync Estrito / 60 Hz Travado)", "fifo");
+    m_presentModeCombo->addItem("FIFO Relaxed (VSync Adaptativo / Sem Stutter)", "fifo_relaxed");
+    m_presentModeCombo->addItem("Immediate (Sem Sincronização / Menor Latência)", "immediate");
+
+    connect(m_presentModeCombo, &QComboBox::currentIndexChanged, this, [this](int idx) {
+        const QString mode = m_presentModeCombo->itemData(idx).toString();
+        m_vsyncCheck->setChecked(mode != "immediate");
+    });
+    connect(m_vsyncCheck, &QCheckBox::toggled, this, [this](bool checked) {
+        if (!checked && m_presentModeCombo->currentData().toString() == "fifo") {
+            int idx = m_presentModeCombo->findData("mailbox");
+            if (idx >= 0) m_presentModeCombo->setCurrentIndex(idx);
+        } else if (checked && m_presentModeCombo->currentData().toString() == "immediate") {
+            int idx = m_presentModeCombo->findData("fifo");
+            if (idx >= 0) m_presentModeCombo->setCurrentIndex(idx);
+        }
+    });
 
     m_fpsSpin = new QSpinBox(page);
-    m_fpsSpin->setRange(30, 240);
+    m_fpsSpin->setRange(0, 240);
+    m_fpsSpin->setSpecialValueText("0 (Ilimitado)");
+    m_fpsSpin->setSingleStep(5);
     m_fpsSpin->setValue(60);
 
     m_scaleCombo = new QComboBox(page);
@@ -171,7 +188,10 @@ void SettingsDialog::loadFromConfig()
 
     m_fullscreenCheck->setChecked(g.fullscreen);
     m_vsyncCheck->setChecked(g.vsync);
-    const int pIdx = m_presentModeCombo->findData(g.presentMode);
+    int pIdx = m_presentModeCombo->findData(g.presentMode);
+    if (pIdx < 0) {
+        pIdx = m_presentModeCombo->findData(g.vsync ? "fifo" : "mailbox");
+    }
     if (pIdx >= 0) m_presentModeCombo->setCurrentIndex(pIdx);
     m_fpsSpin->setValue(g.fpsLimit);
 

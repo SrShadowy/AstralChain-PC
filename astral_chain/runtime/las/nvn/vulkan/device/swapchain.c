@@ -2,13 +2,19 @@
 #include "../device_internal.h"
 
 VkPresentModeKHR dev_present_mode(void) {
-    // MAILBOX by default: the game paces itself (vi.c's emulated 60 Hz vsync), and with FIFO every submission
-    // queued behind the one waiting for a window image, so the game's fence waits followed the presentation engine:
-    // a throttled / captured / busy compositor slowed the whole game (4-21 fps with the GPU mostly idle; mailbox:
-    // 60). No tearing. LARECOMP_VK_PRESENT=fifo|immediate|mailbox to choose.
+    // Presentation modes: // [extra]
+    // - mailbox: Triple buffering / low latency without tearing (Recommended on modern Linux/Wayland)
+    // - fifo: Strict VSync (traditional 60 Hz lock)
+    // - fifo_relaxed: Adaptive VSync (syncs at refresh rate, tears when falling below to avoid stutter)
+    // - immediate: No sync (lowest latency, tears) // [extra]
     const char *e = getenv("LARECOMP_VK_PRESENT");
-    VkPresentModeKHR want = !e || !strcmp(e, "mailbox") ? VK_PRESENT_MODE_MAILBOX_KHR
-                          : !strcmp(e, "immediate") ? VK_PRESENT_MODE_IMMEDIATE_KHR : VK_PRESENT_MODE_FIFO_KHR;
+    VkPresentModeKHR want = VK_PRESENT_MODE_MAILBOX_KHR; // [extra]
+    if (e) {
+        if (!strcmp(e, "immediate")) want = VK_PRESENT_MODE_IMMEDIATE_KHR;
+        else if (!strcmp(e, "fifo")) want = VK_PRESENT_MODE_FIFO_KHR;
+        else if (!strcmp(e, "fifo_relaxed") || !strcmp(e, "fifo-relaxed")) want = VK_PRESENT_MODE_FIFO_RELAXED_KHR;
+        else if (!strcmp(e, "mailbox")) want = VK_PRESENT_MODE_MAILBOX_KHR;
+    } // [extra]
     uint32_t n = 0;
     vkGetPhysicalDeviceSurfacePresentModesKHR(g_vk.phys, g_vk.surface, &n, NULL);
     VkPresentModeKHR m[16];
@@ -19,8 +25,10 @@ VkPresentModeKHR dev_present_mode(void) {
     static VkPresentModeKHR logged = (VkPresentModeKHR)-1;
     if (got != logged) {
         logged = got;
-        LOG("[vk] present mode %s%s\n", got == VK_PRESENT_MODE_MAILBOX_KHR ? "mailbox"
-            : got == VK_PRESENT_MODE_IMMEDIATE_KHR ? "immediate" : "fifo", got != want ? " (the one asked for is not supported)" : "");
+        const char *name = got == VK_PRESENT_MODE_MAILBOX_KHR ? "mailbox" // [extra]
+                         : got == VK_PRESENT_MODE_IMMEDIATE_KHR ? "immediate"
+                         : got == VK_PRESENT_MODE_FIFO_RELAXED_KHR ? "fifo_relaxed" : "fifo";
+        LOG("[vk] present mode %s%s\n", name, got != want ? " (the one asked for is not supported)" : ""); // [extra]
     }
     return got;
 }

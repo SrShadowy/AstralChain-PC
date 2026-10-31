@@ -12,6 +12,8 @@
 #include <dlfcn.h>
 #include <signal.h>
 #include <stdarg.h>
+#include <sched.h>
+#include <time.h>
 
 static inline int extra_is_channel_enabled(const char *s) {
     if (!s) return 0;
@@ -240,7 +242,15 @@ static inline BOOL QueryPerformanceFrequency(LARGE_INTEGER *p) { if (p) p->QuadP
 #define GetTickCount64() extra_tick_count()
 #define GetCurrentThreadId() extra_current_thread_id()
 #define GetCurrentProcessId() ((DWORD)getpid())
-#define Sleep(ms) usleep((ms) * 1000)
+static inline void extra_sleep_ms(unsigned int ms) {
+    if (ms == 0) {
+        sched_yield();
+    } else {
+        struct timespec ts = {.tv_sec = ms / 1000, .tv_nsec = (long)(ms % 1000) * 1000000L};
+        nanosleep(&ts, NULL);
+    }
+}
+#define Sleep(ms) extra_sleep_ms(ms)
 
 #define AcquireSRWLockExclusive(l) pthread_mutex_lock(l)
 #define ReleaseSRWLockExclusive(l) pthread_mutex_unlock(l)

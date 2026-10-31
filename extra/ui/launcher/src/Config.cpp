@@ -20,7 +20,7 @@ void Config::load()
     m_graphics.height = s.value("height", 1080).toInt();
     m_graphics.fullscreen = s.value("fullscreen", false).toBool();
     m_graphics.vsync = s.value("vsync", true).toBool();
-    m_graphics.presentMode = s.value("present_mode", "fifo").toString();
+    m_graphics.presentMode = s.value("present_mode", "mailbox").toString();
     m_graphics.fpsLimit = s.value("fps_limit", 60).toInt();
     m_graphics.renderScale = s.value("render_scale", 1.0).toDouble();
     m_graphics.upscaler = s.value("upscaler", "bilinear").toString();
@@ -171,13 +171,15 @@ QString Config::buildLaunchEnv() const
     else env << "AC_PROMPTS=auto";
     env << "AC_AUDIO_RESYNC=1";
     env << "LARECOMP_VK_LAZY_WB=0";
-    if (!m_graphics.vsync) {
-        env << "LARECOMP_VK_PRESENT=mailbox";
-    } else {
-        const QString mode = m_graphics.presentMode.isEmpty() ? "fifo" : m_graphics.presentMode.toLower();
-        env << QString("LARECOMP_VK_PRESENT=%1").arg(mode);
+    QString mode = m_graphics.presentMode.trimmed().toLower();
+    if (mode.isEmpty()) {
+        mode = m_graphics.vsync ? "fifo" : "mailbox";
     }
-    env << "AC_PRESENT_INTERVAL=1";
+    env << QString("LARECOMP_VK_PRESENT=%1").arg(mode);
+    env << QString("AC_FPS=%1").arg(m_graphics.fpsLimit);
+    if (m_graphics.fpsLimit == 0) {
+        env << "AC_PRESENT_INTERVAL=0";
+    }
     env << QString("AC_WIDTH=%1").arg(m_graphics.width);
     env << QString("AC_HEIGHT=%1").arg(m_graphics.height);
     if (!m_bindings.empty()) {

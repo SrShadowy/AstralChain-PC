@@ -15,11 +15,37 @@
 #define MAP_FIXED_NOREPLACE 0x100000
 #endif
 
-#define INFINITE 0xFFFFFFFFu
-#define WAIT_OBJECT_0 0u
-#define WAIT_TIMEOUT 0x00000102u
-#define WAIT_FAILED 0xFFFFFFFFu
+/* Time units. Everything below is either a millisecond count taken straight
+ * from the Win32 signature or an absolute instant built from these. */
+#define EXTRA_MS_PER_SEC     1000u
+#define EXTRA_NS_PER_MS      1000000L
+#define EXTRA_NS_PER_SEC     1000000000L
+/* extra_qpf() reports the QPC frequency, i.e. nanoseconds per tick. */
+#define EXTRA_QPF_HZ         1000000000ull
 
+/* Capacity of the fixed-size fields carried by a directory-search handle. */
+#define EXTRA_FIND_PATH_MAX    1024
+#define EXTRA_FIND_PATTERN_MAX 64
+
+/* extra_wait_multiple() has no condition variable to block on: it polls each
+ * handle. 500 us keeps latency low without a syscall storm, and stays well
+ * below a 60 Hz frame (16.6 ms). */
+#define EXTRA_WAIT_POLL_US 500
+
+/* Stack size per host thread in parallel mode (guest threads share the heap
+ * and are not stack-hungry, but generated code recurses deeply). */
+#define EXTRA_PARALLEL_STACK_SIZE (16u << 20)
+
+/* Win32 wait return values. WAIT_FAILED is 0xFFFFFFFF and doubles as the
+ * "invalid handle" answer, so callers can tell it apart from WAIT_TIMEOUT. */
+#define INFINITE      0xFFFFFFFFu
+#define WAIT_OBJECT_0 0u
+#define WAIT_TIMEOUT  0x00000102u
+#define WAIT_FAILED   0xFFFFFFFFu
+
+/* Handle kinds. The numeric values are internal tags only: they are never
+ * compared against a Win32 constant, so their magnitude carries no meaning and
+ * the types are told apart by ExtraHandle.type alone. */
 typedef enum {
     EXTRA_HANDLE_EVENT = 1,
     EXTRA_HANDLE_FILE = 2,
@@ -42,8 +68,8 @@ typedef struct ExtraHandle {
         } file;
         struct {
             void *dir;
-            char base_path[1024];
-            char pattern[64];
+            char base_path[EXTRA_FIND_PATH_MAX];
+            char pattern[EXTRA_FIND_PATTERN_MAX];
         } find;
         struct {
             int fd;
@@ -56,6 +82,12 @@ typedef ExtraHandle *HANDLE;
 typedef pthread_mutex_t SRWLOCK;
 #define SRWLOCK_INIT PTHREAD_MUTEX_INITIALIZER
 typedef pthread_cond_t CONDITION_VARIABLE;
+
+/* Console handles are pseudo-handles, not allocations from extra_create_event(),
+ * so extra_close_handle() must recognise them before dereferencing. */
+#define EXTRA_HANDLE_INVALID ((HANDLE)(intptr_t)-1)
+#define EXTRA_HANDLE_STD_OUT ((HANDLE)(uintptr_t)1)
+#define EXTRA_HANDLE_STD_ERR ((HANDLE)(uintptr_t)2)
 
 static inline HANDLE extra_create_event(int manual_reset, int initial_state) {
     ExtraHandle *ev = (ExtraHandle *)calloc(1, sizeof(ExtraHandle));
@@ -88,7 +120,7 @@ static inline int extra_reset_event(HANDLE ev) {
 
 static inline int extra_close_handle(HANDLE h) {
     if (!h) return 0;
-    if (h == (HANDLE)(intptr_t)-1 || h == (HANDLE)(uintptr_t)1 || h == (HANDLE)(uintptr_t)2) return 1;
+    if (h == EXTRA_HANDLE_INVALID || h == EXTRA_HANDLE_STD_OUT || h == EXTRA_HANDLE_STD_ERR) return 1;
     if (h->ref_count > 1) {
         h->ref_count--;
         return 1;
@@ -109,10 +141,35 @@ static inline int extra_close_handle(HANDLE h) {
     return 1;
 }
 
+/* Builds an absolute CLOCK_REALTIME deadline `timeout_ms` from now.
+ * CLOCK_REALTIME is required: pthread_cond_timedwait() uses it unless the
+ * condition variable was created with an explicit clock attribute. Callers
+ * validate the timeout first, so INFINITE never reaches this helper. */
+static inline void extra_deadline_after_ms(uint32_t timeout_ms, struct timespec *ts) {
+    clock_gettime(CLOCK_REALTIME, ts);
+    ts->tv_sec += (time_t)(timeout_ms / EXTRA_MS_PER_SEC);
+    ts->tv_nsec += (long)(timeout_ms % EXTRA_MS_PER_SEC) * EXTRA_NS_PER_MS;
+    if (ts->tv_nsec >= EXTRA_NS_PER_SEC) {
+        ts->tv_sec += 1;
+        ts->tv_nsec -= EXTRA_NS_PER_SEC;
+    }
+}
+
+/* Milliseconds on CLOCK_MONOTONIC, used only to enforce timeouts in polling
+ * loops. CLOCK_MONOTONIC is immune to wall-clock adjustments, which matters
+ * because a wait must not be skipped by an NTP step. */
+static inline uint64_t extra_monotonic_ms(void) {
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    return (uint64_t)now.tv_sec * EXTRA_MS_PER_SEC + (uint64_t)now.tv_nsec / EXTRA_NS_PER_MS;
+}
+
 static inline uint32_t extra_wait_single(HANDLE ev, uint32_t timeout_ms) {
     if (!ev || ev->type != EXTRA_HANDLE_EVENT) return WAIT_FAILED;
     pthread_mutex_lock(&ev->event.lock);
     if (ev->event.signaled) {
+        /* Auto-reset events consume the signal on the successful wait; a manual
+         * reset event stays signaled until the guest explicitly resets it. */
         if (!ev->event.manual_reset) ev->event.signaled = 0;
         pthread_mutex_unlock(&ev->event.lock);
         return WAIT_OBJECT_0;
@@ -123,15 +180,7 @@ static inline uint32_t extra_wait_single(HANDLE ev, uint32_t timeout_ms) {
     }
 
     struct timespec ts;
-    if (timeout_ms != INFINITE) {
-        clock_gettime(CLOCK_REALTIME, &ts);
-        ts.tv_sec += timeout_ms / 1000;
-        ts.tv_nsec += (timeout_ms % 1000) * 1000000L;
-        if (ts.tv_nsec >= 1000000000L) {
-            ts.tv_sec += 1;
-            ts.tv_nsec -= 1000000000L;
-        }
-    }
+    if (timeout_ms != INFINITE) extra_deadline_after_ms(timeout_ms, &ts);
 
     while (!ev->event.signaled) {
         if (timeout_ms == INFINITE) {
@@ -153,10 +202,7 @@ static inline uint32_t extra_wait_single(HANDLE ev, uint32_t timeout_ms) {
 static inline uint32_t extra_wait_multiple(uint32_t count, const HANDLE *handles, int wait_all, uint32_t timeout_ms) {
     (void)wait_all;
     if (!count || !handles) return WAIT_FAILED;
-    uint64_t start = 0;
-    struct timespec now;
-    clock_gettime(CLOCK_MONOTONIC, &now);
-    start = (uint64_t)now.tv_sec * 1000u + (uint64_t)now.tv_nsec / 1000000u;
+    uint64_t start = extra_monotonic_ms();
 
     for (;;) {
         for (uint32_t i = 0; i < count; i++) {
@@ -165,10 +211,8 @@ static inline uint32_t extra_wait_multiple(uint32_t count, const HANDLE *handles
             }
         }
         if (timeout_ms == 0) return WAIT_TIMEOUT;
-        clock_gettime(CLOCK_MONOTONIC, &now);
-        uint64_t elapsed = ((uint64_t)now.tv_sec * 1000u + (uint64_t)now.tv_nsec / 1000000u) - start;
-        if (timeout_ms != INFINITE && elapsed >= timeout_ms) return WAIT_TIMEOUT;
-        usleep(500);
+        if (timeout_ms != INFINITE && extra_monotonic_ms() - start >= timeout_ms) return WAIT_TIMEOUT;
+        usleep(EXTRA_WAIT_POLL_US);
     }
 }
 
@@ -177,30 +221,23 @@ static inline int extra_sleep_cv(CONDITION_VARIABLE *cv, SRWLOCK *lock, uint32_t
         return pthread_cond_wait(cv, lock) == 0;
     }
     struct timespec ts;
-    clock_gettime(CLOCK_REALTIME, &ts);
-    ts.tv_sec += timeout_ms / 1000;
-    ts.tv_nsec += (timeout_ms % 1000) * 1000000L;
-    if (ts.tv_nsec >= 1000000000L) {
-        ts.tv_sec += 1;
-        ts.tv_nsec -= 1000000000L;
-    }
+    extra_deadline_after_ms(timeout_ms, &ts);
     return pthread_cond_timedwait(cv, lock, &ts) == 0;
 }
 
+/* QueryPerformanceCounter / QueryPerformanceFrequency, in nanoseconds. */
 static inline uint64_t extra_qpc(void) {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
-    return (uint64_t)ts.tv_sec * 1000000000ull + (uint64_t)ts.tv_nsec;
+    return (uint64_t)ts.tv_sec * EXTRA_NS_PER_SEC + (uint64_t)ts.tv_nsec;
 }
 
 static inline uint64_t extra_qpf(void) {
-    return 1000000000ull;
+    return EXTRA_QPF_HZ;
 }
 
 static inline uint64_t extra_tick_count(void) {
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return (uint64_t)ts.tv_sec * 1000ull + (uint64_t)ts.tv_nsec / 1000000ull;
+    return extra_monotonic_ms();
 }
 
 static inline uint32_t extra_current_thread_id(void) {
@@ -219,7 +256,7 @@ static inline void extra_parallel_start(unsigned i, void *(*main_fn)(void *)) {
     pthread_t th;
     pthread_attr_t attr;
     pthread_attr_init(&attr);
-    pthread_attr_setstacksize(&attr, 16u << 20);
+    pthread_attr_setstacksize(&attr, EXTRA_PARALLEL_STACK_SIZE);
     pthread_create(&th, &attr, main_fn, (void *)(uintptr_t)i);
     pthread_attr_destroy(&attr);
     printf("PARALLEL guest thread %u on host thread %lu\n", i, (unsigned long)th);

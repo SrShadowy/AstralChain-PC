@@ -6,6 +6,7 @@
 #include "kernel.h"
 #include "rt.h"
 #include "../../exec_internal.h"
+#include "extra/core/heap_mirror_extra.h" // [extra]
 
 // Global memory (shader LDG/STG, maxwell_gmem_base = HEAP_BASE): the guest heap imported as a GPU buffer
 // (VK_EXT_external_memory_host), zero-copy like metal.m's g_guest_buffer, so compute results land in guest
@@ -128,6 +129,7 @@ static GmemWb wb_pending[64], wb_flight[256];
 static int wb_npend, wb_nflight;
 void gmem_wb_note(uint64_t addr, uint64_t size) {
     if (!gmem_alloc || !size || addr < HEAP_BASE || addr - HEAP_BASE + size > gmem_size) return;
+    if (extra_wb_should_skip(size)) return; // [extra]
     for (int i = 0; i < wb_npend; i++)
         if (wb_pending[i].addr == addr && wb_pending[i].size == size) return;
     if (wb_npend == 64) FATAL("heap mirror: more than 64 GPU-written ranges in one submission\n");
@@ -273,6 +275,7 @@ static void lazy_flush(uint64_t addr, uint64_t size) {
 
 // Write the GPU's results of completed submissions into guest memory (before a fence waiter resumes).
 void gmem_writeback_apply(uint64_t done) {
+    if (!extra_wb_has_work(wb_nflight, lazy_nfree)) return; // [extra]
     static int lazy_on = -1;
     if (lazy_on < 0) {
         const char *e = getenv("LARECOMP_VK_LAZY_WB");
