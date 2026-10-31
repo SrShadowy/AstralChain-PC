@@ -90,15 +90,39 @@ void run_translate(void (*fn)(void *), void *arg) {
     pthread_mutex_unlock(&tjobs_lock);
 }
 
+static int plat_cpu_usable(void) { // [extra]
+#if defined(__linux__)
+    cpu_set_t set;
+    CPU_ZERO(&set);
+    if (sched_getaffinity(0, sizeof(set), &set) == 0) {
+        int count = CPU_COUNT(&set);
+        if (count > 0) return count;
+    }
+#endif
+    int c = SDL_GetNumLogicalCPUCores();
+    return c > 0 ? c : 4;
+} // [extra]
+
 void workers_start(void) {
     static bool started;
     if (!started) {
         started = true;
-        // first entry into an area builds dozens of pipelines at once: use most of the CPU (draws wait for them)
-        int n = SDL_GetNumLogicalCPUCores() - 4;
-        if (n < 4) n = 4;
-        if (n > 16) n = 16;
-        ljobs_max = n / 2;
+        // Dynamically scale worker threads based on usable CPU cores (respects affinity & taskset). // [extra]
+        // Leaves dedicated cores for the render thread, audio loop, and recompiler to prevent audio drops.
+        int usable = plat_cpu_usable();
+        int n;
+        if (usable <= 4) {
+            n = usable > 2 ? 2 : 1;
+        } else if (usable <= 8) {
+            n = usable - 2;
+        } else if (usable <= 16) {
+            n = usable - 4;
+        } else {
+            n = usable - 6;
+            if (n > 12) n = 12;
+        }
+        if (n < 1) n = 1;
+        ljobs_max = (n > 1) ? (n / 2) : 1; // [extra]
         for (int i = 0; i < n; i++) { pthread_t t; pthread_create(&t, NULL, worker, NULL); }
     }
 }

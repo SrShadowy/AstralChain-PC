@@ -1,4 +1,7 @@
 #pragma once
+#ifndef _GNU_SOURCE // [extra]
+#define _GNU_SOURCE // [extra]
+#endif // [extra]
 #include <string.h>
 #include <sys/stat.h>
 #ifdef _WIN32 // [extra]

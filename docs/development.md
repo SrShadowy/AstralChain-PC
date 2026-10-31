@@ -1,189 +1,213 @@
-# Development notes
+# Convenções de Desenvolvimento e Guia Técnico (AstralChain-PC)
 
-## Building by hand
+Este documento estabelece as diretrizes práticas de engenharia, organização modular de código, convenções de hooks e referência de variáveis de ambiente para o projeto **AstralChain-PC**, operando sob a diretriz **LINUX FIRST**.
 
-`setup_game.py` runs this command, with paths relative to the repository:
+---
 
-```powershell
-.venv\Scripts\python -m astral_chain.native_trace game\update-exefs --reference third_party\LASRecomp `
-  --compiler tools\zig\zig.exe --output build\<new folder> --instructions 4000000 --sample-steps 0 `
-  --run-timeout 86400 --unbounded --chain --follow 0 --entry rtld:start --seed-all-text --build cached `
-  --control game\control.nacp --romfs game\romfs.bin --nvn-hle --nvn-backend vulkan `
-  --optimize --lean --direct-calls --jumps `
-  --patch third_party\AstralChain-Dynamic-FPS\1.0.1.pchtxt --patch astral_chain\patches\cutscene-catchup-1.0.1.pchtxt `
-  --build-only
-powershell -File astral_chain\run_guarded.ps1 -Run build\<new folder> -Seconds 300 -Env "AC_PARALLEL=1"
+## 1. Princípios de Organização de Código (Linux First)
+
+O projeto prioriza a melhor experiência de execução, estabilidade e desempenho no ecossistema nativo Linux:
+
+### A. Estrutura do Código
+- **Código Customizado Downstream (`extra/`)**: Novas funcionalidades, trampolines de plataforma (POSIX/SDL3), camada de interface gráfica e scripts de validação residem preferencialmente sob `extra/` para manter a base limpa e desacoplada.
+- **Código Herdado (`astral_chain/`)**: Contém o runtime em C e o motor de recompilação estática herdados do projeto original. Visto que o repositório upstream original de Windows (`Puddz`) está inativo e não traz mais atualizações relevantes, não há necessidade de manter compatibilidade rígida com Windows ou contorcer soluções para preservar paridade com upstream.
+
+### B. Distribuição de Pastas sob `extra/`
+| Diretório | Responsabilidade |
+|---|---|
+| `extra/core/` | Trampolines de plataforma POSIX, emulação de memória (`mmap`/`SIGSEGV`), janela/input SDL3, áudio e sincronização |
+| `extra/ui/launcher/` | Código-fonte C++20 do Launcher oficial nativo Qt6 (`include/`, `src/`, `CMakeLists.txt`) |
+| `extra/tools/` | Scripts de validação estática e testes de automação (`audit.sh`, `qa_runner.sh`) |
+| `extra/hooks.h` | Cabeçalho unificado de re-exportação para integração modular com o código herdado |
+
+---
+
+## 2. Separação entre C e C++
+
+- **Núcleo do Runtime e Código Gerado (C)**:
+  - As ~122 unidades de tradução de instruções do jogo, os serviços HLE de baixo nível e o despachante de SVCs permanecem em **C** puro (`-std=gnu17` / C11) para compatibilidade direta com o lifter estático.
+  - O código gerado pelo lifter não deve ser editado manualmente; ajustes estruturais devem ser efetuados nas ferramentas geradoras (`lifter.py` / `native_trace.py`).
+- **Camada Downstream e Interface (C++20)**:
+  - Todo o código em `extra/` e o Launcher Qt6 utilizam C++20 moderno com tipagem forte, RAII, ausência de ponteiros crus (`new`/`delete`) e encapsulamento em namespaces (`ac::launcher`).
+- **Fronteira de Interoperabilidade (`extern "C"`)**:
+  - Funções em `extra/` invocadas pelo código em C do runtime são declaradas com vinculação `extern "C"`.
+  - Exceções de C++ nunca devem cruzar a fronteira para o código em C. Erros devem ser tratados localmente ou mapeados para códigos de status.
+
+---
+
+## 3. Uso Pragmático de Hooks e Marcadores `// [extra]`
+
+A integração entre o código herdado e a camada Linux é feita de maneira pragmática:
+
+### A. Princípio dos Hooks
+- Sempre que uma funcionalidade de plataforma no Linux substituir uma rotina Win32 herdada, a lógica é implementada em `extra/core/` e acionada por uma chamada pontual no código herdado.
+- Evite burocracias artificiais: implemente a solução mais simples e direta que resolva o problema com clareza.
+
+### B. Uso dos Marcadores `// [extra]`
+- O marcador `// [extra]` serve para **demarcar claramente onde o código herdado foi editado**, facilitando revisões e auditorias estáticas (`audit.sh`).
+- **Use estritamente quando necessário**: não exagere na marcação nem polua o código com comentários redundantes linha a linha.
+  - Para alterações ou chamadas pontuais (linha única):
+    ```c
+    #include "extra/hooks.h" // [extra]
+    extra_pad_read_sensors(device, data); // [extra]
+    ```
+  - Para regiões ou blocos editados de múltiplas linhas: marque apenas a **primeira linha (início)** e a **última linha (fim)** do bloco:
+    ```c
+    #ifndef _WIN32 // [extra]
+    extra_storage_init_paths();
+    extra_sync_bootstrap();
+    #endif // [extra]
+    ```
+- Registre adições ou modificações relevantes no ledger `SHADOW_CHANGES.md`.
+
+---
+
+## 4. Limites de Tamanho e Responsabilidade das Funções
+
+Diretrizes práticas verificadas automaticamente por scripts de conformidade (`extra/tools/audit.sh`):
+
+| Elemento | Meta Ideal | Limite de Revisão | Ação Obrigatória |
+|---|---|---|---|
+| **Arquivo Fonte (`extra/`)** | ≤ 300 linhas | 300 a 400 linhas | > 400 linhas: dividir por responsabilidade independente |
+| **Funções** | 20 a 40 linhas | > 40 linhas | > 50 linhas: avaliar decomposição lógica |
+| **Parâmetros de Função** | ≤ 5 parâmetros | 6 a 7 parâmetros | > 7 parâmetros: agrupar em struct de contexto |
+
+**Regra de Ouro da Divisão**: Arquivos e funções devem ser divididos por **responsabilidade clara**, nunca de forma fragmentada ou artificial apenas para satisfazer contadores de linha.
+
+---
+
+## 5. Validação Proporcional e Testes
+
+A validação de alterações deve ser ágil e proporcional ao risco da modificação:
+
+1. **Alteração de Documentação**:
+   - Verificar precisão das informações técnicas, consistência de links relativos e formatação markdown.
+2. **Alteração de Ferramentas / Launcher Qt6**:
+   - Executar `./extra/tools/audit.sh` (valida marcadores necessários, confere limites de 400 linhas e compila o launcher Qt6 via Ninja).
+3. **Alteração de Código do Runtime / Compilação**:
+   - Executar o Fast-Relink via Python:
+     ```bash
+     python3 -m astral_chain.setup_game --rebuild-if-stale
+     ```
+     Verifica a compilação incremental e linkage do executável ELF em ~8 segundos.
+4. **Alteração Gráfica / Comportamental do Jogo**:
+   - Executar o runner de QA determinístico:
+     ```bash
+     # Smoke test completo com input e validação visual de frame (20s)
+     ./extra/tools/qa_runner.sh 20 550
+
+     # Verificação em ambiente headless (sem display/GPU ativa)
+     SKIP_RUNTIME=1 ./extra/tools/qa_runner.sh
+     ```
+
+---
+
+## 6. O Launcher Oficial do Projeto (Qt6 C++20)
+
+O launcher oficial para o projeto é a aplicação nativa em **Qt6 / C++20** localizada em `extra/ui/launcher/`.
+
+> [!IMPORTANT]
+> O launcher herdado em C# (`Launcher.cs` / `Astral Chain Launcher.exe`) pertence ao upstream Windows original e **não é compilado nem utilizado no Linux**. Não gaste tempo tentando portar ou manter o launcher em C#.
+
+### Compilação do Launcher Qt6
+```bash
+# Configurar e compilar via CMake + Ninja
+cmake -B build-launcher -S extra/ui/launcher -GNinja
+cmake --build build-launcher
+
+# Execução direta via helper
+./launcher.sh
 ```
 
-- `native_trace` refuses an existing output folder.
-- A full translation and compile takes about 5 minutes. With unchanged code units, a runtime-only change takes
-  about 1 minute.
-- Each build writes `run-env.txt`, holding addresses that move with `main`'s size, and `run_guarded.ps1` reads
-  it.
-- Always run through `run_guarded.ps1`.
+O launcher gerencia configurações gráficas (resolução, apresentação FIFO/Mailbox/Immediate, tela cheia), seleção de arte de fundo e inicialização segura do executável ELF.
 
-## Unattended test runs
+---
 
-- **Scripted input.** `AC_INPUT_SCRIPT` takes `t0-t1:mask[@period/duty];...`, in seconds after the first input
-  sample. `python -m astral_chain.input_scripts highway|explore <s>|wander <s>` prints ready-made scripts.
-  - Mask bits: A `0x1`, B `0x2`, ZL `0x100`, ZR `0x200`, + `0x400`, D-pad left/up/right/down `0x1000-0x8000`.
-  - Left stick bits: left/up/right/down `0x10000-0x80000`. The right stick uses `<<4` of those.
-- **Separate data.** `AC_DATA_DIR=<folder>` replaces the build's code images (`images\`), `romfs.bin` and save
-  root (`save\`). Use it to test without touching your saves. Give the real path: the save store rejects paths
-  through junctions or `subst` drives.
-- **Screenshots.**
-  - `LARECOMP_SCREENSHOT_EVERY=<frames>` saves `frame_N.png` in the run folder.
-  - Add `LARECOMP_SCREENSHOT_FROM=<frame>` to save into `frames\` instead.
-  - `LARECOMP_SHOT_AT=<frame>,...` captures specific frames.
-- **Pass dumps.** `LARECOMP_DEBUG_FRAME=<frame>` writes every render pass of that frame to `build\pass_NNN.png`
-  (create `build\` in the run folder first) and logs each draw with its shader hashes.
-  - `LARECOMP_DEBUG_EACH=1` ends the pass before every draw, so each draw's result is its own image; the log says
-    which image holds the state before each draw.
-  - Shader names for the hashes: `AC_PRECOMPILE_NAMES=1 build\shader-precompile\<id>\shader_precompile.exe
-    game\shaders 1`. `AC_PRECOMPILE_DUMP=<name part>` prints the translated GLSL instead.
-  - `LARECOMP_SKIP_FSHASH=<hash>,...` skips draws by fragment shader hash. `LARECOMP_WATCH_FS=<hash>` logs that
-    shader's draws in every frame (blend, alpha test, constant buffers); `LARECOMP_WATCH_DEBUG=<n>` debug-dumps the
-    frame of its n-th draw.
+## 7. Referência de Variáveis de Ambiente e Diagnóstico
 
-## Diagnostics
+O runtime suporta uma série de variáveis de ambiente para controle de performance, depuração gráfica e testes automatizados:
 
-| Variable | Effect |
-| --- | --- |
-| `LARECOMP_VK_PROF=1` | Per-2-s CPU/GPU breakdown, texture upload and tracking counters, vertex cache stats |
-| `LARECOMP_GPUPROF_AT=<frame>` / `LARECOMP_GPUPROF_DRAWS=1` | GPU time per pass, or per draw, of a frame |
-| `LARECOMP_GPUPROF_AUTO=1` | Also profile the frame after each frame slower than 250 ms (up to 12; profiling makes a frame slow) |
-| `AC_FULLSCREEN=1` | (launcher: *Start in fullscreen*) Borderless fullscreen on the window's monitor from the start (`app_window.h` `app_set_fullscreen`, also F11 / Alt+Enter) |
-| `AC_HANDHELD=1` | (launcher: *Handheld mode*) The game is told it runs handheld (operation mode 0, normal performance mode; `app_window.h`): it renders 1280x720 into its 1600x900 window textures and crops to it (`nvnWindowSetCrop`, honoured by the present in `device.c`) |
-| `AC_CUTSCENE_FPS=30` | Cutscenes as in the unmodified game: its fixed-step timer path at 30 FPS (default: 60 FPS, measured step) |
-| `AC_PROFILE=1` (+ `AC_PROFILE_THREAD=N`) | CPU sampling profiler. Report: `python -m astral_chain.profile_report <run>` |
-| `AC_PARALLEL_STATS=1` | Guest thread scheduling stats |
-| `AC_AUDIO_DUMP=<file>` | Raw PCM of everything played. Report: `python -m astral_chain.audio_report <run>` (needs `requirements-dev.txt`) |
-| `LARECOMP_SAVE_MSL=1` | Translated GLSL and translator inputs in `build\glsl`. Replay: `python -m astral_chain.shader_replay` |
-| `AC_TRACE_CALLS=1` | Per-call SVC/IPC/audio/HID log lines (off in play builds) |
-| `LARECOMP_SKIP_UNBUILT=1` | Skip draws whose pipeline is still compiling, instead of waiting for it |
-| `LARECOMP_TEX_FULLHASH=1` | Hash every texture fully at each check (slow; rules change detection in or out) |
-| `AC_ASYNC_SUBMIT=1` | (launcher: *Prepare graphics on a separate thread*) Queue submissions, fences and presents to a worker thread that runs the Vulkan backend (`objects.c`); other NVN calls wait for the queue unless `nvn_async_safe`. The profile line counts the waits (`async drains`, `fence waits`) |
-| `LARECOMP_VK_WW_BATCH=0` | One write tracking query per texture check, as before the batched checks (`exec.c` `ww_written_pages`); the profile line's `write watch` part counts the queries by caller |
-| `AC_GPU_HANG_MS=<ms>` | GPU hang stop threshold (default 1200) |
-| `LARECOMP_DUMP_TEX=<min width>` | Level-0 data of up to 24 textures (as uploaded, unswizzled) to `tex_*.bin` in the run folder |
-| `LARECOMP_DUMP_ASTC=<min width>` | Blocks and CPU decode of up to 16 ASTC textures (with `LARECOMP_GPU_ASTC=0`) to `astc_*.bin` |
-| `LARECOMP_GPU_ASTC=0` | Decode ASTC on the CPU, as before the GPU decoder |
-| `LARECOMP_BC7=1` | (launcher: *Texture compression*) Store ASTC textures as BC7 (`bc7_gpu.c`): precomputed ones from `cache\bc7` if there, the others recompressed on the GPU. Logs `[vk] BC7: ...`; the 2-s profile line shows `video memory` and the precomputed hits / misses |
-| `AC_BC7_PRECOMPUTE=1` | (setup; launcher: *prepared at setup*) `setup_game` encodes every ASTC texture to BC7 into `build\game\cache\bc7` (`bc7_cache.py`, once) |
-| `LARECOMP_BC7_CACHE=0` | Ignore the precomputed BC7 textures (GPU conversion only) |
-| `LARECOMP_BC7_LOG=1` | One `[bc7key]` line per ASTC texture upload: hash, layout, precomputed hit or miss |
-| `AC_KEYS=A:74,B:75,...` | (launcher **Controls**) Main bindings as Windows virtual-key codes: `A B X Y LSTICK RSTICK L R ZL ZR PLUS MINUS DLEFT DUP DRIGHT DDOWN LLEFT LUP LRIGHT LDOWN RLEFT RUP RRIGHT RDOWN`; unlisted ones keep their default, 0 for none. Mouse buttons are 1 2 4 5 6 (left, right, middle, back, forward), the wheel 14 / 15 (up / down). Defaults and parser: `runtime/las/input_bindings.h` (kept in step with `ControlsForm`) |
-| `AC_KEYS2=...` | The alternative bindings, same format |
-| `AC_MOUSE_LOOK=0` | (launcher: *Mouse moves the camera* off) The mouse keeps its buttons but does not drive the right stick (`mouse.h`: raw input, speed to stick tilt, 20% minimum against the game's dead zone) |
-| `AC_MOUSE_SENS=<percent>` / `AC_MOUSE_INVERT=1` | Mouse camera sensitivity (100: full tilt at 1500 counts/s) and inverted up/down |
-| `AC_PROMPTS=switch` | (launcher: *Button icons*) Keep the Switch button icons. Otherwise `las/button_prompts.c` redraws the game's button icon atlas (ui_core `core.wtp` texture 0, 256x512 RGBA8, found by its content hash through the `texpatch` hooks of `textures.c`) with the main bindings |
-| `LARECOMP_ASTC_VERIFY=<n>` | Read back the first n texture levels the GPU decodes and compare them with the CPU decoder (`ASTC verify` lines; slow) |
-| `LARECOMP_NO_PIPE_WARM=1` | No pipeline warm-up (pipelines are built at their first draw only) |
-| `LARECOMP_GPL=0` | No shader libraries (`VK_EXT_graphics_pipeline_library`): pipelines are compiled whole at their first draw |
-| `LARECOMP_NO_GPL_WARM=1` | Shader libraries only when a program is built, not when the game loads a shader |
-| `AC_GPU_WARM=0` | (launcher) Skip the GPU warm-up before the game (`shader_cache.warm_gpu`, exec.c `vk_gpu_warm`) |
-| `__GL_SHADER_DISK_CACHE_PATH=<empty folder>` | (NVIDIA) Start the driver's shader cache empty, for this process only: first-play measurements without touching the shared cache |
-| `LARECOMP_DEBUG_IF_DARK=<x0>,<y0>,<x1>,<y1>,<level>[,<frame>]` | With screenshots: debug-dump the next frame once a screenshot is darker than level in that box (fractions of the window) |
-| `LARECOMP_LOG_PACKAGED=1` | Log each texture's packaged layout (block height) |
-| `AC_CUTSCENE_STALL=<n>:<s>:<ms>[:<s>:<ms>...]` | Stall the game thread `<ms>` ms, `<s>` s after the n-th cutscene starts (A/V sync tests) |
-| `LARECOMP_STALLS=<frame>:<ms>,...` | Stall the render thread at those frames; `LARECOMP_SLOW_FRAME_MS` / `_FROM` / `_UNTIL` / `_EVERY` for ranges |
-| `AC_CUTSCENE_STALL_LOCKED=1` | Test stalls hold the kernel lock: every guest thread waits, the sound thread too |
-| `AC_CUT_CARRY=0` | Cutscene cuts end as in the original code (each cut up to a frame early at 60 fps; svc #0xB2) |
-| `AC_AUDIO_RESYNC=0` | Do not skip sound after an underrun (by default the gap, up to 0.3 s, is skipped to stay in sync) |
-| `AC_SAVE_SNAPSHOTS=0` | Do not copy each game save to `<save folder>-snapshots\<date-time>\` (on by default, newest 30 kept) |
-| `AC_CRASH_DUMP=1` | On a host fault, also write `crash.dmp` (a minidump: thread stacks and registers) to the run folder. Read it with `round-00\trace.pdb`. The launcher's diagnostics mode sets it |
+### A. Controle Geral e Performance
+| Variável | Valores / Padrão | Efeito |
+|---|---|---|
+| `AC_PARALLEL` | `1` (padrão) | Executa threads do guest Horizon em paralelo nas threads do host |
+| `AC_ASYNC_SUBMIT` | `1` (launcher) | Submete comandos gráficos e fences em uma thread dedicada do backend Vulkan |
+| `AC_CUTSCENE_FPS` | `60` (padrão) / `30` | `30` roda cutscenes no passo original; `60` utiliza o patch de Dynamic-FPS |
+| `AC_GPU_HANG_MS` | `1200` (ms) | Tempo limite antes de acionar o watchdog interno e encerrar o jogo por travamento de GPU |
+| `AC_FULLSCREEN` | `1` / `0` | Inicializa a janela em tela cheia sem bordas (borderless fullscreen) |
+| `AC_HANDHELD` | `1` / `0` | Simula modo portátil do Switch (renderiza 1280x720 recortado para janela 1600x900) |
+| `AC_VERBOSE` | `1` / `0` | Ativa saída verbosa de logs no terminal (padrão enxuto mantido em 0) |
 
-With `LARECOMP_VK_PROF=1`, frames over 50 ms are logged as `[hitch]` lines with their time split (texture uploads,
-waits for shader programs). The 2-second lines count pipeline cache hits and misses. Frames with over 40 ms of
-texture work get a `texture time` line (hashing, uploads, ASTC decoded in the frame, in the background or on the
-GPU), and any single texture upload over 20 ms gets a `slow texture upload` line, profiling or not. The pipeline
-warm-up reports `pipeline warm-up queued / ready / late / rejected` (ready: built before its first draw), the shader
-libraries `shader libraries built / reused / linked / optimized`.
+### B. Diagnóstico Gráfico e Vulkan
+| Variável | Valores | Efeito |
+|---|---|---|
+| `LARECOMP_VK_PROF` | `1` | Exibe breakdown de CPU/GPU a cada 2s, contadores de textura e estatísticas de pipeline |
+| `LARECOMP_SHOT_AT` | `<frame>,...` | Captura screenshots determinísticas nos números de frame especificados |
+| `LARECOMP_SCREENSHOT_EVERY` | `<frames>` | Salva capturas periódicas a cada N frames em `frame_N.png` |
+| `LARECOMP_DEBUG_FRAME` | `<frame>` | Despeja cada render pass do frame indicado para `build/pass_NNN.png` com hashes de shaders |
+| `LARECOMP_DEBUG_EACH` | `1` | Encerra o render pass antes de cada draw call individual para inspeção atômica de imagens |
+| `LARECOMP_SKIP_FSHASH` | `<hash>,...` | Ignora a execução de draw calls que utilizem o fragment shader especificado |
+| `LARECOMP_WATCH_FS` | `<hash>` | Registra em log todas as submissões do fragment shader especificado |
+| `LARECOMP_GPL` | `0` / `1` | `0` desativa `VK_EXT_graphics_pipeline_library` e força compilação monolítica |
+| `AC_GPU_WARM` | `0` / `1` | `0` pula o warm-up antecipado de pipelines na inicialização |
 
-`python -m astral_chain.astc_gpu_test [astc_*.bin...]` checks the GPU ASTC decoder against the CPU one, byte for
-byte: random blocks of every footprint, sRGB and not, plus any texture dumps given. `python -m
-astral_chain.bc7_gpu_test [astc_*.bin...]` measures the BC7 encoder (PSNR on test images and dumps; every block must
-be mode 6). `trace.log` always gets `CUTSCENE` lines (cutscene start and end, frames over 200 ms in a
-cutscene) and `AUDIO underrun` lines when the sound queue ran dry.
+### C. Texturas e Decodificação ASTC / BC7
+| Variável | Valores | Efeito |
+|---|---|---|
+| `LARECOMP_GPU_ASTC` | `1` (padrão) / `0` | `1` decodifica texturas ASTC via compute shader na GPU; `0` usa fallback na CPU |
+| `LARECOMP_BC7` | `1` / `0` | Ativa o armazenamento de texturas ASTC comprimidas como BC7 (reduz consumo de VRAM) |
+| `AC_BC7_PRECOMPUTE` | `1` | Modo de setup que gera previamente o cache de texturas BC7 em `build/game/cache/bc7` |
+| `LARECOMP_BC7_LOG` | `1` | Emite linha de log com hash e layout para cada upload de textura ASTC/BC7 |
+| `LARECOMP_DUMP_TEX` | `<min_width>` | Salva o nível de mipmap 0 de texturas descompactadas em arquivos binários `tex_*.bin` |
 
-### Testing from a checkpoint
+### D. Input Determinístico e Controles
+- **`AC_INPUT_SCRIPT="t0-t1:mask[@period/duty];..."`**:
+  Permite injetar sequências automatizadas de entrada baseadas em timestamps (em segundos) desde o primeiro quadro.
+  - **Mapeamento de Bits de Botões**:
+    - `0x1`: Botão A
+    - `0x2`: Botão B
+    - `0x100`: Botão ZL
+    - `0x200`: Botão ZR
+    - `0x400`: Botão + (Plus)
+    - `0x1000` a `0x8000`: D-Pad (Esquerda, Cima, Direita, Baixo)
+    - `0x10000` a `0x80000`: Analógico Esquerdo (Esquerda, Cima, Direita, Baixo)
+    - Deslocamento de `<< 4` nos bits do analógico esquerdo controla o analógico direito.
+- **Configuração de Mouse e Câmera**:
+  - `AC_MOUSE_LOOK=0`: Desativa o controle de câmera pelo movimento do mouse.
+  - `AC_MOUSE_SENS=<percent>`: Ajusta a sensibilidade de rotação da câmera (padrão 100).
+  - `AC_MOUSE_INVERT=1`: Inverte o eixo vertical da câmera no mouse.
+  - `AC_PROMPTS=switch`: Força a exibição dos ícones originais de controle do Switch em vez dos ícones de PC gerados via FreeType.
 
-Game saves work as checkpoints: every save the game writes is also copied to `<save folder>-snapshots\<date-time>\`.
-To replay a moment, copy a snapshot's `data` folder over a test save folder (`AC_DATA_DIR=<folder>`, see above) and
-load it. The game's own autosaves usually come right before story cutscenes.
+---
 
-## BC7 textures
+## 8. Dados Técnicos de Texturas BC7 (Benchmark de Referência)
 
-`LARECOMP_BC7=1` stores the game's ASTC textures as BC7 images, a quarter of RGBA8's video memory. A texture gets
-its BC7 blocks one of two ways:
+Medição realizada em ambiente de teste padrão (RTX 4090, rota da rodovia, 3 execuções com estados limpos intercalados entre frames 1000 e 19950):
 
-- **Precomputed** (`AC_BC7_PRECOMPUTE=1` at setup, `bc7_cache.py` and `runtime/bc7_convert.c`): every texture of
-  the game's packs (XT1 headers in `.wta`, data in `.wtp`, inside `.dat`/`.dtt`/`.evn`/`.eff` packs or loose in the
-  `.pkz` archives; WTB files hold both) is unswizzled with the runtime's own layout code, decoded, and encoded with
-  bc7enc (modes 1/5/6/7, quality 1) on all CPU threads. `cache/bc7/index.bin` lists them by the same hash
-  `upload_texture` computes over the texture's guest bytes (`bc7_cache.h`); `data.bin` holds the blocks. Some
-  textures are created with their mipmaps only down to one ASTC block: they get a second index entry for the same
-  data. 13,387 textures, 16.2 GB, 12.4 min on a Ryzen 7 7800X3D; every texture of the highway route found.
-- **On the GPU** (`bc7_gpu.c`, anything not precomputed): the ASTC decoder writes the level into a scratch buffer, a
-  compute shader encodes BC7 mode 6 blocks (principal axis endpoints, least squares refinement), and they are copied
-  into the image. Levels over 4096x4096 stay RGBA8.
+| Métrica | Desativado (RGBA8) | GPU (Compute Shader) | Pré-computado (Cache) |
+|---|---|---|---|
+| **Memória de Vídeo (Média / Pico)** | 7.2 / 8.7 GB | 4.7 / 5.2 GB | 4.7 / 5.1 GB |
+| **Total de Pausas por Sessão** | 7 pausas (~460 ms) | 12 pausas (~980 ms) | 6 pausas (~500 ms) |
+| **Tempo de Upload de Textura** | 9.4 s | 9.2 s | 10.4–11.3 s (I/O de disco) |
+| **Qualidade PSNR (300 texturas)** | Referência nativa | 46.2 dB médio / 27.2 dB pior | 51.0 dB médio / 34.2 dB pior |
 
-Comparison (2026-10-21; fresh install, first-play state for each run, highway chase, 3 runs each, interleaved; RTX
-4090; pauses counted between frames 1000 and 19950):
+---
 
-| | Off | GPU | Precomputed |
-| --- | --- | --- | --- |
-| Video memory, average / peak | 7.2 / 8.7 GB | 4.7 / 5.2 GB | 4.7 / 5.1 GB |
-| Pauses per run (total) | 8, 6, 7 (~460 ms) | 12, 12, 11 (~980 ms) | 7, 6, 6 (~500 ms) |
-| Texture upload time per run | 9.4 s | 9.2 s | 10.4-11.3 s (reads; 4 uploads of ~26 ms, one 101 ms pause) |
-| PSNR on 300 game textures, mean / worst | | 46.2 / 27.2 dB | 51.0 / 34.2 dB |
+## 9. Comandos Úteis do Desenvolvedor
 
-The GPU version's extra pauses (60-100 ms, mostly on the loading screen as an area's textures arrive) are counted as
-"other" time, not texture uploads or GPU waits: not explained yet. Its quality gap is in non-colour textures
-(normal maps, masks: 43.4 vs 49.6 dB; colour 50.5 vs 53.2 dB): mode 6 alone has one line through RGBA per block.
-The precomputed runs had most of the 16 GB file in the Windows file cache (31 GB RAM); from a cold disk its reads
-would take longer. `python -m astral_chain.bc7_cache --keys <file>` lists the precomputed keys without encoding.
+```bash
+# 1. Auditoria estática de conformidade e build do launcher Qt6
+./extra/tools/audit.sh
 
-## Code map
+# 2. Recompilação ultrarrápida após editar arquivos em extra/ ou runtime (~8 segundos)
+python3 -m astral_chain.setup_game --rebuild-if-stale
 
-| File | Role |
-| --- | --- |
-| `setup_game.py` | Setup and rebuild-on-update; `--status` (JSON) and `--force-shaders` for the launcher |
-| `native_trace.py` | Loads the NSOs, applies patches, translates, generates C, builds, writes `run-env.txt` |
-| `native_build.py`, `nvn_build.py`, `shader_build.py` | Cached compilation of code units, the NVN layer and the patched shader translator |
-| `bc7_cache.py`, `runtime/bc7_convert.c` | The optional BC7 preparation (`AC_BC7_PRECOMPUTE=1`): game textures to `build\game\cache\bc7` |
-| `shader_cache.py`, `runtime/shader_precompile.c` | Shader precompilation: extracts the shaders from `root.pkz` to `game\shaders`, compiles every one of them (generic draw-time keys) plus the variants of `data/shader_variants.bin` and `cache/programs.bin` into `cache/spirv` |
-| `data/shader_variants.bin` | Known shader variants (code hashes and draw-time keys, `programs.bin` format; no game data). Grows from test runs |
-| `data/pipeline_variants.bin` | Known pipelines (a program's code hashes and keys, and the render state; `pipelines.bin` format; no game data). Merged into the cache at launch. Grows from test runs |
-| `runtime/host_runtime.c.in` | Kernel and services runtime |
-| `runtime/guest_threads.h` | Guest threads and the parallel scheduler |
-| `runtime/hid_service.h`, `runtime/mouse.h`, `runtime/las/input_bindings.h` | Controller emulation: keys, mouse buttons and mouse camera, XInput pads |
-| `runtime/las/button_prompts.c` | Keyboard and mouse button icons (redraws the game's button icon atlas at upload) |
-| `runtime/nvn_hle.h` | NVN entry points |
-| `runtime/las/nvn/vulkan/` | Renderer: `exec.c` commands, draws and the pipeline warm-up, `textures.c` uploads, `astc_gpu.c` ASTC decoding on the GPU, `bc7_gpu.c` the optional BC7 recompression, `shaders.c` SPIR-V cache, `device.c` swapchain |
-| `runtime/las/maxwell_ext.h` | Maxwell instructions added to the translator (LDS/STS, atomics, VOTE, SUST, TLD...) |
+# 3. Teste automatizado de QA determinístico (20s de execução com validação de frame 550)
+./extra/tools/qa_runner.sh 20 550
 
-## The launcher
+# 4. Compilação direta do launcher Qt6
+cmake -B build-launcher -S extra/ui/launcher -GNinja && cmake --build build-launcher
 
-`Astral Chain Launcher.exe` is built from `launcher/Launcher.cs` by `python launcher\build.py`, with the C# 5
-compiler of the .NET Framework 4 that ships with Windows. Rebuild and commit the exe whenever the source changes.
-The backgrounds in `launcher/art/` (every `.jpg`, in file name order; the first is the default) are embedded in the
-exe and picked with the arrows at the top right (`background=` in `launcher.ini`); `launcher/icon.ico` is its icon; the window is
-borderless and draws its own buttons (`Theme`, `NeonButton`, `GlyphButton`, `NeonProgress`).
-
-- It runs the same steps as the .cmd files: `.venv` and `requirements.txt`, then `setup_game` (install;
-  `--rebuild-if-stale` before each start; `--force-shaders` for **Compile shaders** when already compiled), then
-  `run_guarded.ps1`. Everything runs without windows (`-NoConsole`: the game shares the guard script's hidden
-  console); its output goes to the launcher's log and `userdata\launcher.log`.
-- The button states come from `setup_game --status`: `installed` (the game data is extracted), `build`
-  (`current`, `stale`, `missing`) and `shaders` (`compiled`, `needed`, `never`: `shader_cache.status` compares the
-  precompile and warm-up stamps with what a launch would write; a new driver is only noticed by the warm-up).
-- Settings are stored in `userdata\launcher.ini` and become the variables of the tables above. The option list is
-  `Options` in `Launcher.cs`.
-- **Controls** (`ControlsForm`) stores `keys=A:74,...` and `keys2=...` (virtual-key codes, as the game window
-  receives them; mouse buttons and wheel as in `las/input_bindings.h`) and passes `AC_KEYS` / `AC_KEYS2` only when a
-  binding differs from the defaults, which must match `input_bindings.h`. Mapped Alt and F10 no longer open the game
-  window's system menu; unmapped Alt frees the mouse while held.
-- Diagnostics mode adds `LARECOMP_VK_PROF=1` and `AC_CRASH_DUMP=1`. **Create report** zips `run.txt`,
-  `stderr.log`, `trace.log` (last 8 MB each), `launcher.log`, `crash.dmp` and a system summary into `reports\`,
-  with the Windows user name replaced in paths.
+# 5. Formatação de código
+clang-format -i $(git ls-files 'extra/*.cpp' 'extra/*.h' 'extra/*.c')
+```

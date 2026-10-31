@@ -77,11 +77,20 @@ const char *renderer_stats(void) {
         vmaGetMemoryProperties(g_vk.vma, &mp);
         VmaBudget budgets[VK_MAX_MEMORY_HEAPS];
         vmaGetHeapBudgets(g_vk.vma, budgets);
-        uint64_t used = 0;
-        for (uint32_t i = 0; i < mp->memoryHeapCount; i++)
-            if (mp->memoryHeaps[i].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) used += budgets[i].statistics.allocationBytes;
+        uint64_t used = 0, budget = 0; // [extra]
+        for (uint32_t i = 0; i < mp->memoryHeapCount; i++) {
+            if (mp->memoryHeaps[i].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) {
+                used += budgets[i].statistics.allocationBytes;
+                budget += budgets[i].budget;
+            }
+        } // [extra]
         size_t n = strlen(stats_text);
-        snprintf(stats_text + n, sizeof stats_text - n, ", video memory %.0fMB", used / 1048576.0);
+        if (budget > 0) { // [extra]
+            snprintf(stats_text + n, sizeof stats_text - n, ", video memory %.0fMB / %.0fMB (%.0f%%)",
+                     used / 1048576.0, budget / 1048576.0, (used * 100.0) / budget);
+        } else {
+            snprintf(stats_text + n, sizeof stats_text - n, ", video memory %.0fMB", used / 1048576.0);
+        } // [extra]
         extern void vk_bc7_cache_stats(uint64_t *hits, uint64_t *misses);
         uint64_t bh, bm;
         vk_bc7_cache_stats(&bh, &bm);

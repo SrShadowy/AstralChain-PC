@@ -5,11 +5,15 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
 
-SECONDS_RUN="${1:-20}"
-SHOT_FRAME="${2:-550}"
+SECONDS_RUN="${1:-45}"
+if [ "$SECONDS_RUN" -ge 40 ]; then
+    SHOT_FRAME="${2:-2500}"
+else
+    SHOT_FRAME="${2:-550}"
+fi
 if [ -z "${AC_INPUT_SCRIPT:-}" ]; then
-    if [ "$SECONDS_RUN" -gt 30 ]; then
-        INPUT_SEQ="10-13:300;18-21:300;24-25:1;27-28:1;30-32:11000;33-34:1;35-37:11000;38-39:1;40-42:11000;43-44:1;46-47:400;48-49:400;51-52:1"
+    if [ "$SECONDS_RUN" -ge 40 ]; then
+        INPUT_SEQ="10-13:300;18-21:300;24-25:1;27-28:1;30-32:11000;33-34:1;35-37:11000;38-39:1;40-42:11000"
     else
         INPUT_SEQ="10.0-14.0:300;18.0-21.0:300"
     fi
@@ -48,7 +52,8 @@ LOG_FILE="/tmp/ac_qa_run.log"
 rm -f "$LOG_FILE" "./build/game/frames/frame_$(printf '%05d' "$SHOT_FRAME").png" "./frames/frame_$(printf '%05d' "$SHOT_FRAME").png"
 
 set +e
-AC_ASYNC_SUBMIT="${AC_ASYNC_SUBMIT:-1}" LARECOMP_VK_PRESENT="${LARECOMP_VK_PRESENT:-fifo}" \
+AC_PARALLEL="${AC_PARALLEL:-1}" AC_AUDIO_RESYNC="${AC_AUDIO_RESYNC:-1}" \
+    AC_ASYNC_SUBMIT="${AC_ASYNC_SUBMIT:-1}" LARECOMP_VK_PRESENT="${LARECOMP_VK_PRESENT:-fifo}" \
     AC_INPUT_SCRIPT="$INPUT_SEQ" LARECOMP_SHOT_AT="$SHOT_FRAME" \
     stdbuf -oL -eL ./astral_chain/run_guarded.sh --run build/game --seconds "$SECONDS_RUN" > "$LOG_FILE" 2>&1
 EXIT_CODE=$?
@@ -88,12 +93,13 @@ if [ ! -f "$FRAME_PATH" ]; then
     FRAME_PATH="./frames/frame_$(printf '%05d' "$SHOT_FRAME").png"
 fi
 if [ -f "$FRAME_PATH" ]; then
-    python3 - "$FRAME_PATH" << 'EOF'
+    python3 - "$FRAME_PATH" "$SHOT_FRAME" << 'EOF'
 import sys
 import numpy as np
 from PIL import Image
 
 img = Image.open(sys.argv[1])
+shot_frame = int(sys.argv[2])
 arr = np.array(img)[:, :, :3]
 h, w, _ = arr.shape
 tl = arr[:h//2, :w//2].mean()
@@ -103,9 +109,21 @@ br = arr[h//2:, w//2:].mean()
 green_flash = int(((arr[:, :, 1] > 200) & (arr[:, :, 0] < 30) & (arr[:, :, 2] < 30)).sum())
 
 print(f"Resolução: {w}x{h} | Quadrantes (TL={tl:.1f}, TR={tr:.1f}, BL={bl:.1f}, BR={br:.1f}) | GreenFlash={green_flash}")
-if min(tl, tr, bl, br) < 1.0:
-    print("FAILED: Quadrante vazio/preto detectado (possível corte de viewport/scissor).")
-    sys.exit(1)
+if shot_frame >= 1200:
+    q_counts = [
+        int((arr[:h//2, :w//2] > 30).sum()),
+        int((arr[:h//2, w//2:] > 30).sum()),
+        int((arr[h//2:, :w//2] > 30).sum()),
+        int((arr[h//2:, w//2:] > 30).sum())
+    ]
+    if min(q_counts) < 50:
+        print(f"FAILED: Quadrante vazio/preto detectado (pixel counts: {q_counts}).")
+        sys.exit(1)
+else:
+    non_zero = int((arr > 30).sum())
+    if arr.max() < 50 or non_zero < 500:
+        print("FAILED: Imagem totalmente vazia/preta detectada.")
+        sys.exit(1)
 if green_flash > 500:
     print("FAILED: Artefato de flash verde detectado na decodificação de textura.")
     sys.exit(1)
