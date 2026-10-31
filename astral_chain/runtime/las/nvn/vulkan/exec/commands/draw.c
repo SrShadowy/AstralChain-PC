@@ -453,7 +453,7 @@ static void draw_(CmdRec *r, bool indexed) {
             if (iaddr % isz == 0 && guest_direct(iaddr, (uint64_t)count * isz, &ib.buf, &ib.off)) {
                 scan_src = src; scan_isz = isz; scan_restart = restart;  // max_index only if a stream gets copied
             } else {
-                ib = guest_copy_vtx(iaddr, (uint64_t)count * isz + 4); // [extra]
+                ib = vk_transient_copy(src, (uint64_t)count * isz + 4, 4); // [extra]
                 if (isz == 2) { const uint16_t *s = src; for (uint32_t i = 0; i < count; i++) if (s[i] > max_index && s[i] != (uint16_t)restart) max_index = s[i]; }
                 else { const uint32_t *s = src; for (uint32_t i = 0; i < count; i++) if (s[i] > max_index && s[i] != restart) max_index = s[i]; }
             }
@@ -510,7 +510,7 @@ static void draw_(CmdRec *r, bool indexed) {
             else need = (uint64_t)max_index * stride + 256;
             if (v.size && need > v.size) need = v.size;
             if (!v.addr) { static const uint8_t zero[256]; sp = vk_transient_copy(zero, 256, 16); }
-            else sp = guest_copy_vtx(v.addr, need ? need : 16); // [extra]
+            else sp = guest_copy_vtx(v.addr, (v.size && v.size <= 524288) ? v.size : (need ? need : 16)); // [extra]
         }
         VkDeviceSize off = sp.off;
         if (ss_on && (ss.vb_known >> s & 1) && ss.vb[s] == sp.buf && ss.vo[s] == off) continue;
@@ -588,11 +588,24 @@ static void debug_draw(Prog *pr, CmdRec *r, bool indexed) {
             LOG("\n");
         }
         for (int c = 0; c < 18; c++) {
-            if (!((pr->fi->cbuf_mask >> c) & 1) || !st.ubuf[1][c].addr) continue;
-            const float *u = (const float *)(uintptr_t)st.ubuf[1][c].addr;
-            LOG("[draw]   fcb%d %llx size %u:", c, (unsigned long long)st.ubuf[1][c].addr, (unsigned)st.ubuf[1][c].size);
-            for (int k = 0; k < 96 && k * 4 < (int)st.ubuf[1][c].size; k++) LOG(" %.6g", u[k]);
-            LOG("\n");
+            if (!((pr->vi->cbuf_mask >> c) & 1)) continue; // [extra]
+            int idx = c >= 3 ? c - 3 : c; // [extra]
+            Range r = st.ubuf[0][idx].addr ? st.ubuf[0][idx] : st.ubuf[0][c]; // [extra]
+            if (!r.addr) continue; // [extra]
+            const float *u = (const float *)(uintptr_t)r.addr; // [extra]
+            LOG("[draw]   vcb%d(idx%d) %llx size %u:", c, idx, (unsigned long long)r.addr, (unsigned)r.size); // [extra]
+            for (int k = 0; k < 96 && k * 4 < (int)r.size; k++) LOG(" %.6g", u[k]); // [extra]
+            LOG("\n"); // [extra]
+        }
+        for (int c = 0; c < 18; c++) {
+            if (!((pr->fi->cbuf_mask >> c) & 1)) continue; // [extra]
+            int idx = c >= 3 ? c - 3 : c; // [extra]
+            Range r = st.ubuf[1][idx].addr ? st.ubuf[1][idx] : st.ubuf[1][c]; // [extra]
+            if (!r.addr) continue; // [extra]
+            const float *u = (const float *)(uintptr_t)r.addr; // [extra]
+            LOG("[draw]   fcb%d(idx%d) %llx size %u:", c, idx, (unsigned long long)r.addr, (unsigned)r.size); // [extra]
+            for (int k = 0; k < 96 && k * 4 < (int)r.size; k++) LOG(" %.6g", u[k]); // [extra]
+            LOG("\n"); // [extra]
         }
     }
     for (int i = 0; i < pr->fi->ntex && i < 64; i++) {  // fragment textures: guest size / format, allocation, scale

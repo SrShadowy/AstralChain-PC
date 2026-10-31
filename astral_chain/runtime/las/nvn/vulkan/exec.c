@@ -113,6 +113,7 @@ void vk_exec_reset(void) {
     pipe_reset(); // [extra]
     cs_reset(); // [extra]
     guest_copy_flush(); // [extra]
+    guest_vcopy_flush(); // [extra]
     gmem_reset(); // [extra]
     gfast_reset(); // [extra]
     vc_reset(); // [extra]

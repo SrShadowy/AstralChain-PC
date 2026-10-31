@@ -117,3 +117,8 @@ desktop.ini
 /.claude/
 /.chatgpt/
 AGENTS.md
+--shot.logs
+.gitignore
+--shot.cpu
+--shot
+--shot.frame.bmp

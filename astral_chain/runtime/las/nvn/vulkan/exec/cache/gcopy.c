@@ -8,7 +8,7 @@ static uint64_t gcopy_gen;
 
 void guest_copy_flush(void) {
     gcopy_gen++;
-    guest_vcopy_flush();
+    /* guest_vcopy_flush decoupled: uniform buffer updates must not thrash vertex cache */ // [extra]
 }
 
 VkSpan guest_copy(uint64_t addr, uint64_t size) {

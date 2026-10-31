@@ -45,7 +45,7 @@
 | `astral_chain/runtime/save_fs.h` | `save_resolve` | `extra/core/storage_trampoline.h` | Formatação de caminhos e conversão mbstowcs | 6 lines |
 | `astral_chain/runtime/las/las_compat.h` | `#ifndef _WIN32` | `extra/core/storage_trampoline.h` | Inclusão de rotinas de compatibilidade POSIX | 4 lines |
 | `astral_chain/native_trace.py` | `run-env.txt` | `run_guarded.sh` | Exportação de backend vinculado e glslang | 4 lines |
-| `astral_chain/runtime/las/nvn/vulkan/exec.c` | `guest_copy_vtx` / `vcopy` / `draw` | `exec.c` | Cache isolado de cópia de vértices e índices (`vcopy`), eliminando gargalo de 20 GB/s de memcpy entre draws e flushes de uniform buffers | 22 lines |
+| `astral_chain/runtime/las/nvn/vulkan/exec.c` | `guest_copy_vtx` / `vcopy` / `draw` | `exec.c` | Deduplicação cirúrgica de cópias de vértices (`vcopy` com correspondência estrita de tamanho e dispersão de hash) e isolamento de index buffers | 22 lines |
 | `astral_chain/runtime/las/nvn/vulkan/textures.c` | `mark_dynamic` | `extra/core/vulkan_trampoline.h` | Amostragem FNV para texturas de vídeo dinâmicas | 5 lines |
 | `astral_chain/runtime/las/settings.h` | `settings_load` | `extra/ui/launcher` | Suporte a variável de ambiente `AC_UPSCALER=fsr1` | 4 lines |
 | `astral_chain/runtime/hid_service.h` | `hid_xinput` | `extra/core/window_trampoline.h` | Leitura de gamepad via SDL3 no Linux | 4 lines |
@@ -237,5 +237,17 @@
 - Exposição da opção de submissão gráfica assíncrona na aba Avançado do Launcher Qt6 com persistência em `userdata/launcher.ini`.
 - Injeção de `AC_ASYNC_SUBMIT=1` no ambiente de lançamento, desacoplando a gravação de command buffers da execução, fences e apresentação Vulkan na GPU.
 - Vinculação do ajuste de VSync ao modo de apresentação `LARECOMP_VK_PRESENT_MODE=fifo` (prevenindo que o modo `mailbox` consuma 85% de GPU em execuções sem pacing) e controle limpo de cópia dinâmica de vértices sem corrupção de atlas de texturas.
+
+### Correção de Artefatos de HUD, Scissor Escuro e Alinhamento de Viewport (`vcopy.c`, `draw.c`, `present.c`)
+- Correção da chave de cache em `vcopy.c`: correspondência estrita de tamanho (`vcopy[slot].size == size`) e inclusão de `size` no hash de 64 bits, eliminando alocações colidentes de scratch memory que carimbavam glifos de HUD nas geometrias do chão 3D.
+- Reversão da cópia dinâmica de índices em `draw.c` para `vk_transient_copy(src, size, 4)`, eliminando corrupção de malhas e corte de caracteres em textos de interface ("LOADIN" -> "LOADING").
+- Sincronização do filtro de estado Vulkan (`StateFilter ss`) em `present.c`: remoção de chamadas manuais espúrias de scissor em `vk_present_draw` e emissão de `ss_forget()` ao término de operações de apresentação e pós-processamento, erradicando a caixa retangular escura que cortava elementos da cena 3D.
+
+### Resolução de Bugs de HUD, Menus e Quadrantes no Linux (`vcache.c`, `gcopy.c`, `draw.c`, `objects.c`, `exec.c`)
+- **Fallback Automático para Vértices Dinâmicos de CPU (`vcache.c`)**: No Linux, a ausência de write tracking (`GetWriteWatch`) deixava o espelho de dispositivo (`gmem_buf`) defasado para escritas de CPU após a carga inicial. Implementado limiar adaptativo `min_direct` (512 KB, configurável via `LARECOMP_VK_DIRECT_MIN_SIZE`), redirecionando buffers dinâmicos de interface, menus e tela de título para cópias limpas via host RAM (`guest_copy_vtx`), mantendo malhas 3D estáticas no espelho direto de VRAM a 60 FPS.
+- **Desacoplamento de Invalidação de Cache (`gcopy.c`, `exec.c`)**: Remoção de `guest_vcopy_flush()` de dentro de `guest_copy_flush()`. Atualizações de uniform buffers (`CMD_UPDATE_UNIFORM_BUFFER`) não mais descartam cópias de vértices no meio da submissão, eliminando overhead redundante de cópia. `guest_vcopy_flush()` é acionado adequadamente em resets globais (`vk_exec_reset()`).
+- **Chave de Cache Unificada para Interface (`draw.c`)**: Para buffers $\le 512$ KB, a cópia usa o tamanho integral `v.size`, garantindo que múltiplos draws desenhando elementos da mesma folha de sprites ou atlas de UI acertem o mesmo slot do cache `vcopy`.
+- **Invalidação de Descritores no Registro de Texturas (`objects.c`)**: Incremento de `vk_view_gen` em `register_texture` ao registrar novas entradas no `NvnDescPool`, impedindo que views cacheadas em `descriptors.c` persistam incorretamente para geometrias 3D subsequentes.
+
 
 

@@ -5,15 +5,15 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
 
-SECONDS_RUN="${1:-45}"
+SECONDS_RUN="${1:-58}"
 if [ "$SECONDS_RUN" -ge 40 ]; then
-    SHOT_FRAME="${2:-2500}"
+    SHOT_FRAME="${2:-3200}"
 else
     SHOT_FRAME="${2:-550}"
 fi
 if [ -z "${AC_INPUT_SCRIPT:-}" ]; then
     if [ "$SECONDS_RUN" -ge 40 ]; then
-        INPUT_SEQ="10-13:300;18-21:300;24-25:1;27-28:1;30-32:11000;33-34:1;35-37:11000;38-39:1;40-42:11000"
+        INPUT_SEQ="10-13:300;18-21:300;24-25:1;27-28:1;30-32:11000;33-34:1;35-37:11000;38-39:1;40-42:11000;43-44:1;46-47:400;48-49:400;51-52:1"
     else
         INPUT_SEQ="10.0-14.0:300;18.0-21.0:300"
     fi

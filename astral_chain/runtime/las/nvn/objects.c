@@ -664,6 +664,7 @@ static void register_texture(Cpu *c) {
     e->tex = HOST(NvnTexture, A(2));
     e->has_view = A(3) != 0;
     if (e->has_view) memcpy(&e->view, AP(3), sizeof e->view);
+    extern uint32_t vk_view_gen; vk_view_gen++; // [extra]
 }
 NVN(nvnTexturePoolRegisterTexture) { register_texture(c); }
 NVN(nvnTexturePoolRegisterImage) { register_texture(c); }
