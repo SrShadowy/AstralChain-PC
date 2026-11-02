@@ -32,4 +32,4 @@ else
     PY_EXEC=".venv/bin/python"
 fi
 
-"$PY_EXEC" -m astral_chain.setup_game "$@"
+"$PY_EXEC" -m astral_chain.build.setup_game "$@"

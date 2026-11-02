@@ -11,8 +11,8 @@
 #include <math.h>
 #include <stdlib.h>
 
-#include "../hle.h"
-#include "../settings.h"
+#include "hle.h" // [extra]
+#include "settings.h" // [extra]
 #include "output_scale.h"
 
 #define MAX_TEX 16384.0

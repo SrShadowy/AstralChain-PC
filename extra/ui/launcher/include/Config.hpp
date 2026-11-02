@@ -16,11 +16,32 @@ struct GraphicsSettings {
     int fpsLimit{60};
     double renderScale{1.0};
     QString upscaler{"bilinear"};
+    double lodBias{0.0};   // texture quality: global LOD bias (0 = native, + = lighter)
+    double lodMin{0.0};    // LoD floor: min-LOD (0 = off)
+    bool noShadow{false};  // disable shadow-map sampling
 };
 
 struct AudioSettings {
     int masterVolume{100};
     bool muteOnUnfocus{false};
+};
+
+struct MouseSettings {
+    static constexpr double kDefaultSensitivity = 100.0;
+    static constexpr double kDefaultYScale = 1.0;
+    static constexpr const char* kDefaultCurve = "power";
+    static constexpr bool kDefaultInvertY = false;
+    static constexpr bool kDefaultMenuNav = true;
+    static constexpr bool kDefaultMenuMotion = true;
+    static constexpr int kDefaultMenuCell = 40;
+
+    double sensitivity{kDefaultSensitivity};
+    double yScale{kDefaultYScale};
+    QString curve{kDefaultCurve};
+    bool invertY{kDefaultInvertY};
+    bool menuNav{kDefaultMenuNav};
+    bool menuMotion{kDefaultMenuMotion};
+    int menuCell{kDefaultMenuCell};
 };
 
 struct GameSettings {
@@ -49,6 +70,9 @@ public:
     [[nodiscard]] AudioSettings& audio() noexcept { return m_audio; }
     [[nodiscard]] const AudioSettings& audio() const noexcept { return m_audio; }
 
+    [[nodiscard]] MouseSettings& mouse() noexcept { return m_mouse; }
+    [[nodiscard]] const MouseSettings& mouse() const noexcept { return m_mouse; }
+
     [[nodiscard]] GameSettings& game() noexcept { return m_game; }
     [[nodiscard]] const GameSettings& game() const noexcept { return m_game; }
 
@@ -61,6 +85,7 @@ private:
     QString m_iniPath;
     GraphicsSettings m_graphics;
     AudioSettings m_audio;
+    MouseSettings m_mouse;
     GameSettings m_game;
     std::unordered_map<QString, QString> m_bindings;
 };

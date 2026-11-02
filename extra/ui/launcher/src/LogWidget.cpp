@@ -39,19 +39,22 @@ void LogWidget::setupUi()
     mainLayout->setContentsMargins(0, 0, 0, 0);
     mainLayout->setSpacing(8);
 
-    auto* toolbar = new QHBoxLayout();
-    toolbar->setSpacing(6);
+    // 1. BARRA SUPERIOR (Filtros, Busca e Status)
+    auto* topToolbar = new QHBoxLayout();
+    topToolbar->setContentsMargins(0, 0, 0, 0);
+    topToolbar->setSpacing(8);
 
     m_statusBadge = new QLabel("○ Inativo", this);
     m_statusBadge->setObjectName("logStatusBadge");
-    toolbar->addWidget(m_statusBadge);
-    toolbar->addSpacing(6);
+    m_statusBadge->setFixedHeight(28);
+    topToolbar->addWidget(m_statusBadge);
 
     m_searchEdit = new QLineEdit(this);
     m_searchEdit->setPlaceholderText("Buscar no log...");
     m_searchEdit->setClearButtonEnabled(true);
-    m_searchEdit->setMaximumWidth(180);
-    toolbar->addWidget(m_searchEdit);
+    m_searchEdit->setMinimumWidth(160);
+    m_searchEdit->setFixedHeight(28);
+    topToolbar->addWidget(m_searchEdit);
 
     m_categoryCombo = new QComboBox(this);
     m_categoryCombo->addItem("📋 Todos os canais", static_cast<int>(LogCategory::All));
@@ -63,30 +66,41 @@ void LogWidget::setupUi()
     m_categoryCombo->addItem("🧠 Lógica & App ([logic])", static_cast<int>(LogCategory::LogicApp));
     m_categoryCombo->addItem("🕹️ Entrada ([input])", static_cast<int>(LogCategory::Input));
     m_categoryCombo->addItem("⚠️ Erros & Avisos", static_cast<int>(LogCategory::ErrorsWarnings));
-    toolbar->addWidget(m_categoryCombo);
+    m_categoryCombo->setMinimumWidth(210);
+    m_categoryCombo->setFixedHeight(28);
+    topToolbar->addWidget(m_categoryCombo);
 
-    m_autoScrollCheck = new QCheckBox("Autoscroll", this);
-    m_autoScrollCheck->setChecked(true);
-    toolbar->addWidget(m_autoScrollCheck);
-    toolbar->addStretch();
+    topToolbar->addStretch();
+    mainLayout->addLayout(topToolbar);
 
-    m_copyBtn = new QPushButton("📋 Copiar", this);
-    m_clearBtn = new QPushButton("🗑 Limpar", this);
-    m_openFolderBtn = new QPushButton("📁 Pasta", this);
-    m_exportBtn = new QPushButton("💾 Exportar", this);
-
-    for (auto* btn : {m_copyBtn, m_clearBtn, m_openFolderBtn, m_exportBtn}) {
-        btn->setFixedHeight(26);
-        btn->setCursor(Qt::PointingHandCursor);
-        toolbar->addWidget(btn);
-    }
-    mainLayout->addLayout(toolbar);
-
+    // 2. CONSOLE CENTRAL DE LOG
     m_textEdit = new QTextEdit(this);
     m_textEdit->setObjectName("logView");
     m_textEdit->setReadOnly(true);
     m_textEdit->document()->setMaximumBlockCount(4000);
     mainLayout->addWidget(m_textEdit);
+
+    // 3. BARRA INFERIOR (Ações e Autoscroll)
+    auto* bottomToolbar = new QHBoxLayout();
+    bottomToolbar->setContentsMargins(0, 0, 0, 0);
+    bottomToolbar->setSpacing(8);
+
+    m_autoScrollCheck = new QCheckBox("Autoscroll automático", this);
+    m_autoScrollCheck->setChecked(true);
+    bottomToolbar->addWidget(m_autoScrollCheck);
+    bottomToolbar->addStretch();
+
+    m_copyBtn = new QPushButton("📋 Copiar", this);
+    m_clearBtn = new QPushButton("🗑 Limpar", this);
+    m_openFolderBtn = new QPushButton("📁 Pasta de Logs", this);
+    m_exportBtn = new QPushButton("💾 Exportar...", this);
+
+    for (auto* btn : {m_copyBtn, m_clearBtn, m_openFolderBtn, m_exportBtn}) {
+        btn->setFixedHeight(28);
+        btn->setCursor(Qt::PointingHandCursor);
+        bottomToolbar->addWidget(btn);
+    }
+    mainLayout->addLayout(bottomToolbar);
 
     connect(m_searchEdit, &QLineEdit::textChanged, this, &LogWidget::onFilterChanged);
     connect(m_categoryCombo, &QComboBox::currentIndexChanged, this, &LogWidget::onCategoryChanged);

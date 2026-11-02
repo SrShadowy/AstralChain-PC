@@ -12,7 +12,7 @@
 //   LARECOMP_FORCE_STEPS=<n> (test) always n
 #include <stdlib.h>
 
-#include "../hle.h"
+#include "hle.h" // [extra]
 
 extern volatile uint64_t g_vsync_count;  // runtime/hle/vi.c
 uint64_t g_frame_steps_late;             // (stats) frames that advanced more than one step

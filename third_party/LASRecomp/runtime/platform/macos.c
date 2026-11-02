@@ -15,7 +15,7 @@
 #include <sys/ucontext.h>
 #include <unistd.h>
 
-#include "../platform.h"
+#include "platform.h" // [extra]
 
 static mach_timebase_info_data_t tb;
 

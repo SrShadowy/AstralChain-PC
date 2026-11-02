@@ -13,7 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../hle.h"
+#include "hle.h" // [extra]
 
 #define CHAMBER_MGR (MAIN_BASE + 0x1cb9fb8)
 #define CHAMBER_CTOR (MAIN_BASE + 0xcdf1c0)

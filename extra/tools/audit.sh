@@ -65,4 +65,20 @@ cmake -B build-launcher -S extra/ui/launcher -GNinja > /dev/null
 cmake --build build-launcher > /dev/null
 echo "PASSED: Qt6 Launcher builds cleanly."
 
+echo "--- 4. Menu Pointer Self-Test ---"
+if pkg-config --exists sdl3 2>/dev/null; then
+    TEST_BIN="$(mktemp -t ac-pointer-test.XXXXXX)"
+    if gcc -O1 -Wall -Wextra -I. -o "$TEST_BIN" extra/tools/mouse_pointer_test.c \
+            $(pkg-config --cflags --libs sdl3) > /dev/null 2>&1 && \
+            "$TEST_BIN" | grep -v '^\[input\]'; then
+        rm -f "$TEST_BIN"
+    else
+        rm -f "$TEST_BIN"
+        echo "FAILED: menu pointer self-test."
+        exit 1
+    fi
+else
+    echo "SKIPPED: SDL3 development files not found (menu pointer self-test)."
+fi
+
 echo "=== All audits passed successfully! ==="

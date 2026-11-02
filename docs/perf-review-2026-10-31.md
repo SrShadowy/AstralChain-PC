@@ -61,7 +61,7 @@ duração constantes (~45 s por execução):
 
 A diferença de p95 entre FIFO e mailbox é de ~9 a 10 ms, e o ganho de `1% low` chega a +50%. Isso
 não é um tradeoff de qualidade — é trabalho duplicado. O jogo **já** faz o seu próprio pacing de
-60 Hz em `nvn_present_pace` (`runtime/nvn_hle.h`), alinhando a apresentação a uma grade de ticks de
+60 Hz em `nvn_present_pace` (`runtime/gpu/nvn_hle.h`), alinhando a apresentação a uma grade de ticks de
 19,2 MHz herdada do Switch. Empilhar FIFO por cima aplica uma segunda espera de refresh sobre a
 primeira, e é justamente esse empilhamento que produz o padrão 17/34.
 
@@ -69,7 +69,7 @@ O próprio código do backend já documenta esse modo de falha em `vulkan/device
 mailbox é descrito como o default para evitar que "cada submissão ficasse enfileirada atrás da que
 espera por uma imagem da janela". A documentação e o comportamento efetivo divergem, porém:
 
-- `astral_chain/run_guarded.sh:64` fixa `LARECOMP_VK_PRESENT="${LARECOMP_VK_PRESENT:-fifo}"`;
+- `astral_chain/tools/run_guarded.sh:64` fixa `LARECOMP_VK_PRESENT="${LARECOMP_VK_PRESENT:-fifo}"`;
 - `userdata/launcher.ini` traz `present_mode=immediate` convivendo com `vsync=true`, combinação
   contraditória que o launcher resolve silenciosamente para FIFO ao montar o ambiente.
 
@@ -97,14 +97,14 @@ não é trabalho computacional — trabalho real tem variância. É a assinatura
 fazendo syscall. A origem está no shim POSIX que traduz a API de espera do Win32:
 
 ```c
-// extra/core/platform_posix.h:243
+// extra/platform/platform_posix.h:243
 #define Sleep(ms) usleep((ms) * 1000)
 ```
 
 No Windows, `Sleep(0)` cede o restante do quantum ao escalonador, o que é semanticamente "não
 consuma CPU desnecessariamente". Mapeado para `usleep(0)`, o comportamento é oposto: a chamada
 resolve via `nanosleep` com prazo zero, retorna imediatamente e o laço **continua girando**. Em
-`plat_sleep_until_ns` (`runtime/nvn_hle.h:241`) isso vira um spin puro:
+`plat_sleep_until_ns` (`runtime/gpu/nvn_hle.h:241`) isso vira um spin puro:
 
 ```c
 void plat_sleep_until_ns(uint64_t t) {
@@ -129,7 +129,7 @@ alimenta diretamente o `p95` que se quer estabilizar.
 
 Este é o item estrutural, e o mais caro de todos. O runtime herdado consulta o sistema operacional
 para saber quais páginas de 4 KB do heap convidado (2,8 GB) a CPU reescreveu desde a última
-consulta. No Windows isso é `GetWriteWatch`. Em `runtime/nvn_hle.h:265`, a implementação POSIX é um
+consulta. No Windows isso é `GetWriteWatch`. Em `runtime/gpu/nvn_hle.h:265`, a implementação POSIX é um
 no-op:
 
 ```c
@@ -231,7 +231,7 @@ CPU e contenção de `klock` no mesmo movimento, e é o item que mais provavelme
 uso diário (fora de jogo, com outras tarefas competindo por núcleos).
 
 **P2 — Implementar write tracking nativo via soft-dirty (o fix arquitetural).**
-Fornecer `plat_written_pages` e `track_harvest` em `extra/core/`, usando `clear_refs` + `pagemap` +
+Fornecer `plat_written_pages` e `track_harvest` em `extra/platform/`, usando `clear_refs` + `pagemap` +
 `MADV_NOHUGEPAGE`, respeitando a fronteira de código estabelecida. Isso religa simultaneamente o
 vertex cache, o `TEX_WATCH` e a coerência real do espelho — e permite **remover** a heurística dos
 512 KB, trocando uma aposta de corretude por um mecanismo verificado. É o item que responde
@@ -267,15 +267,15 @@ Nenhuma das melhorias P0–P4 foi implementada ou re-testada em jogo até o mome
 
 ```bash
 # Telemetria de percentis + perfil por categoria
-LARECOMP_VK_PROF=1 ./astral_chain/run_guarded.sh --run build/game --seconds 40
+LARECOMP_VK_PROF=1 ./astral_chain/tools/run_guarded.sh --run build/game --seconds 40
 
 # Comparativo de modo de apresentação
 for m in fifo mailbox immediate; do
-  LARECOMP_VK_PRESENT=$m ./astral_chain/run_guarded.sh --run build/game --seconds 45
+  LARECOMP_VK_PRESENT=$m ./astral_chain/tools/run_guarded.sh --run build/game --seconds 45
 done
 
 # Isolar o custo do spin-wait (pacing desligado)
-AC_FPS=0 AC_PRESENT_INTERVAL=0 ./astral_chain/run_guarded.sh --run build/game --seconds 45
+AC_FPS=0 AC_PRESENT_INTERVAL=0 ./astral_chain/tools/run_guarded.sh --run build/game --seconds 45
 
 # Consumo por thread (janela de 12 s)
 PID=$(pgrep -n -f 'round-00/trace')

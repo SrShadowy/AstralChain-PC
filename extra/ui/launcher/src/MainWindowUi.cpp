@@ -1,17 +1,17 @@
 #include "MainWindow.hpp"
 #include "LogWidget.hpp"
+#include "CustomButton.hpp"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
-#include <QPushButton>
 #include <QLabel>
 #include <QProgressBar>
-#include <QGraphicsDropShadowEffect>
 
 namespace ac::launcher {
 
 void MainWindow::setupUi()
 {
     auto* central = new QWidget(this);
+    central->setObjectName("centralWidget");
     setCentralWidget(central);
 
     auto* rootLayout = new QHBoxLayout(central);
@@ -20,10 +20,10 @@ void MainWindow::setupUi()
 
     m_sidePanel = new QWidget(this);
     m_sidePanel->setObjectName("sidePanel");
-    m_sidePanel->setFixedWidth(290);
+    m_sidePanel->setFixedWidth(320);
     auto* leftLayout = new QVBoxLayout(m_sidePanel);
     leftLayout->setSpacing(0);
-    leftLayout->setContentsMargins(20, 24, 20, 20);
+    leftLayout->setContentsMargins(16, 20, 16, 18);
 
     auto* title = new QLabel("ASTRAL CHAIN", m_sidePanel);
     title->setObjectName("titleLabel");
@@ -34,44 +34,26 @@ void MainWindow::setupUi()
     subtitle->setObjectName("subtitleLabel");
     leftLayout->addWidget(subtitle);
 
-    leftLayout->addSpacing(20);
+    leftLayout->addSpacing(18);
 
-    m_playBtn = new QPushButton("▶  PLAY", m_sidePanel);
-    m_playBtn->setObjectName("playBtn");
+    m_playBtn = new CustomButton("▶  PLAY", m_sidePanel, true /* isPrimary */);
     m_playBtn->setFixedHeight(52);
-    m_playBtn->setCursor(Qt::PointingHandCursor);
-
-    m_playGlow = new QGraphicsDropShadowEffect(m_playBtn);
-    m_playGlow->setBlurRadius(28);
-    m_playGlow->setColor(QColor(0, 188, 212, 120));
-    m_playGlow->setOffset(0, 2);
-    m_playBtn->setGraphicsEffect(m_playGlow);
-
     leftLayout->addWidget(m_playBtn);
-    leftLayout->addSpacing(14);
+    leftLayout->addSpacing(10);
 
-    m_diagBtn = new QPushButton("  Play (Diagnostics)", m_sidePanel);
-    m_setupBtn = new QPushButton("  Setup Game", m_sidePanel);
-    m_shadersBtn = new QPushButton("  Compile Shaders", m_sidePanel);
-    m_settingsBtn = new QPushButton("  Settings", m_sidePanel);
-    m_controlsBtn = new QPushButton("  Controls", m_sidePanel);
+    m_diagBtn = new CustomButton("  Play (Diagnostics)", m_sidePanel);
+    m_setupBtn = new CustomButton("  Setup Game", m_sidePanel);
+    m_shadersBtn = new CustomButton("  Compile Shaders", m_sidePanel);
+    m_settingsBtn = new CustomButton("  Settings", m_sidePanel);
+    m_controlsBtn = new CustomButton("  Controls", m_sidePanel);
 
     for (auto* btn : {m_diagBtn, m_setupBtn, m_shadersBtn, m_settingsBtn, m_controlsBtn}) {
-        btn->setObjectName("sideBtn");
-        btn->setCursor(Qt::PointingHandCursor);
-        btn->setFixedHeight(38);
+        btn->setFixedHeight(42);
         leftLayout->addWidget(btn);
-        leftLayout->addSpacing(6);
+        leftLayout->addSpacing(4);
     }
 
     leftLayout->addStretch();
-
-    m_artBtn = new QPushButton("🖼  Switch Art", m_sidePanel);
-    m_artBtn->setObjectName("artBtn");
-    m_artBtn->setCursor(Qt::PointingHandCursor);
-    m_artBtn->setFixedHeight(34);
-    leftLayout->addWidget(m_artBtn);
-
     rootLayout->addWidget(m_sidePanel);
 
     auto* rightBox = new QWidget(this);
@@ -108,13 +90,12 @@ void MainWindow::setupUi()
 
     rootLayout->addWidget(rightBox);
 
-    connect(m_playBtn, &QPushButton::clicked, this, &MainWindow::onPlay);
-    connect(m_diagBtn, &QPushButton::clicked, this, &MainWindow::onPlayDiagnostics);
-    connect(m_setupBtn, &QPushButton::clicked, this, &MainWindow::onSetupGame);
-    connect(m_shadersBtn, &QPushButton::clicked, this, &MainWindow::onCompileShaders);
-    connect(m_settingsBtn, &QPushButton::clicked, this, &MainWindow::onOpenSettings);
-    connect(m_controlsBtn, &QPushButton::clicked, this, &MainWindow::onOpenControls);
-    connect(m_artBtn, &QPushButton::clicked, this, &MainWindow::onNextArt);
+    connect(m_playBtn, &CustomButton::clicked, this, &MainWindow::onPlay);
+    connect(m_diagBtn, &CustomButton::clicked, this, &MainWindow::onPlayDiagnostics);
+    connect(m_setupBtn, &CustomButton::clicked, this, &MainWindow::onSetupGame);
+    connect(m_shadersBtn, &CustomButton::clicked, this, &MainWindow::onCompileShaders);
+    connect(m_settingsBtn, &CustomButton::clicked, this, &MainWindow::onOpenSettings);
+    connect(m_controlsBtn, &CustomButton::clicked, this, &MainWindow::onOpenControls);
 }
 
 } // namespace ac::launcher

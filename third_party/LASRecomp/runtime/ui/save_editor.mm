@@ -18,7 +18,7 @@ extern "C" void pets_give(int c, bool on);
 extern "C" const char *rando_seed_dir(void);
 
 extern "C" {
-#include "../hle.h"
+#include "hle.h" // [extra]
 }
 
 #define LIVE_SAVE 0x7001CBB220ull  // main + 0x1CBB220

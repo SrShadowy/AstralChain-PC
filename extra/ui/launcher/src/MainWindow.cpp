@@ -3,6 +3,7 @@
 #include "ControlsDialog.hpp"
 #include "SetupDialog.hpp"
 #include "LogWidget.hpp"
+#include "CustomButton.hpp"
 #include "Theme.hpp"
 
 #include <QVBoxLayout>
@@ -28,7 +29,6 @@ MainWindow::MainWindow(QWidget* parent)
     resize(980, 620);
     setMinimumSize(840, 520);
 
-    loadArtList();
     setupUi();
     applyTheme();
 
@@ -36,41 +36,13 @@ MainWindow::MainWindow(QWidget* parent)
     connect(&m_runner, &ProcessRunner::lineReceived, this, &MainWindow::onProcessLine);
     connect(&m_runner, &ProcessRunner::finished, this, &MainWindow::onProcessFinished);
 
-    m_artTimer = new QTimer(this);
-    connect(m_artTimer, &QTimer::timeout, this, &MainWindow::onNextArt);
-    m_artTimer->start(20000);
-
     QTimer::singleShot(200, this, &MainWindow::refreshGameStatus);
-}
-
-void MainWindow::loadArtList()
-{
-    QDir artDir("launcher/art");
-    const QStringList files = artDir.entryList({"*.jpg", "*.png"}, QDir::Files, QDir::Name);
-    for (const auto& f : files) m_artPaths << artDir.filePath(f);
-    if (!m_artPaths.isEmpty()) m_currentBackground.load(m_artPaths.first());
-}
-
-void MainWindow::onNextArt()
-{
-    if (m_artPaths.isEmpty()) return;
-    m_currentArtIndex = (m_currentArtIndex + 1) % m_artPaths.size();
-    m_currentBackground.load(m_artPaths[m_currentArtIndex]);
-    update();
 }
 
 void MainWindow::paintEvent(QPaintEvent*)
 {
     QPainter p(this);
-    p.setRenderHint(QPainter::Antialiasing);
-    p.setRenderHint(QPainter::SmoothPixmapTransform);
-
-    if (!m_currentBackground.isNull()) {
-        p.drawPixmap(rect(), m_currentBackground.scaled(size(), Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation));
-    } else {
-        p.fillRect(rect(), QColor(13, 17, 23));
-    }
-    p.fillRect(rect(), QColor(6, 8, 12, 190));
+    p.fillRect(rect(), QColor("#3b3a4a"));
 }
 
 void MainWindow::closeEvent(QCloseEvent* event)
@@ -100,7 +72,7 @@ void MainWindow::applyTheme()
 void MainWindow::refreshGameStatus()
 {
     QProcess proc;
-    proc.start("python3", {"-m", "astral_chain.setup_game", "--status"});
+    proc.start("python3", {"-m", "astral_chain.build.setup_game", "--status"});
     if (proc.waitForFinished(3000)) {
         const auto doc = QJsonDocument::fromJson(proc.readAllStandardOutput());
         if (doc.isObject()) {
@@ -129,19 +101,15 @@ void MainWindow::setRunningUi(bool running, qint64 pid)
 {
     if (running) {
         m_playBtn->setText("⏹  PARAR");
-        m_playBtn->setObjectName("stopBtn");
+        m_playBtn->setDangerMode(true);
         m_playBtn->setEnabled(true);
-        m_playGlow->setColor(QColor(239, 83, 80, 160));
         m_statusDot->setStyleSheet("font-size: 11px; color: #66bb6a;");
     } else {
         m_playBtn->setText("▶  PLAY");
-        m_playBtn->setObjectName("playBtn");
+        m_playBtn->setDangerMode(false);
         m_playBtn->setEnabled(m_installed);
-        m_playGlow->setColor(QColor(0, 188, 212, 120));
         m_statusDot->setStyleSheet("font-size: 11px; color: #42a5f5;");
     }
-    m_playBtn->style()->unpolish(m_playBtn);
-    m_playBtn->style()->polish(m_playBtn);
     m_logWidget->setRunningState(running, pid);
 }
 
@@ -209,7 +177,7 @@ void MainWindow::onSetupGame()
 
 void MainWindow::onCompileShaders()
 {
-    QStringList args = {"-m", "astral_chain.setup_game", "--rebuild-if-stale"};
+    QStringList args = {"-m", "astral_chain.build.setup_game", "--rebuild-if-stale"};
     if (m_config.game().forceShaders) args << "--force-shaders";
     const QString py = QFile::exists(".venv/bin/python") ? ".venv/bin/python" : "python3";
     runCommand(py, args, "Compilando shaders...", false);

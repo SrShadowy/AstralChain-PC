@@ -9,7 +9,7 @@
 // +0 small keys held, +1 bits: compass 0, map 1, beak 2, Nightmare Key 3.
 #include <stdio.h>
 
-#include "../hle.h"
+#include "hle.h" // [extra]
 
 #define LIVE_SAVE 0x7001CBB220ull
 // item ids as AddItem gets them: Items.gsheet `itemID` (not the row number; rows 41+ differ)

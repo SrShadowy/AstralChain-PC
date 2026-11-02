@@ -1,7 +1,7 @@
 // [extra]
 #include <stdlib.h>
 #include <string.h>
-#include "../../rt.h"
+#include "rt.h" // [extra]
 #include "../../exec_internal.h"
 
 // ================================================================== transient memory ring

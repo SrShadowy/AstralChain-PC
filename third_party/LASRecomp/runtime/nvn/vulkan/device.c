@@ -8,8 +8,8 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "../../paths.h"
-#include "../../settings.h"
+#include "paths.h" // [extra]
+#include "settings.h" // [extra]
 #include "../../ui/menu.h"
 #include "vk.h"
 #include "../output_scale.h"

@@ -28,8 +28,8 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "../hle.h"
-#include "../rando.h"
+#include "hle.h" // [extra]
+#include "rando.h" // [extra]
 
 #define PLAYER_STATUS_PTR (MAIN_BASE + 0x1CC1368)  // PlayerStatus*: current level name at +0
 #define GAME_MGR (MAIN_BASE + 0x1C97188)           // +0x4a8: the current scene (weak), scene +0x228 -> +0x1b8 room sp

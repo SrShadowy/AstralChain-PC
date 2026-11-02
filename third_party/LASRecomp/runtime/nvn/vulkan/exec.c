@@ -10,11 +10,11 @@
 #include <string.h>
 #include <sys/stat.h>
 
-#include "../../kernel.h"
+#include "kernel.h" // [extra]
 #include "shaders.h"
 #include "vk.h"
 #include "../renderer.h"
-#include "../../settings.h"
+#include "settings.h" // [extra]
 
 static uint64_t stat_draws, stat_skipped, stat_passes, stat_dispatches, stat_wait_ns, stat_flushes, stat_feedback_copies;
 static uint64_t stat_upload_bytes;

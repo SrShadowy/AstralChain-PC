@@ -1,9 +1,9 @@
 // hid (shared memory, input state filled in later) and settings (set, set:sys).
 #include <string.h>
 
-#include "../hle.h"
-#include "../ipc.h"
-#include "../settings.h"
+#include "hle.h" // [extra]
+#include "ipc.h"
+#include "settings.h" // [extra]
 
 static uint32_t new_event_handle(void) {
     uint32_t w, r;

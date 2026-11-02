@@ -1,7 +1,7 @@
 // NVN implemented on the host. Guest NVN objects hold a pointer to a host object at offset 0;
 // builders and small state objects store their fields directly in guest memory.
 #pragma once
-#include "../hle.h"
+#include "hle.h" // [extra]
 #include "tegra.h"
 
 #define NVN(name) HLE_FUNC(#name, hle_##name)

@@ -11,8 +11,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "../hle.h"
-#include "../rando.h"
+#include "hle.h" // [extra]
+#include "rando.h" // [extra]
 
 #define LIVE_SAVE 0x7001CBB220ull
 #define COMPANION (LIVE_SAVE + 0x555D)

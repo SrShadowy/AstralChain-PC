@@ -119,15 +119,15 @@ The codebase is organized to maintain modularity and ease upstream merges with t
 
 | Path | Description |
 | --- | --- |
-| `extra/core/` | Modular platform hooks and trampolines (`sync`, `memory`, `window`, `vulkan`, `audio`, `storage`, `platform_posix`) |
+| `extra/` | Modular platform hooks by domain: `platform/` (POSIX sync/memory), `sdl/` (window/audio), `gpu/` (Vulkan/Maxwell), `input/`, `storage/`, `ui/`, `toggles/` |
 | `extra/ui/launcher/` | Native Qt6 C++20 launcher (`ac::launcher` namespace, modular classes <= 250 lines) |
 | `extra/tools/` | Verification and compliance audit scripts (`audit.sh`) |
 | `extra/hooks.h` | Downstream master re-export header for non-intrusive upstream hooks |
 | `launcher.sh` | Build and execution helper for the Qt6 launcher |
 | `setup.sh` | Linux virtual environment setup and game data unpacker |
 | `play.sh`, `play-diagnostics.sh` | Linux game runners with environment guards |
-| `astral_chain/runtime/hooks/` | Upstream forwarding headers preserving historical include paths |
-| `astral_chain/` | Native lifter driver, build system, and game runtime |
+| `astral_chain/runtime/` | Horizon HLE runtime by domain: `gpu/`, `audio/`, `input/`, `storage/`, `services/`, `kernel/`, `tools/` + `las/` (NVN on Vulkan) |
+| `astral_chain/` | Python pipeline by module: `shared/` (formats), `translator/` (lifter driver), `build/` (setup/native build), `gpu/` (NVN/shaders), `tools/` |
 | `astral_chain/patches/` | Pchtxt code patches (Dynamic-FPS, cutscene sync) |
 | `third_party/` | Submodules and vendored components (LASRecomp, Vulkan-Headers, VulkanMemoryAllocator) |
 | `SHADOW_CHANGES.md` | Upstream Touch Ledger and modular code architecture rules |

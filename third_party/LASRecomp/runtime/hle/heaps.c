@@ -11,7 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../hle.h"
+#include "hle.h" // [extra]
 
 uint64_t loader_find_symbol(const char *name);
 void guest_call(Cpu *c, uint64_t addr);

@@ -10,11 +10,11 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../hle.h"
+#include "hle.h" // [extra]
 #include "../nvn/nvn.h"
 #include "../nvn/renderer.h"
-#include "../settings.h"
-#include "../input_bind.h"
+#include "settings.h" // [extra]
+#include "input_bind.h" // [extra]
 
 enum {
     BTN_A = 0, BTN_B, BTN_X, BTN_Y, BTN_LSTICK, BTN_RSTICK, BTN_L, BTN_R, BTN_ZL, BTN_ZR, BTN_PLUS, BTN_MINUS,
@@ -482,7 +482,7 @@ HLE_FUNC("_ZN2nn3hid15GetNpadStyleSetERKj", hid_style_set) {
 
 // BindNpadStyleSetUpdateEvent(id, SystemEventType*, clear mode): signaled once so the game sees a
 // controller connected.
-#include "../kernel.h"
+#include "kernel.h" // [extra]
 HLE_FUNC("_ZN2nn3hid27BindNpadStyleSetUpdateEventERKjPNS_2os15SystemEventTypeENS3_14EventClearModeE", hid_bind_style_event) {
     uint32_t w, r;
     KEvent *ev = kernel_create_event_pair(&w, &r);

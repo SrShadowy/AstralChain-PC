@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "../hle.h"
+#include "hle.h" // [extra]
 
 int menu_keyboard_run(const char *initial, int max_len, char *out, int cap);  // runtime/ui/menu.mm
 

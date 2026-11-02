@@ -13,8 +13,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "../hle.h"
-#include "../rando.h"
+#include "hle.h" // [extra]
+#include "rando.h" // [extra]
 
 #define FLAG_PTR (MAIN_BASE + 0x1CC1388)  // the event-flag bitfield (runtime/hle/flags_ext.c)
 #define FLAG_CAP (MAIN_BASE + 0x1CC1390)

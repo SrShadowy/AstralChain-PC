@@ -6,7 +6,7 @@
 #include <string.h>
 #include <sys/stat.h>
 
-#include "../../kernel.h"
+#include "kernel.h" // [extra]
 #include "../../exec_internal.h"
 
 // Program build statistics

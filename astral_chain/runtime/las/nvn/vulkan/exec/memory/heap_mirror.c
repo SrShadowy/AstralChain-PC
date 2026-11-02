@@ -6,7 +6,7 @@
 #include "kernel.h"
 #include "rt.h"
 #include "../../exec_internal.h"
-#include "extra/core/heap_mirror_extra.h" // [extra]
+#include "extra/gpu/heap_mirror_extra.h" // [extra]
 
 // Global memory (shader LDG/STG, maxwell_gmem_base = HEAP_BASE): the guest heap imported as a GPU buffer
 // (VK_EXT_external_memory_host), zero-copy like metal.m's g_guest_buffer, so compute results land in guest

@@ -27,9 +27,4 @@ __thread uint64_t g_blocked_ns;
 const char *game_level_name(void) { return "-"; }
 /* LASRecomp's F9 debug-frame request; never raised. */
 volatile int g_debug_frame_request;
-/* SMAA is not vendored and g_settings.antialias is off, so these are never
- * reached; reaching them stops instead of drawing with invented data. */
-#include "rt.h"
-const unsigned char *smaa_area_tex(void) { FATAL("SMAA data not vendored\n"); }
-const unsigned char *smaa_search_tex(void) { FATAL("SMAA data not vendored\n"); }
-const char smaa_hlsl_src[] = "#error SMAA source not vendored\n";
+/* SMAA 1x is vendored now (nvn/smaa_data.c); its three symbols live there. */ // [extra]

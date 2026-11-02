@@ -6,9 +6,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../hle.h"
-#include "../rando.h"
-#include "../settings.h"
+#include "hle.h" // [extra]
+#include "rando.h"
+#include "settings.h" // [extra]
 
 #define MAIN_BASE 0x7000000000ull
 

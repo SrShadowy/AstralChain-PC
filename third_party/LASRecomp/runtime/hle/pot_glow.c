@@ -9,9 +9,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../hle.h"
-#include "../platform.h"
-#include "../rando.h"
+#include "hle.h" // [extra]
+#include "platform.h"
+#include "rando.h" // [extra]
 
 #define PLAYER_STATUS_PTR (MAIN_BASE + 0x1CC1368)  // PlayerStatus*: current level name at +0
 #define EVENT_FLAGS (MAIN_BASE + 0x1CBB220 + 0x5DC0)  // live save: GlobalFlags bitfield (2048 bits)

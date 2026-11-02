@@ -13,7 +13,7 @@
 #include "warp_data.h"
 
 extern "C" {
-#include "../hle.h"
+#include "hle.h" // [extra]
 void warp_request(const char *level, const char *locator);
 int warp_available(void);
 bool warp_blocked(const char *locator);

@@ -16,9 +16,9 @@
 #include "imgui.h"
 
 extern "C" {
-#include "../hle.h"
-#include "../rando.h"
-#include "../settings.h"
+#include "hle.h" // [extra]
+#include "rando.h"
+#include "settings.h" // [extra]
 uint64_t renderer_present_count(void);
 int doorjump_chaos_pairs(const char *level, int *ids, int max);
 void doorjump_chaos_pair(int id, int *col, int *row, char *side, int *slot);

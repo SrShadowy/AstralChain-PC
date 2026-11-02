@@ -472,14 +472,7 @@ void rt_svc(Cpu*c,uint32_t imm,uint64_t pc) {
    * worker threads poll in sleep loops). */
   int64_t ns=(int64_t)c->x[0];
   if(ns<-2) boundary("thread-yield-mode",c,pc);
-  if(ns<=0) SwitchToThread();
-  else {
-   uint64_t until=rt_ticks()+(uint64_t)(((__uint128_t)(uint64_t)ns*19200000+999999999)/1000000000);
-   for(uint64_t now=rt_ticks();now<until;now=rt_ticks()) {
-    uint64_t left_ms=(until-now)/19200;
-    if(left_ms>=2) Sleep((DWORD)(left_ms-1)); else SwitchToThread();
-   }
-  }
+  extra_svc_sleep_thread(ns); // [extra]
   c->x[0]=0;return;
  }
  klock();threads_initialize();

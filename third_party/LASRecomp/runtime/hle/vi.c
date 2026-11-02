@@ -2,8 +2,8 @@
 #include <stdlib.h>
 #include <time.h>
 
-#include "../hle.h"
-#include "../kernel.h"
+#include "hle.h" // [extra]
+#include "kernel.h" // [extra]
 
 static uint32_t vsync_r, vsync_w;
 static KEvent *vsync_event;

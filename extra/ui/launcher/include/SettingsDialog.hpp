@@ -6,6 +6,7 @@
 class QCheckBox;
 class QComboBox;
 class QSpinBox;
+class QDoubleSpinBox;
 class QSlider;
 class QLabel;
 class QLineEdit;
@@ -13,6 +14,7 @@ class QLineEdit;
 namespace ac::launcher {
 
 class Config;
+class MouseSettingsWidget;
 
 class SettingsDialog : public QDialog {
     Q_OBJECT
@@ -40,6 +42,7 @@ private:
     QCheckBox* m_parallelCheck{nullptr};
     QCheckBox* m_ignoreFocusCheck{nullptr};
     QComboBox* m_promptsCombo{nullptr};
+    MouseSettingsWidget* m_mouseWidget{nullptr};
 
     // Graphics
     QComboBox* m_resolutionCombo{nullptr};
@@ -49,6 +52,9 @@ private:
     QSpinBox* m_fpsSpin{nullptr};
     QComboBox* m_scaleCombo{nullptr};
     QComboBox* m_upscalerCombo{nullptr};
+    QComboBox* m_textureQualityCombo{nullptr};
+    QComboBox* m_lodCombo{nullptr};
+    QCheckBox* m_noShadowCheck{nullptr};
 
     // Audio
     QSlider* m_volumeSlider{nullptr};

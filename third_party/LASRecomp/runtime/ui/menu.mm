@@ -23,8 +23,8 @@ extern "C" bool vk_imgui_backend_init(void);  // runtime/nvn/vulkan/imgui_glue.c
 #endif
 
 extern "C" {
-#include "../hle.h"
-#include "../settings.h"
+#include "hle.h" // [extra]
+#include "settings.h" // [extra]
 #include "menu.h"
 void input_reset(void);
 void save_editor_draw(float scale);  // save_editor.mm
@@ -35,8 +35,8 @@ bool warp_tab_draw(float scale);  // warp_tab.mm: true when a warp started
 extern "C" void cheats_draw(float scale);  // cheats.mm
 extern "C" void difficulty_draw(float scale);  // difficulty.mm
 void controls_bindings_draw(float scale);  // controls_ui.mm
-#include "../input_bind.h"
-#include "../paths.h"
+#include "input_bind.h" // [extra]
+#include "paths.h" // [extra]
 }
 
 // ------------------------------------------------------------------ state shared with the main thread

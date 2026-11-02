@@ -11,7 +11,7 @@
 #include <string.h>
 #include <strings.h>
 
-#include "../hle.h"
+#include "hle.h" // [extra]
 
 typedef struct { uint64_t addr, size; } Font;
 static Font fonts[2];  // [0] Standard (every type), [1] NintendoExt when a dump provides it

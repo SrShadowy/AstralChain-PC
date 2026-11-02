@@ -3,8 +3,8 @@
 #include <sys/time.h>
 #include <time.h>
 
-#include "../hle.h"
-#include "../ipc.h"
+#include "hle.h" // [extra]
+#include "ipc.h" // [extra]
 
 static const uint8_t clock_uuid[16] = {0x4c, 0x41, 0x52, 0x65, 0x63, 0x6f, 0x6d, 0x70, 1, 2, 3, 4, 5, 6, 7, 8};
 

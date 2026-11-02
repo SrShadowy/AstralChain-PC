@@ -1,5 +1,6 @@
 // [extra]
 #include "../device_internal.h"
+#include "extra/toggles/ac_toggles.h" // [extra]
 
 VkPresentModeKHR dev_present_mode(void) {
     // Presentation modes: // [extra]
@@ -7,7 +8,8 @@ VkPresentModeKHR dev_present_mode(void) {
     // - fifo: Strict VSync (traditional 60 Hz lock)
     // - fifo_relaxed: Adaptive VSync (syncs at refresh rate, tears when falling below to avoid stutter)
     // - immediate: No sync (lowest latency, tears) // [extra]
-    const char *e = getenv("LARECOMP_VK_PRESENT");
+    const char *e = g_extra_present_mode; // [extra]
+    if (!e) e = getenv("LARECOMP_VK_PRESENT"); // [extra]
     VkPresentModeKHR want = VK_PRESENT_MODE_MAILBOX_KHR; // [extra]
     if (e) {
         if (!strcmp(e, "immediate")) want = VK_PRESENT_MODE_IMMEDIATE_KHR;

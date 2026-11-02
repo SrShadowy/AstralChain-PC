@@ -18,8 +18,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../hle.h"
-#include "../settings.h"
+#include "hle.h" // [extra]
+#include "settings.h" // [extra]
 
 #define MOVIE_EOS 4u
 

@@ -7,6 +7,7 @@
 #include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
+#include "extra/toggles/ac_toggles.h" // [extra]
 
 #include "vk.h"
 #include "../astc.h"
@@ -1258,6 +1259,29 @@ static VkCompareOp compare_op(uint32_t f) {
     }
 }
 
+// [extra]
+// Live graphics overrides (ImGui menu + launcher): overlay global first, cached
+// env second — same pattern as extra/gpu/vtx_debug_extra.h. Valid LOD bias and
+// min-LOD are >= 0, so -1 is the "unset" sentinel.
+static float extra_lod_bias(void) {
+    if (g_extra_lod_bias >= 0.0f) return g_extra_lod_bias;
+    static float cached = -1.0f;
+    if (cached < 0.0f) { const char *e = getenv("LARECOMP_LOD_BIAS"); cached = e ? (float)atof(e) : 0.0f; }
+    return cached;
+}
+static float extra_lod_min(void) {
+    if (g_extra_lod_min >= 0.0f) return g_extra_lod_min;
+    static float cached = -1.0f;
+    if (cached < 0.0f) { const char *e = getenv("LARECOMP_LOD_MIN"); cached = e ? (float)atof(e) : 0.0f; }
+    return cached;
+}
+static int extra_no_shadow(void) {
+    if (g_extra_no_shadow >= 0) return g_extra_no_shadow;
+    static int cached = -1;
+    if (cached < 0) cached = getenv("LARECOMP_NO_SHADOW") != NULL;
+    return cached;
+} // [extra]
+
 VkSampler vk_sampler(NvnSamplerDesc *d) {
     if (d->backend) return (VkSampler)d->backend;
     VkSamplerCreateInfo si = {.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
@@ -1282,17 +1306,16 @@ VkSampler vk_sampler(NvnSamplerDesc *d) {
     si.maxLod = d->lod_max > 1000 ? VK_LOD_CLAMP_NONE : d->lod_max;
     if (mf <= 1) si.maxLod = si.minLod + 0.25f;  // not mipmapped: stay on the base level
     if (si.maxLod < si.minLod) si.maxLod = si.minLod;
-    si.mipLodBias = d->lod_bias;
+    si.mipLodBias = d->lod_bias + extra_lod_bias(); // [extra]
     if (d->max_aniso > 1) { si.anisotropyEnable = VK_TRUE; si.maxAnisotropy = fminf(d->max_aniso, 16); }
-    static float lodmin = -1;
-    if (lodmin < 0) lodmin = getenv("LARECOMP_LOD_MIN") ? (float)atof(getenv("LARECOMP_LOD_MIN")) : 0;
+    float lodmin = extra_lod_min(); // [extra]
     if (lodmin > 0 && mf > 1) si.minLod = fmaxf(si.minLod, lodmin);
     static int stest = -1;
     if (stest < 0) stest = getenv("LARECOMP_SAMPLER_TEST") != NULL;
     if (stest && mf > 1) { si.minLod = 0; si.maxLod = VK_LOD_CLAMP_NONE; si.anisotropyEnable = VK_TRUE; si.maxAnisotropy = 16; }
     if (d->compare_mode) {
         si.compareEnable = VK_TRUE;
-        si.compareOp = getenv("LARECOMP_NO_SHADOW") ? VK_COMPARE_OP_ALWAYS : compare_op(d->compare_func);
+        si.compareOp = extra_no_shadow() ? VK_COMPARE_OP_ALWAYS : compare_op(d->compare_func); // [extra]
     }
     VkSamplerCustomBorderColorCreateInfoEXT cb = {.sType = VK_STRUCTURE_TYPE_SAMPLER_CUSTOM_BORDER_COLOR_CREATE_INFO_EXT};
     if (border) {

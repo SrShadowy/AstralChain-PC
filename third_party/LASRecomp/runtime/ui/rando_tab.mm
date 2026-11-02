@@ -17,10 +17,10 @@
 #include "option_rows.h"
 
 extern "C" {
-#include "../hle.h"
-#include "../paths.h"
-#include "../rando.h"
-#include "../settings.h"
+#include "hle.h" // [extra]
+#include "paths.h"
+#include "rando.h"
+#include "settings.h" // [extra]
 extern const char *g_romfs_dir;
 extern int g_start_screen;  // hle/warp.c
 void launcher_play_seed(const char *seed);  // ui/launcher.mm

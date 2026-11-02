@@ -18,7 +18,7 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "../platform.h"
+#include "platform.h" // [extra]
 
 #ifndef MAP_FIXED_NOREPLACE
 #define MAP_FIXED_NOREPLACE 0x100000

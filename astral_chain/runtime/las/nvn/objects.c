@@ -5,6 +5,7 @@
 
 #include "../kernel.h"
 #include "nvn.h"
+#include "extra/toggles/ac_toggles.h" // [extra]
 
 void renderer_sync(void);
 uint64_t renderer_wait_target(uint64_t seq);
@@ -153,6 +154,7 @@ static void *aq_worker(void *arg) {
     return NULL;
 }
 static bool aq_enabled(void) {
+    if (g_extra_async_kill) return 0; // [extra]
     if (aq_on < 0) {
         const char *e = getenv("AC_ASYNC_SUBMIT");
         aq_on = e && atoi(e) != 0;

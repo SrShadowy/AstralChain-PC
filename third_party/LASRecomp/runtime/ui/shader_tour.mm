@@ -10,7 +10,7 @@
 #include "warp_data.h"
 
 extern "C" {
-#include "../hle.h"
+#include "hle.h" // [extra]
 int game_in_play(void);
 void warp_request(const char *level, const char *locator);
 int warp_busy(void);

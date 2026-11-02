@@ -15,7 +15,13 @@ O projeto prioriza a melhor experiência de execução, estabilidade e desempenh
 ### B. Distribuição de Pastas sob `extra/`
 | Diretório | Responsabilidade |
 |---|---|
-| `extra/core/` | Trampolines de plataforma POSIX, emulação de memória (`mmap`/`SIGSEGV`), janela/input SDL3, áudio e sincronização |
+| `extra/platform/` | Trampolines POSIX: memória (`mmap`/`SIGSEGV`), threads/sync, tempo, pacing, crypto e base ELF |
+| `extra/sdl/` | Janela e superfície Vulkan SDL3 + saída de áudio (`SDL_AudioStream`) |
+| `extra/input/` | Mouse/menus, detecção de contexto de entrada e códigos virtuais |
+| `extra/gpu/` | Trampolines Vulkan/Maxwell, write-tracking e shaderc POSIX |
+| `extra/storage/` | Paths POSIX, normalização de saves e enumeração de diretórios |
+| `extra/ui/` | Fonte FreeType, launcher Qt6 e overlay ImGui |
+| `extra/toggles/` | Toggles de runtime (`ac_toggles`) consumidos pela overlay |
 | `extra/ui/launcher/` | Código-fonte C++20 do Launcher oficial nativo Qt6 (`include/`, `src/`, `CMakeLists.txt`) |
 | `extra/tools/` | Scripts de validação estática e testes de automação (`audit.sh`, `qa_runner.sh`) |
 | `extra/hooks.h` | Cabeçalho unificado de re-exportação para integração modular com o código herdado |
@@ -40,7 +46,7 @@ O projeto prioriza a melhor experiência de execução, estabilidade e desempenh
 A integração entre o código herdado e a camada Linux é feita de maneira pragmática:
 
 ### A. Princípio dos Hooks
-- Sempre que uma funcionalidade de plataforma no Linux substituir uma rotina Win32 herdada, a lógica é implementada em `extra/core/` e acionada por uma chamada pontual no código herdado.
+- Sempre que uma funcionalidade de plataforma no Linux substituir uma rotina Win32 herdada, a lógica é implementada no módulo adequado sob `extra/` (`platform/`, `sdl/`, `gpu/`, `input/` ou `storage/`) e acionada por uma chamada pontual no código herdado.
 - Evite burocracias artificiais: implemente a solução mais simples e direta que resolva o problema com clareza.
 
 ### B. Uso dos Marcadores `// [extra]`
@@ -87,7 +93,7 @@ A validação de alterações deve ser ágil e proporcional ao risco da modifica
 3. **Alteração de Código do Runtime / Compilação**:
    - Executar o Fast-Relink via Python:
      ```bash
-     python3 -m astral_chain.setup_game --rebuild-if-stale
+     python3 -m astral_chain.build.setup_game --rebuild-if-stale
      ```
      Verifica a compilação incremental e linkage do executável ELF em ~8 segundos.
 4. **Alteração Gráfica / Comportamental do Jogo**:
@@ -136,6 +142,7 @@ O runtime suporta uma série de variáveis de ambiente para controle de performa
 | `AC_CUTSCENE_FPS` | `60` (padrão) / `30` | `30` roda cutscenes no passo original; `60` utiliza o patch de Dynamic-FPS |
 | `AC_GPU_HANG_MS` | `1200` (ms) | Tempo limite antes de acionar o watchdog interno e encerrar o jogo por travamento de GPU |
 | `AC_FULLSCREEN` | `1` / `0` | Inicializa a janela em tela cheia sem bordas (borderless fullscreen) |
+| `AC_OVERLAY` | `1` / `0` (padrão) | Inicia com o menu ImGui in-game aberto (o mesmo da tecla **Insert**; útil para validação headless de renderização em conjunto com `LARECOMP_WINDOW_SHOT=<frame>`) |
 | `AC_HANDHELD` | `1` / `0` | Simula modo portátil do Switch (renderiza 1280x720 recortado para janela 1600x900) |
 | `AC_VERBOSE` | `1` / `0` | Ativa saída verbosa de logs no terminal (padrão enxuto mantido em 0) |
 
@@ -150,6 +157,7 @@ O runtime suporta uma série de variáveis de ambiente para controle de performa
 | `LARECOMP_SKIP_FSHASH` | `<hash>,...` | Ignora a execução de draw calls que utilizem o fragment shader especificado |
 | `LARECOMP_WATCH_FS` | `<hash>` | Registra em log todas as submissões do fragment shader especificado |
 | `LARECOMP_GPL` | `0` / `1` | `0` desativa `VK_EXT_graphics_pipeline_library` e força compilação monolítica |
+| `LARECOMP_GUARD_VTX` | `1` / `0` | `1` detecta e previne explosão de vértices (NaN/Inf/>50k) e iluminação anômala |
 | `AC_GPU_WARM` | `0` / `1` | `0` pula o warm-up antecipado de pipelines na inicialização |
 
 ### C. Texturas e Decodificação ASTC / BC7
@@ -160,6 +168,15 @@ O runtime suporta uma série de variáveis de ambiente para controle de performa
 | `AC_BC7_PRECOMPUTE` | `1` | Modo de setup que gera previamente o cache de texturas BC7 em `build/game/cache/bc7` |
 | `LARECOMP_BC7_LOG` | `1` | Emite linha de log com hash e layout para cada upload de textura ASTC/BC7 |
 | `LARECOMP_DUMP_TEX` | `<min_width>` | Salva o nível de mipmap 0 de texturas descompactadas em arquivos binários `tex_*.bin` |
+
+### C.1 Qualidade de Textura, LoD e Sombras (override de sampler)
+Atuam na montagem de samplers Vulkan (`textures.c` `vk_sampler`) e são editáveis ao vivo no menu
+ImGui (Insert) e persistidos pelo launcher Qt6; a env continua sendo o default de boot.
+| Variável | Valores / Padrão | Efeito |
+|---|---|---|
+| `LARECOMP_LOD_BIAS` | `0` (padrão) / `0..3` | Bias de LOD global somado ao bias do sampler (`si.mipLodBias`); positivo empurra a amostragem para mips menores (textura mais leve) |
+| `LARECOMP_LOD_MIN` | `0` (padrão) / `0..4` | Piso de LOD (`si.minLod = max(minLod, valor)`) em texturas com mipmapping |
+| `LARECOMP_NO_SHADOW` | ausente / `1` | `1` troca o teste de comparação de shadow-map para `VK_COMPARE_OP_ALWAYS` (sombras desligadas) |
 
 ### D. Input Determinístico e Controles
 - **`AC_INPUT_SCRIPT="t0-t1:mask[@period/duty];..."`**:
@@ -175,9 +192,25 @@ O runtime suporta uma série de variáveis de ambiente para controle de performa
     - Deslocamento de `<< 4` nos bits do analógico esquerdo controla o analógico direito.
 - **Configuração de Mouse e Câmera**:
   - `AC_MOUSE_LOOK=0`: Desativa o controle de câmera pelo movimento do mouse.
-  - `AC_MOUSE_SENS=<percent>`: Ajusta a sensibilidade de rotação da câmera (padrão 100).
+  - `AC_MOUSE_SENS=<percent>`: Ajusta a sensibilidade de rotação da câmera (padrão 100, suporta de 5% a 4000%).
+  - `AC_MOUSE_YSCALE=<float>`: Escala independente de sensibilidade para o eixo vertical Y (padrão 1.0).
+  - `AC_MOUSE_CURVE=power|linear|aggressive|<exp>`: Curva de aceleração da câmera (padrão `power` com expoente 1.35; `linear` para 1:1; `aggressive` com 1.75).
   - `AC_MOUSE_INVERT=1`: Inverte o eixo vertical da câmera no mouse.
+- **Cursor e ponteiro de menu** (`extra/input/mouse_mode.h`, `mouse_menu.h`, `menu_detect.h`):
+  - A aplicação **inicia com o cursor livre** e centrado: a tela de título é clicável sem tecla alguma. Uma tecla de stick (movimento/câmera: WASD/FTHG por padrão) toma o mouse para a câmera, mas só se o ponteiro estiver parado há mais de 1,2 s — quem acabou de usar o mouse e anda a lista pelo teclado mantém o cursor. Teclas de D-pad nunca tomam o mouse.
+  - `AC_MOUSE_AUTO_MENU=0`: desativa essa captura automática por tecla de stick (restam a tecla de pausa e F10).
+  - `AC_MOUSE_MENU_TIMEOUT=1`: devolve a câmera após 5 s sem uso do ponteiro (padrão 0: nunca esconde um cursor que o jogador ainda pode precisar).
+  - `AC_MOUSE_MENUS=1` / `0`: Ativa ou desativa o ponteiro de menu (passos direcionais, clique, roda). Padrão 1.
+  - `AC_MOUSE_MENU_MOTION=0`: Desativa só os passos direcionais ao mover o mouse (clique e roda continuam). Padrão 1.
+  - `AC_MOUSE_MENU_CELL=<px>`: Passo em pixels de tela para cada avanço discreto de item ao mover o mouse (padrão 40, faixa 10–200).
+  - `AC_MOUSE_MENU_TOUCH=1`: Publica um contato real de touch na posição do cursor, para telas que façam hit-test do painel. Padrão 0. O contato chega ao jogo (a máquina de estados dele em `ctx+0x24` percorre `0→2→3→1→0`, e a posição publicada confere com o painel), mas nenhum menu alcançado no boot — overlay de tutorial, LOAD DATA (docked e handheld) e Legatus/Mapa — usa touch para selecionar item (`docs/plan-mouse-menu.md` §4.4).
+  - Movimento do mouse gera passos de D-pad, o clique esquerdo injeta A e o direito injeta B; a roda rola a lista. Isso vale em qualquer tela do jogo, sem zonas hard-coded — o jogo não expõe flag de UI nem geometria de item, e o objeto de mouse que ele constrói por frame não é lido por nada. **Seleção posicional absoluta não é possível**: o ponteiro mapeia para passos relativos (`docs/plan-mouse-menu.md` §4).
+  - Tecla **F10** e tecla de **pausa do jogo** (MINUS, `Esc` por padrão): alternam entre o modo de jogo (`CAPTURED`, câmera ativa) e o modo de menu (`RELEASED`, cursor do sistema visível e câmera travada, com acumuladores zerados para não haver chicoteio ao voltar). A tecla de pausa foi escolhida por espelhar exatamente o ciclo abrir/fechar do menu de pausa do jogo.
+  - Alt+Tab devolve o cursor e o restaura ao recuperar o foco, preservando a escolha explícita de menu.
+  - **Gate de foco**: a injeção de menu (passos D-pad, taps A/B e contato de touch) é aplicada dentro de `if(connected && focused)` em `hid_publish`. `window_trampoline.h` fixa `g_sdl_input_focus = 1` logo após `SDL_RaiseWindow` porque o evento `WINDOW focus` do SDL pode nunca chegar em execução sem interação; sem isso toda a injeção fica silenciosamente desligada.
+  - `./extra/tools/audit.sh` roda `extra/tools/mouse_pointer_test.c` (mapeamento de painel, passos, pulsos, clique/roda e política de modo) e reprova a auditoria se a tradução do ponteiro quebrar.
   - `AC_PROMPTS=switch`: Força a exibição dos ícones originais de controle do Switch em vez dos ícones de PC gerados via FreeType.
+  - **Insert (menu ImGui in-game)**: abre o overlay de Performance/Graphics/Debug/About (`extra/ui/overlay/`). Com o menu aberto, teclado/mouse/gamepad deixam de chegar ao jogo e o mouse sai do modo relativo; Insert fecha e restaura o modo conforme o foco. Antialiasing, Upscaler, Limite de FPS e flags de debug valem no frame seguinte; VSync recria a swapchain no pré-frame; Async submit é kill switch one-way (religar exige relaunch). Todo item é override em memória sobre o env — nada é persistido no v1.
 
 ---
 
@@ -201,7 +234,7 @@ Medição realizada em ambiente de teste padrão (RTX 4090, rota da rodovia, 3 e
 ./extra/tools/audit.sh
 
 # 2. Recompilação ultrarrápida após editar arquivos em extra/ ou runtime (~8 segundos)
-python3 -m astral_chain.setup_game --rebuild-if-stale
+python3 -m astral_chain.build.setup_game --rebuild-if-stale
 
 # 3. Teste automatizado de QA determinístico (20s de execução com validação de frame 550)
 ./extra/tools/qa_runner.sh 20 550

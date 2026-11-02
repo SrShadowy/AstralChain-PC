@@ -24,10 +24,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../hle.h"
-#include "../input_bind.h"
-#include "../rando.h"
-#include "../settings.h"
+#include "hle.h" // [extra]
+#include "input_bind.h"
+#include "rando.h"
+#include "settings.h" // [extra]
 #include "astc.h"
 #include "tegra.h"
 

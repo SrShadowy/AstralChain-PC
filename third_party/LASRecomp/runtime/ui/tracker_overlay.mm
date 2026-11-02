@@ -17,9 +17,9 @@
 #include "imgui.h"
 
 extern "C" {
-#include "../hle.h"
-#include "../rando.h"
-#include "../settings.h"
+#include "hle.h" // [extra]
+#include "rando.h"
+#include "settings.h" // [extra]
 uint64_t renderer_present_count(void);
 int kernel_data_regions(uint64_t *addr, uint64_t *size, int max);
 const char *souls_at(int i, int *kind, bool *owned);  // runtime/hle/souls.c

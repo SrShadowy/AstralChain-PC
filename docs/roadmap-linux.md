@@ -25,7 +25,7 @@ Todas as frentes de trabalho são classificadas em quatro categorias explícitas
 ---
 
 ### Etapa 1: Isolamento de Dependências Win32 Herdadas
-- **Objetivo**: Identificar e redirecionar chamadas Win32 herdadas para os trampolines de plataforma sob `extra/core/`.
+- **Objetivo**: Identificar e redirecionar chamadas Win32 herdadas para os trampolines de plataforma sob `extra/` (módulos `platform/`, `sdl/`, `gpu/`, `input/`, `storage/`).
 - **Dependências**: Análise do código herdado em `astral_chain/runtime/`.
 - **Tarefas**:
   - [x] Redirecionar manipulação de memória virtual Win32 (`VirtualAlloc`/`VirtualProtect`) para POSIX `mmap`/`mprotect`.
@@ -41,13 +41,13 @@ Todas as frentes de trabalho são classificadas em quatro categorias explícitas
 ---
 
 ### Etapa 2: Camada de Abstração de Plataforma (HAL / Trampolines)
-- **Objetivo**: Fornecer implementações modulares de plataforma sob `extra/core/` desacopladas do código herdado.
+- **Objetivo**: Fornecer implementações modulares de plataforma sob `extra/` (módulos `platform/`, `sdl/`, `gpu/`, `input/`, `storage/`) desacopladas do código herdado.
 - **Dependências**: Etapa 1; cabeçalho de re-exportação `extra/hooks.h`.
 - **Tarefas**:
-  - [x] Criar `extra/core/platform_posix.h` com atributos de linkage e tipos portáveis ELF.
-  - [x] Implementar `extra/core/sync_trampoline.h` com `pthread_mutex`, `pthread_cond` e threads nativas.
-  - [x] Implementar `extra/core/storage_trampoline.h` para caminhos POSIX e diretórios de save em `userdata/`.
-  - [x] Implementar `extra/core/time_trampoline.h` com relógio monotônico do kernel Linux (`CLOCK_MONOTONIC`).
+  - [x] Criar `extra/platform/platform_posix.h` com atributos de linkage e tipos portáveis ELF.
+  - [x] Implementar `extra/platform/sync_trampoline.h` com `pthread_mutex`, `pthread_cond` e threads nativas.
+  - [x] Implementar `extra/storage/storage_trampoline.h` para caminhos POSIX e diretórios de save em `userdata/`.
+  - [x] Implementar `extra/platform/time_trampoline.h` com relógio monotônico do kernel Linux (`CLOCK_MONOTONIC`).
   - [x] Desenvolver script de auditoria estática `extra/tools/audit.sh` (teto ≤ 400 linhas e marcadores necessários).
 - **Critérios Objetivos de Aceitação**: Todos os trampolines compilam limpamente em C++20 com `audit.sh` passando 100%.
 - **Riscos / Pontos Não Resolvidos**: Nenhum. Etapa concluída.
@@ -158,3 +158,4 @@ Todas as frentes de trabalho são classificadas em quatro categorias explícitas
 | **11** | Alternativa de Write-Watch via `userfaultfd` | Hipótese sob Investigação | **Investigação** |
 | **12** | Upscaling Espacial FSR 1.0 e Vibração Avançada | Melhoria Opcional | **Opcional** |
 | **13** | Backend DirectX 12 / Ferramentas Windows | Fora de Escopo | **Descartado / Irrelevante** |
+| **14** | Suporte a 144 FPS (desacoplar câmera/input/timers) | Hipótese sob Investigação | **Adiado — ver [`fps-cap-144.md`](fps-cap-144.md)** |

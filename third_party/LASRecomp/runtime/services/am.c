@@ -2,9 +2,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../hle.h"
-#include "../ipc.h"
-#include "../settings.h"
+#include "hle.h" // [extra]
+#include "ipc.h"
+#include "settings.h" // [extra]
 
 #define AM_NO_MESSAGE MAKE_RESULT(128, 3)
 #define AM_NO_DATA MAKE_RESULT(128, 2)

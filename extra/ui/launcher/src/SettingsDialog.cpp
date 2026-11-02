@@ -1,5 +1,6 @@
 #include "SettingsDialog.hpp"
 #include "Config.hpp"
+#include "MouseSettingsWidget.hpp"
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -63,9 +64,12 @@ QWidget* SettingsDialog::createGameTab()
     m_promptsCombo->addItem("Teclado & Mouse (PC)", "keyboard");
     form->addRow("Ícones de Botões (Prompts):", m_promptsCombo);
 
+    m_mouseWidget = new MouseSettingsWidget(page);
+
     layout->addWidget(m_parallelCheck);
     layout->addWidget(m_ignoreFocusCheck);
     layout->addLayout(form);
+    layout->addWidget(m_mouseWidget);
     layout->addStretch();
     return page;
 }
@@ -114,6 +118,21 @@ QWidget* SettingsDialog::createGraphicsTab()
     m_upscalerCombo->addItem("Bilinear (Padrão)", "bilinear");
     m_upscalerCombo->addItem("AMD FSR 1.0 (EASU + RCAS)", "fsr1");
 
+    m_textureQualityCombo = new QComboBox(page);
+    m_textureQualityCombo->addItem("Nativa (0)", 0.0);
+    m_textureQualityCombo->addItem("Média (1)", 1.0);
+    m_textureQualityCombo->addItem("Baixa (2)", 2.0);
+    m_textureQualityCombo->addItem("Muito Baixa (3)", 3.0);
+
+    m_lodCombo = new QComboBox(page);
+    m_lodCombo->addItem("Desligado (0)", 0.0);
+    m_lodCombo->addItem("1", 1.0);
+    m_lodCombo->addItem("2", 2.0);
+    m_lodCombo->addItem("3", 3.0);
+    m_lodCombo->addItem("4", 4.0);
+
+    m_noShadowCheck = new QCheckBox("Desativar Sombras (mais FPS)", page);
+
     layout->addRow("Resolution:", m_resolutionCombo);
     layout->addRow("", m_fullscreenCheck);
     layout->addRow("", m_vsyncCheck);
@@ -121,6 +140,9 @@ QWidget* SettingsDialog::createGraphicsTab()
     layout->addRow("Target FPS:", m_fpsSpin);
     layout->addRow("Internal Scale:", m_scaleCombo);
     layout->addRow("Upscaler:", m_upscalerCombo);
+    layout->addRow("Qualidade de Textura:", m_textureQualityCombo);
+    layout->addRow("Nível de LoD:", m_lodCombo);
+    layout->addRow("", m_noShadowCheck);
     return page;
 }
 
@@ -205,6 +227,19 @@ void SettingsDialog::loadFromConfig()
     const int upIdx = m_upscalerCombo->findData(g.upscaler);
     if (upIdx >= 0) m_upscalerCombo->setCurrentIndex(upIdx);
 
+    // nearest-preset selection for discrete graphics toggles (bias / LoD)
+    auto selectNearest = [](QComboBox* combo, double value) {
+        int best = 0; double bestDelta = 1e18;
+        for (int i = 0; i < combo->count(); ++i) {
+            const double delta = qAbs(combo->itemData(i).toDouble() - value);
+            if (delta < bestDelta) { bestDelta = delta; best = i; }
+        }
+        combo->setCurrentIndex(best);
+    };
+    selectNearest(m_textureQualityCombo, g.lodBias);
+    selectNearest(m_lodCombo, g.lodMin);
+    m_noShadowCheck->setChecked(g.noShadow);
+
     const auto& a = m_config.audio();
     m_volumeSlider->setValue(a.masterVolume);
     m_volumeLabel->setText(QString("%1%").arg(a.masterVolume));
@@ -222,6 +257,10 @@ void SettingsDialog::loadFromConfig()
     m_customEnvEdit->setText(gm.customEnv);
     const int prIdx = m_promptsCombo->findData(gm.buttonPrompts);
     if (prIdx >= 0) m_promptsCombo->setCurrentIndex(prIdx);
+
+    if (m_mouseWidget) {
+        m_mouseWidget->loadFrom(m_config.mouse());
+    }
 }
 
 void SettingsDialog::writeToConfig()
@@ -237,10 +276,17 @@ void SettingsDialog::writeToConfig()
     g.presentMode = m_presentModeCombo->currentData().toString();
     g.fpsLimit = m_fpsSpin->value();
     g.upscaler = m_upscalerCombo->currentData().toString();
+    g.lodBias = m_textureQualityCombo->currentData().toDouble();
+    g.lodMin = m_lodCombo->currentData().toDouble();
+    g.noShadow = m_noShadowCheck->isChecked();
 
     auto& a = m_config.audio();
     a.masterVolume = m_volumeSlider->value();
     a.muteOnUnfocus = m_muteUnfocusCheck->isChecked();
+
+    if (m_mouseWidget) {
+        m_mouseWidget->writeTo(m_config.mouse());
+    }
 
     auto& gm = m_config.game();
     gm.parallelThreads = m_parallelCheck->isChecked();

@@ -8,7 +8,7 @@
 #include <stdint.h>
 #include <string.h>
 
-#include "../hle.h"
+#include "hle.h" // [extra]
 
 #define PLAYER_STATUS_PTR (MAIN_BASE + 0x1CC1368)  // PlayerStatus*: level name at +0
 #define KEY_ITEMS (MAIN_BASE + 0x1CBB220 + 0x556C)  // live save key items: bit 0 = Flippers

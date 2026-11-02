@@ -1,8 +1,8 @@
 // acc:u0 (one local user) and the preselected-user launch parameter.
 #include <string.h>
 
-#include "../hle.h"
-#include "../ipc.h"
+#include "hle.h" // [extra]
+#include "ipc.h" // [extra]
 
 const uint8_t g_user_id[16] = {0x4c, 0x41, 0x52, 0x65, 0x63, 0x6f, 0x6d, 0x70, 0x01, 0, 0, 0, 0, 0, 0, 0x01};
 

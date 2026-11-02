@@ -7,6 +7,7 @@
 #include "../../../../settings.h"
 #include "../../exec_internal.h"
 #include "../../../renderer.h"
+#include "extra/gpu/vtx_debug_extra.h" // [extra]
 
 static uint64_t g_cur_fs_hash;
 
@@ -480,6 +481,17 @@ static void draw_(CmdRec *r, bool indexed) {
         vkCmdBindIndexBuffer(cb, ib.buf, ib.off, itype_vk);
     }
 
+    if ((extra_vtx_debug_enabled() || extra_vtx_guard_enabled()) && st.vbuf[0].addr) {  // [extra]
+        if (scan_src) {  // resolve the deferred index scan; the streams loop below then reuses max_index as-is
+            if (scan_isz == 2) { const uint16_t *q = scan_src; for (uint32_t i = 0; i < icount; i++) if (q[i] > max_index && q[i] != (uint16_t)scan_restart) max_index = q[i]; }
+            else { const uint32_t *q = scan_src; for (uint32_t i = 0; i < icount; i++) if (q[i] > max_index && q[i] != scan_restart) max_index = q[i]; }
+            max_index += 1;
+            if (base_vertex > 0) max_index += (uint32_t)base_vertex;
+            scan_src = NULL;
+        }
+        extra_vtx_guard_stream((const void *)(uintptr_t)st.vbuf[0].addr, max_index, (uint32_t)k.stride[0], (uint64_t)st.program);
+    }  // clamping the guest source here lands in the copy/binding below, not after it // [extra]
+
     // ---- vertex streams: the range this draw can read, copied once per submission
     for (int s = 0; s < 17; s++) {
         if (!(k.used_streams & (1u << s))) continue;
@@ -519,6 +531,7 @@ static void draw_(CmdRec *r, bool indexed) {
     }
 
     if (prof) prof_vtx += SDL_GetTicksNS() - prof_t2_;
+    extra_vtx_guard_cbuf((const void *)(uintptr_t)st.ubuf[1][0].addr, (size_t)st.ubuf[1][0].size, (uint64_t)st.program); // [extra]
     // ---- draw
     // Instanced draws with item spots among their instances (bushsanity: bushes are drawn in batches, each instance's
     // model matrix in vertex storage buffer 0, indexed by instance id): drawn as runs of instances, gold runs tinted

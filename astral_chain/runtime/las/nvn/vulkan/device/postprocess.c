@@ -1,5 +1,6 @@
 // [extra]
 #include "../device_internal.h"
+#include "extra/ui/overlay/ac_overlay.h" // [extra]
 
 uint64_t renderer_present_count(void) { return g_dev_state.total_frames; }
 uint64_t vk_frame_counter(void) { return g_dev_state.frame_counter; }
@@ -26,6 +27,7 @@ static int s_ft_count = 0;
 
 void backend_present(NvnTexture *t) {
     g_dev_state.last_presented = t;
+    ac_overlay_pre_frame(); // [extra]
     TexBackend *b = vk_tex(t, true);
     b->presented = true;
     vk_end_pass();
@@ -58,6 +60,7 @@ void backend_present(NvnTexture *t) {
         VkCommandBuffer cb = vk_cmd();
         float pv[8] = {renderer_origin_lower_left() ? 1.0f : 0.0f, 0, 0, 0, uv[0], uv[1], uv[2], uv[3]};
         vk_present_draw(cb, b, (float)vx, (float)vy, (float)vw, (float)vh, pv);
+        ac_overlay_frame(); // [extra]
         static long win_shot = -1;
         if (win_shot < 0) win_shot = getenv("LARECOMP_WINDOW_SHOT") ? atol(getenv("LARECOMP_WINDOW_SHOT")) : 0;
         bool shot = win_shot && (long)g_dev_state.total_frames + 1 == win_shot;

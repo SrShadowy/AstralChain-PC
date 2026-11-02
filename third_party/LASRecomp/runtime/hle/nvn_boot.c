@@ -1,7 +1,7 @@
 // NVN entry points: every NVN function is looked up by name and bound to a host stub.
 #include <string.h>
 
-#include "../hle.h"
+#include "hle.h" // [extra]
 
 static uint64_t nvn_proc(const char *name) {
     if (!name || !*name) return 0;

@@ -2,12 +2,10 @@
 
 #include <QMainWindow>
 #include <QStringList>
-#include <QGraphicsDropShadowEffect>
 #include <memory>
 #include "Config.hpp"
 #include "ProcessRunner.hpp"
 
-class QPushButton;
 class QLabel;
 class QProgressBar;
 class QTimer;
@@ -15,6 +13,7 @@ class QTimer;
 namespace ac::launcher {
 
 class LogWidget;
+class CustomButton;
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -33,7 +32,6 @@ private slots:
     void onProcessLine(const QString& line);
     void onProcessStarted(qint64 pid);
     void onProcessFinished(int exitCode, QProcess::ExitStatus exitStatus);
-    void onNextArt();
     void refreshGameStatus();
 
 protected:
@@ -43,32 +41,24 @@ protected:
 private:
     void setupUi();
     void applyTheme();
-    void loadArtList();
     void setRunningUi(bool running, qint64 pid = 0);
     void runCommand(const QString& program, const QStringList& args, const QString& statusText, bool isGame = false);
 
     Config m_config;
     ProcessRunner m_runner;
 
-    QStringList m_artPaths;
-    int m_currentArtIndex{0};
-    QPixmap m_currentBackground;
-    QTimer* m_artTimer{nullptr};
-
-    QPushButton* m_playBtn{nullptr};
-    QPushButton* m_diagBtn{nullptr};
-    QPushButton* m_setupBtn{nullptr};
-    QPushButton* m_shadersBtn{nullptr};
-    QPushButton* m_settingsBtn{nullptr};
-    QPushButton* m_controlsBtn{nullptr};
-    QPushButton* m_artBtn{nullptr};
+    CustomButton* m_playBtn{nullptr};
+    CustomButton* m_diagBtn{nullptr};
+    CustomButton* m_setupBtn{nullptr};
+    CustomButton* m_shadersBtn{nullptr};
+    CustomButton* m_settingsBtn{nullptr};
+    CustomButton* m_controlsBtn{nullptr};
 
     QLabel* m_statusLabel{nullptr};
     LogWidget* m_logWidget{nullptr};
     QProgressBar* m_progressBar{nullptr};
     QWidget* m_sidePanel{nullptr};
     QLabel* m_statusDot{nullptr};
-    QGraphicsDropShadowEffect* m_playGlow{nullptr};
 
     bool m_installed{false};
     bool m_isGameRunning{false};

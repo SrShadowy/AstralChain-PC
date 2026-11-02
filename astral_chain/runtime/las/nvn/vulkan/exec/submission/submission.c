@@ -8,7 +8,7 @@
 #include <pthread.h>
 #include <SDL3/SDL_timer.h>
 #include "../../../../settings.h"
-#include "../../platform.h"
+#include "platform.h" // [extra]
 #include "../../exec_internal.h"
 #include "../../../renderer.h"
 #include "submission_internal.h"

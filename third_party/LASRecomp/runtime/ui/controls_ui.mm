@@ -8,8 +8,8 @@
 #include "imgui.h"
 
 extern "C" {
-#include "../input_bind.h"
-#include "../settings.h"
+#include "input_bind.h" // [extra]
+#include "settings.h" // [extra]
 }
 
 static void cell(int dev, int slot, int fam, int cap_dev, int cap_slot, int ms_left) {

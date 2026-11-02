@@ -1,8 +1,8 @@
 // Small services: parental control, add-on content, and other mostly-stubbed interfaces.
 #include <string.h>
 
-#include "../hle.h"
-#include "../ipc.h"
+#include "hle.h" // [extra]
+#include "ipc.h" // [extra]
 
 static void ok_logger(Service *s, IpcReq *req, IpcResp *resp) {
     LOG("[svc] %s cmd %u (ok)\n", s->name, req->cmd);

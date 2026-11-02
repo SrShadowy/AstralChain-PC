@@ -8,7 +8,7 @@
 #include <timeapi.h>
 #include <io.h>
 
-#include "../platform.h"
+#include "platform.h" // [extra]
 
 // ---- guest address space
 // The window is reserved up front and committed per region (plat_commit from the loader / kernel). Anything

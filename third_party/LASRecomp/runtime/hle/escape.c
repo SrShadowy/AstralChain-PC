@@ -19,8 +19,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../hle.h"
-#include "../rando.h"
+#include "hle.h" // [extra]
+#include "rando.h" // [extra]
 
 #define PLAYER_STATUS_PTR (MAIN_BASE + 0x1CC1368)  // PlayerStatus*: level name at +0, inventory bits at +0xa8
 extern uint64_t renderer_present_count(void);

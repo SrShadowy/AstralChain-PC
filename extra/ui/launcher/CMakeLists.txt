@@ -14,20 +14,24 @@ add_executable(astral_chain_launcher
     include/ProcessRunner.hpp
     include/ControlsDialog.hpp
     include/SettingsDialog.hpp
+    include/MouseSettingsWidget.hpp
     include/SetupDialog.hpp
     include/MainWindow.hpp
     include/LogWidget.hpp
     include/Theme.hpp
+    include/CustomButton.hpp
     src/main.cpp
     src/Config.cpp
     src/ProcessRunner.cpp
     src/ControlsDialog.cpp
     src/SettingsDialog.cpp
+    src/MouseSettingsWidget.cpp
     src/SetupDialog.cpp
     src/MainWindow.cpp
     src/MainWindowUi.cpp
     src/LogWidget.cpp
     src/Theme.cpp
+    src/CustomButton.cpp
 )
 
 target_include_directories(astral_chain_launcher PRIVATE include)

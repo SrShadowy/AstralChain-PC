@@ -24,11 +24,24 @@ void Config::load()
     m_graphics.fpsLimit = s.value("fps_limit", 60).toInt();
     m_graphics.renderScale = s.value("render_scale", 1.0).toDouble();
     m_graphics.upscaler = s.value("upscaler", "bilinear").toString();
+    m_graphics.lodBias = s.value("lod_bias", 0.0).toDouble();
+    m_graphics.lodMin = s.value("lod_min", 0.0).toDouble();
+    m_graphics.noShadow = s.value("no_shadow", false).toBool();
     s.endGroup();
 
     s.beginGroup("Audio");
     m_audio.masterVolume = s.value("master_volume", 100).toInt();
     m_audio.muteOnUnfocus = s.value("mute_on_unfocus", false).toBool();
+    s.endGroup();
+
+    s.beginGroup("Mouse");
+    m_mouse.sensitivity = s.value("sensitivity", MouseSettings::kDefaultSensitivity).toDouble();
+    m_mouse.yScale = s.value("y_scale", MouseSettings::kDefaultYScale).toDouble();
+    m_mouse.curve = s.value("curve", MouseSettings::kDefaultCurve).toString();
+    m_mouse.invertY = s.value("invert_y", MouseSettings::kDefaultInvertY).toBool();
+    m_mouse.menuNav = s.value("menu_nav", MouseSettings::kDefaultMenuNav).toBool();
+    m_mouse.menuMotion = s.value("menu_motion", MouseSettings::kDefaultMenuMotion).toBool();
+    m_mouse.menuCell = s.value("menu_cell", MouseSettings::kDefaultMenuCell).toInt();
     s.endGroup();
 
     s.beginGroup("Game");
@@ -68,11 +81,24 @@ void Config::save()
     s.setValue("fps_limit", m_graphics.fpsLimit);
     s.setValue("render_scale", m_graphics.renderScale);
     s.setValue("upscaler", m_graphics.upscaler);
+    s.setValue("lod_bias", m_graphics.lodBias);
+    s.setValue("lod_min", m_graphics.lodMin);
+    s.setValue("no_shadow", m_graphics.noShadow);
     s.endGroup();
 
     s.beginGroup("Audio");
     s.setValue("master_volume", m_audio.masterVolume);
     s.setValue("mute_on_unfocus", m_audio.muteOnUnfocus);
+    s.endGroup();
+
+    s.beginGroup("Mouse");
+    s.setValue("sensitivity", m_mouse.sensitivity);
+    s.setValue("y_scale", m_mouse.yScale);
+    s.setValue("curve", m_mouse.curve);
+    s.setValue("invert_y", m_mouse.invertY);
+    s.setValue("menu_nav", m_mouse.menuNav);
+    s.setValue("menu_motion", m_mouse.menuMotion);
+    s.setValue("menu_cell", m_mouse.menuCell);
     s.endGroup();
 
     s.beginGroup("Game");
@@ -163,12 +189,22 @@ QString Config::buildLaunchEnv() const
     }
     if (m_graphics.fullscreen) env << "AC_FULLSCREEN=1";
     if (m_graphics.upscaler == "fsr1") env << "AC_UPSCALER=fsr1";
+    if (m_graphics.lodBias > 0.0) env << QString("LARECOMP_LOD_BIAS=%1").arg(m_graphics.lodBias);
+    if (m_graphics.lodMin > 0.0) env << QString("LARECOMP_LOD_MIN=%1").arg(m_graphics.lodMin);
+    if (m_graphics.noShadow) env << "LARECOMP_NO_SHADOW=1";
     if (m_game.verboseLog) env << "AC_VERBOSE=1";
     if (m_game.cutscene30Fps) env << "AC_CUTSCENE_FPS=30";
     if (m_game.asyncSubmit) env << "AC_ASYNC_SUBMIT=1";
     if (m_game.buttonPrompts == "switch") env << "AC_PROMPTS=switch";
     else if (m_game.buttonPrompts == "keyboard") env << "AC_PROMPTS=keyboard";
     else env << "AC_PROMPTS=auto";
+    env << QString("AC_MOUSE_SENS=%1").arg((int)m_mouse.sensitivity);
+    if (m_mouse.yScale != MouseSettings::kDefaultYScale) env << QString("AC_MOUSE_YSCALE=%1").arg(m_mouse.yScale);
+    if (m_mouse.curve != MouseSettings::kDefaultCurve) env << QString("AC_MOUSE_CURVE=%1").arg(m_mouse.curve);
+    if (m_mouse.invertY) env << "AC_MOUSE_INVERT=1";
+    if (!m_mouse.menuNav) env << "AC_MOUSE_MENUS=0";
+    if (!m_mouse.menuMotion) env << "AC_MOUSE_MENU_MOTION=0";
+    if (m_mouse.menuCell != MouseSettings::kDefaultMenuCell) env << QString("AC_MOUSE_MENU_CELL=%1").arg(m_mouse.menuCell);
     env << "AC_AUDIO_RESYNC=1";
     env << "LARECOMP_VK_LAZY_WB=0";
     QString mode = m_graphics.presentMode.trimmed().toLower();

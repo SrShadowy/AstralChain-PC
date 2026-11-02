@@ -28,5 +28,6 @@ Awakening hooks report inactive), `settings.h`, `texpatch.h`, `las_compat.h`,
 `vma.cpp` (VulkanMemoryAllocator v3.1.0 under `third_party/`). The Maxwell
 translator is the reviewed derivative from `astral_chain/shader_build.py`.
 
-Not vendored: Metal backend, texture patches (`texpatch`), menu/imgui, SMAA and
-other Link's Awakening specific features.
+Not vendored: Metal backend, texture patches (`texpatch`), menu/imgui, and
+other Link's Awakening specific features. SMAA 1x (iryoku/smaa, MIT) is vendored
+under `nvn/smaa_data.c` + `third_party/smaa/` and backs the "Antialiasing" option.

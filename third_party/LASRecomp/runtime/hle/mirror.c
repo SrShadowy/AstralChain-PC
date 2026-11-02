@@ -7,7 +7,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "../settings.h"
+#include "settings.h" // [extra]
 
 uint64_t renderer_present_count(void);
 
@@ -30,7 +30,7 @@ bool mirror_input(void) {
 // tools/patches.py PROMPT_POS_SITE: the HUD writes the prompt pane's translation (x right of the centre) each time it
 // places it; in mirror mode, with the mirrored world on screen, x is mirrored - the prompt itself reads as ever.
 #include <string.h>
-#include "../hle.h"
+#include "hle.h" // [extra]
 float rt_prompt_x(uint64_t pane, float x) {
     if (!mirror_input() || memcmp((const char *)(uintptr_t)(pane + 0xB0), "L_Interact_00", 14)) return x;
     return -x;

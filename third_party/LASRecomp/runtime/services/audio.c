@@ -7,9 +7,9 @@
 
 #include <SDL3/SDL.h>
 
-#include "../hle.h"
-#include "../settings.h"
-#include "../ipc.h"
+#include "hle.h" // [extra]
+#include "settings.h"
+#include "ipc.h" // [extra]
 
 // ------------------------------------------------------------------ audren: a CPU mixer modelled on
 // Ryujinx's AudioRenderer (VoiceState / DataSourceHelper / StateUpdater, copies in notes/ryujinx_audio).

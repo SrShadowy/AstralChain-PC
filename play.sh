@@ -13,7 +13,7 @@ else
     exit 1
 fi
 
-"$PY_EXEC" -m astral_chain.setup_game --rebuild-if-stale
+"$PY_EXEC" -m astral_chain.build.setup_game --rebuild-if-stale
 
 DEFAULT_ENV="AC_PARALLEL=1;AC_IGNORE_FOCUS=;AC_AUDIO_RESYNC=1;LARECOMP_VK_LAZY_WB=0;LARECOMP_VK_COPY_VERTICES=0;AC_PRESENT_INTERVAL=1"
 HAS_ENV=0
@@ -25,7 +25,7 @@ for arg in "$@"; do
 done
 
 if [ "$HAS_ENV" -eq 1 ]; then
-    exec ./astral_chain/run_guarded.sh --run build/game --seconds 604800 "$@"
+    exec ./astral_chain/tools/run_guarded.sh --run build/game --seconds 604800 "$@"
 else
-    exec ./astral_chain/run_guarded.sh --run build/game --seconds 604800 --env "$DEFAULT_ENV" "$@"
+    exec ./astral_chain/tools/run_guarded.sh --run build/game --seconds 604800 --env "$DEFAULT_ENV" "$@"
 fi

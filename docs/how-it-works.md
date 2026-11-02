@@ -2,7 +2,7 @@
 
 ## From your dump to `trace.exe`
 
-1. **Extraction** (`astral_chain/setup_game.py`, NSTool). The v1.0.1 update's ExeFS holds the game code: `main`,
+1. **Extraction** (`astral_chain/build/setup_game.py`, NSTool). The v1.0.1 update's ExeFS holds the game code: `main`,
    plus `rtld` and `sdk`, which are byte-identical to the base game's. Its RomFS is a patch over the base game's.
    NSTool applies it (`--basenca`), and `romfs_tool.c` packs the merged tree into one read-only image,
    `game/romfs.bin`. The game reads that image at run time.

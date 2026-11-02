@@ -35,7 +35,7 @@ PYTHON="python3"
 if [ -f ".venv/bin/python3" ]; then
     PYTHON=".venv/bin/python3"
 fi
-$PYTHON -m astral_chain.setup_game --rebuild-if-stale
+$PYTHON -m astral_chain.build.setup_game --rebuild-if-stale
 T1=$(date +%s)
 echo "PASSED: Build/Relink verificado em $((T1 - T0))s."
 
@@ -55,7 +55,7 @@ set +e
 AC_PARALLEL="${AC_PARALLEL:-1}" AC_AUDIO_RESYNC="${AC_AUDIO_RESYNC:-1}" \
     AC_ASYNC_SUBMIT="${AC_ASYNC_SUBMIT:-1}" LARECOMP_VK_PRESENT="${LARECOMP_VK_PRESENT:-fifo}" \
     AC_INPUT_SCRIPT="$INPUT_SEQ" LARECOMP_SHOT_AT="$SHOT_FRAME" \
-    stdbuf -oL -eL ./astral_chain/run_guarded.sh --run build/game --seconds "$SECONDS_RUN" > "$LOG_FILE" 2>&1
+    stdbuf -oL -eL ./astral_chain/tools/run_guarded.sh --run build/game --seconds "$SECONDS_RUN" > "$LOG_FILE" 2>&1
 EXIT_CODE=$?
 set -e
 

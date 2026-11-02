@@ -14,7 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../hle.h"
+#include "hle.h" // [extra]
 
 static pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;
 static char g_level[64], g_locator[64];

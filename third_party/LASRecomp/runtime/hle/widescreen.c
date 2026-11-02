@@ -5,8 +5,8 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
-#include "../hle.h"
-#include "../settings.h"
+#include "hle.h" // [extra]
+#include "settings.h" // [extra]
 
 #define BACKDROP_HASHES 0x71fe31bbf03c3515ull
 

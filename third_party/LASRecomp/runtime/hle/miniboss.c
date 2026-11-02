@@ -11,7 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../hle.h"
+#include "hle.h" // [extra]
 
 void guest_call(Cpu *c, uint64_t addr);
 uint64_t doorjump_player(uint64_t frame);  // PlayerCollision component: position at +0x80

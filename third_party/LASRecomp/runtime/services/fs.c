@@ -7,9 +7,9 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "../hle.h"
-#include "../rando.h"
-#include "../ipc.h"
+#include "hle.h" // [extra]
+#include "rando.h"
+#include "ipc.h" // [extra]
 
 #define FS_PATH_NOT_FOUND MAKE_RESULT(2, 1)
 #define FS_PATH_EXISTS MAKE_RESULT(2, 2)

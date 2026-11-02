@@ -10,8 +10,8 @@
 #include "option_rows.h"
 
 extern "C" {
-#include "../hle.h"
-#include "../settings.h"
+#include "hle.h" // [extra]
+#include "settings.h" // [extra]
 int game_in_play(void);
 int rt_hookshot_seed_forced(void);  // hle/hookshot.c
 int rt_no_buff_seed_forced(void);   // hle/qol.c

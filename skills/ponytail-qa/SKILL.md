@@ -23,13 +23,13 @@ Para regras globais e arquitetura, consulte [`AGENTS.md`](../../AGENTS.md) e [`d
    - Resolva a causa raiz com o menor diff legível. Proibidos wrappers, camadas intermediárias ou opções sem demanda imediata.
    - Qualquer atalho com limite técnico deve conter: `// shortcut: <limite>, <quando atualizar>`.
 2. **Organização Pragmática**:
-   - Correções de plataforma residem em `extra/core/`.
+   - Correções de plataforma residem nos módulos de domínio sob `extra/` (`platform/`, `sdl/`, `gpu/`, `input/`, `storage/`).
    - Modificações no código herdado devem ser pontuais e objetivas.
    - O marcador `// [extra]` deve ser utilizado **estritamente quando necessário** para demarcar os locais editados fora de `extra/`, evitando exageros ou marcações redundantes.
    - Teto rígido de **400 linhas** por arquivo em `extra/` (meta ideal **≤ 300 linhas**), verificado por `audit.sh`.
    - O launcher oficial é o Launcher Qt6 C++20 (`extra/ui/launcher/`). O launcher legado em C# de Windows não é utilizado nem compilado no Linux.
 3. **Validação Rápida e Feedback Contínuo**:
-   - Utilize o Fast-Relink (`python3 -m astral_chain.setup_game --rebuild-if-stale`) para recompilar alterações de código em ~8 segundos sem reconstruir as unidades de guest inalteradas.
+   - Utilize o Fast-Relink (`python3 -m astral_chain.build.setup_game --rebuild-if-stale`) para recompilar alterações de código em ~8 segundos sem reconstruir as unidades de guest inalteradas.
    - Mantenha a saída de log limpa e enxuta (logs verbosos ativados apenas sob `AC_VERBOSE=1`).
 
 ---
@@ -42,12 +42,12 @@ Para regras globais e arquitetura, consulte [`AGENTS.md`](../../AGENTS.md) e [`d
 2. **Inspeção de Contexto**:
    - Verifique quais chamadas de sistema Win32/POSIX ou manipulações de ponteiros precedem a instrução `boundary(...)` ou o ponto de parada (ex.: `GetLastError()`, descritores de arquivos abertos, separadores de diretório `/` vs `\`, fontes ausentes).
 3. **Resolução no Trampoline Pertinente**:
-   - Ajuste o tratamento no respectivo trampoline em `extra/core/`:
-     - Memória e sinais: `extra/core/memory_trampoline.h` (`mmap`, `mprotect`, `SIGSEGV`).
-     - Arquivos e saves: `extra/core/storage_trampoline.h` e `find_trampoline.h`.
-     - Janela e eventos: `extra/core/window_trampoline.h`.
-     - Sincronização e threads: `extra/core/sync_trampoline.h`.
-     - Tipos e linkage ELF: `extra/core/platform_posix.h`.
+   - Ajuste o tratamento no respectivo trampoline sob `extra/`:
+     - Memória e sinais: `extra/platform/memory_trampoline.h` (`mmap`, `mprotect`, `SIGSEGV`).
+     - Arquivos e saves: `extra/storage/storage_trampoline.h` e `find_trampoline.h`.
+     - Janela e eventos: `extra/sdl/window_trampoline.h`.
+     - Sincronização e threads: `extra/platform/sync_trampoline.h`.
+     - Tipos e linkage ELF: `extra/platform/platform_posix.h`.
 
 ### B. Falhas Gráficas e Renderização (Viewport Cortado, Flicker, Flash Verde)
 1. **Captura Determinística de Frame**:
@@ -68,8 +68,8 @@ Para regras globais e arquitetura, consulte [`AGENTS.md`](../../AGENTS.md) e [`d
    - Injete sequências temporizadas utilizando a sintaxe `AC_INPUT_SCRIPT="t0-t1:mask;..."`.
    - Exemplo: `AC_INPUT_SCRIPT="10-13:300;18-21:300"` segura ZL+ZR (máscara `0x300`) nos segundos 10–13 e 18–21 para avançar diálogos e menus.
 2. **Inspeção do Loop de Eventos**:
-   - Verifique se a função `extra_window_pump_events` em `extra/core/window_trampoline.h` está sendo invocada a cada quadro no laço principal de renderização.
-   - Verifique a leitura de estado do gamepad e das teclas virtuais em `runtime/hid_service.h` e `runtime/mouse.h`.
+   - Verifique se a função `extra_window_pump_events` em `extra/sdl/window_trampoline.h` está sendo invocada a cada quadro no laço principal de renderização.
+   - Verifique a leitura de estado do gamepad e das teclas virtuais em `runtime/input/hid_service.h` e `runtime/input/mouse.h`.
 
 ---
 
@@ -84,7 +84,7 @@ Valida marcadores `// [extra]`, teto de 400 linhas em `extra/` e compilação do
 ### 2. Fast-Relink do Runtime (~8s)
 Verifica compilação incremental de código nativo sem reconstruir units de guest inalteradas:
 ```bash
-python3 -m astral_chain.setup_game --rebuild-if-stale
+python3 -m astral_chain.build.setup_game --rebuild-if-stale
 ```
 
 ### 3. Suíte Integrada de QA (Auditoria + Fast-Relink + Runtime + Visual)

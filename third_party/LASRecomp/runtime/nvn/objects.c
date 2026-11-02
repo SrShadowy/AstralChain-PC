@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../kernel.h"
+#include "kernel.h" // [extra]
 #include "nvn.h"
 
 void renderer_sync(void);

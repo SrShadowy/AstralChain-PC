@@ -5,8 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../hle.h"
-#include "../input_bind.h"
+#include "hle.h" // [extra]
+#include "input_bind.h" // [extra]
 
 _Static_assert(PADB_LTRIGGER == SDL_GAMEPAD_BUTTON_COUNT, "trigger pseudo-buttons follow SDL's buttons");
 
