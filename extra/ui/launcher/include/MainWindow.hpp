@@ -2,6 +2,7 @@
 
 #include <QMainWindow>
 #include <QStringList>
+#include <QProcessEnvironment>
 #include <memory>
 #include "Config.hpp"
 #include "ProcessRunner.hpp"
@@ -41,6 +42,7 @@ protected:
 private:
     void setupUi();
     void applyTheme();
+    QProcessEnvironment gameProcessEnvironment() const;  // [extra] build inputs from the config
     void setRunningUi(bool running, qint64 pid = 0);
     void runCommand(const QString& program, const QStringList& args, const QString& statusText, bool isGame = false);
 

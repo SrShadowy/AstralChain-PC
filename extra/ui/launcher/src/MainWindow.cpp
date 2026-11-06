@@ -69,9 +69,19 @@ void MainWindow::applyTheme()
     setStyleSheet(getLauncherStyleSheet());
 }
 
+QProcessEnvironment MainWindow::gameProcessEnvironment() const
+{
+    QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+    env.insert("AC_FPS_UNLOCKED", m_config.graphics().fpsUnlocked ? "1" : "0");
+    return env;
+}
+
 void MainWindow::refreshGameStatus()
 {
+    // [extra] The FPS patch variant is a build input: ask setup_game about the build that
+    // matches the selected variant, or a correct build would be reported stale.
     QProcess proc;
+    proc.setProcessEnvironment(gameProcessEnvironment());
     proc.start("python3", {"-m", "astral_chain.build.setup_game", "--status"});
     if (proc.waitForFinished(3000)) {
         const auto doc = QJsonDocument::fromJson(proc.readAllStandardOutput());
@@ -130,7 +140,7 @@ void MainWindow::runCommand(const QString& program, const QStringList& args, con
     } else {
         m_playBtn->setEnabled(false);
     }
-    m_runner.start(program, args);
+    m_runner.start(program, args, "", gameProcessEnvironment());
 }
 
 void MainWindow::onPlay()

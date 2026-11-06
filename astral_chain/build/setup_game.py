@@ -53,8 +53,28 @@ GLSLANG = TOOLS/'glslang'/'bin'/'glslang'
 ROMFS_TOOL = TOOLS/'romfs-build'
 
 LASRECOMP = PROJECT/'third_party'/'LASRecomp'
-PATCHES = (PROJECT/'third_party'/'AstralChain-Dynamic-FPS'/'1.0.1.pchtxt',
-           PROJECT/'astral_chain'/'patches'/'cutscene-catchup-1.0.1.pchtxt')
+# Applied in this order: the Dynamic-FPS timing fixes, then (only with AC_FPS_UNLOCKED=1) the two-word
+# overlay that removes the mod's 60 fps cap, then the port's cutscene step-limit catch-up on top of both.
+FPS_PATCH = PROJECT/'third_party'/'AstralChain-Dynamic-FPS'/'1.0.1.pchtxt'
+UNLOCKED_PATCH = PROJECT/'astral_chain'/'patches'/'dynamic-unlocked-1.0.1.pchtxt'
+CUTSCENE_PATCH = PROJECT/'astral_chain'/'patches'/'cutscene-catchup-1.0.1.pchtxt'
+
+
+def fps_unlocked():
+    """AC_FPS_UNLOCKED=1 (launcher: Settings > Graphics) swaps the vendored Dynamic-60fps patch for
+    Dynamic-Unlocked. The patches differ in two instructions (mov w1,#1 -> #0), so the vocabulary stays
+    the same; only the rate cap the mod imposes on the game's own timer changes."""
+    return os.environ.get('AC_FPS_UNLOCKED', '').strip().lower() in ('1', 'true', 'on', 'yes')
+
+
+def active_patches():
+    patches = [FPS_PATCH]
+    if fps_unlocked():
+        patches.append(UNLOCKED_PATCH)
+    patches.append(CUTSCENE_PATCH)
+    return patches
+
+
 MAIN_SHA_101 = 'dc47cae835866379c597e1c507bf52ee0f865ec4412930dfdf1bbc20b6bb9c3b'
 PROGRAM_ID = '01007300020fa000'
 FREE_SPACE_GB = 35  # extracted RomFS (~10 GB) + its image (~10 GB) + NCAs + build, before the cleanup
@@ -351,6 +371,7 @@ def build_romfs(inputs, base_program, base_tik, update_program, update_tik):
 def fingerprint():
     """Changes to the sources, vendored code or patches make the next launch rebuild."""
     digest = hashlib.sha256()
+    digest.update(b'unlocked=1\n' if fps_unlocked() else b'unlocked=0\n')  # (the FPS patch variant)
     for root in (PROJECT/'astral_chain', PROJECT/'third_party', PROJECT/'extra'):
         for path in sorted(root.rglob('*')):
             if path.is_file() and '__pycache__' not in path.parts and 'data' not in path.relative_to(root).parts[:1]:
@@ -371,7 +392,7 @@ def guest_fingerprint():
     for f in (PROJECT/'astral_chain/lifter.py', PROJECT/'astral_chain/native_trace.py'):
         if f.is_file():
             digest.update(f.read_bytes())
-    for patch in PATCHES:
+    for patch in active_patches():
         if Path(patch).is_file():
             digest.update(Path(patch).read_bytes())
     return digest.hexdigest()
@@ -444,7 +465,7 @@ def build_game():
                '--follow', '0', '--entry', 'rtld:start', '--seed-all-text', '--build', 'cached',
                '--control', CONTROL, '--romfs', ROMFS_IMAGE, '--nvn-hle', '--nvn-backend', 'vulkan',
                '--optimize', '--lean', '--direct-calls', '--jumps']
-    for patch in PATCHES:
+    for patch in active_patches():
         command += ['--patch', patch]
     command.append('--build-only')
     result = subprocess.run([str(c) for c in command], cwd=PROJECT)

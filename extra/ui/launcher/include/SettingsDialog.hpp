@@ -50,6 +50,7 @@ private:
     QCheckBox* m_vsyncCheck{nullptr};
     QComboBox* m_presentModeCombo{nullptr};
     QSpinBox* m_fpsSpin{nullptr};
+    QCheckBox* m_fpsUnlockedCheck{nullptr};
     QComboBox* m_scaleCombo{nullptr};
     QComboBox* m_upscalerCombo{nullptr};
     QComboBox* m_textureQualityCombo{nullptr};

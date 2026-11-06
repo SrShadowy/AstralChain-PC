@@ -4,6 +4,17 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
 
+# The Python self-tests need capstone (the ARM64 decoder). setup.sh installs it
+# into .venv when the system interpreter lacks it, so prefer the venv and fall
+# back to python3 when that one already has the module.
+PYTHON=python3
+if [ -x "$ROOT_DIR/.venv/bin/python" ]; then
+    PYTHON="$ROOT_DIR/.venv/bin/python"
+fi
+if ! "$PYTHON" -c "import capstone" >/dev/null 2>&1 && python3 -c "import capstone" >/dev/null 2>&1; then
+    PYTHON=python3
+fi
+
 echo "=== Downstream Audit ==="
 
 echo "--- 1. Marker Audit (Region Start/End or Single-Line Hook) ---"
@@ -79,6 +90,49 @@ if pkg-config --exists sdl3 2>/dev/null; then
     fi
 else
     echo "SKIPPED: SDL3 development files not found (menu pointer self-test)."
+fi
+
+echo "--- 5. RE Helper Self-Test (menu cursor / hit-test scan) ---"
+if "$PYTHON" -m astral_chain.tools.re_cursor_test > /dev/null 2>&1 && \
+        "$PYTHON" -m astral_chain.tools.re_cursor_e2e_test > /dev/null 2>&1; then
+    echo "PASSED: re_cursor decoder and report self-tests."
+else
+    echo "FAILED: re_cursor self-test ($PYTHON -m astral_chain.tools.re_cursor_test)."
+    exit 1
+fi
+
+echo "--- 6. FPS Patch Delta Self-Test (Dynamic-Unlocked == base + 2 words) ---"
+if "$PYTHON" -m astral_chain.tools.fps_patch_test > /dev/null 2>&1; then
+    echo "PASSED: Dynamic-Unlocked patch is exactly the base plus the two cap words."
+else
+    echo "FAILED: fps patch self-test ($PYTHON -m astral_chain.tools.fps_patch_test)."
+    exit 1
+fi
+
+echo "--- 7. Frame-Pacing Self-Test (60 fps unchanged, other targets derived) ---"
+PACE_BIN="$(mktemp -t ac-pace-test.XXXXXX)"
+pace_run() {  # every target the heuristic branches on, plus unusable values
+    "$PACE_BIN" > /dev/null \
+        && AC_FPS=0 "$PACE_BIN" > /dev/null \
+        && AC_FPS=30 "$PACE_BIN" > /dev/null \
+        && AC_FPS=144 "$PACE_BIN" > /dev/null \
+        && AC_FPS=1000 "$PACE_BIN" > /dev/null \
+        && AC_FPS=1001 "$PACE_BIN" > /dev/null \
+        && AC_FPS=abc "$PACE_BIN" > /dev/null \
+        && AC_FPS=-5 "$PACE_BIN" > /dev/null \
+        && AC_FPS=60fps "$PACE_BIN" > /dev/null \
+        && AC_FPS=1234567890123456 "$PACE_BIN" > /dev/null \
+        && AC_FPS= AC_TARGET_FPS=90 "$PACE_BIN" > /dev/null
+}
+if gcc -std=c11 -O1 -Wall -Wextra -Werror -I. -o "$PACE_BIN" extra/tools/pace_target_test.c -lm > /dev/null 2>&1 \
+        && pace_run; then
+    rm -f "$PACE_BIN"
+    echo "PASSED: pacing heuristic matches the old 60 fps behaviour; thresholds scale."
+else
+    "$PACE_BIN" || true
+    rm -f "$PACE_BIN"
+    echo "FAILED: frame-pacing self-test (extra/tools/pace_target_test.c)."
+    exit 1
 fi
 
 echo "=== All audits passed successfully! ==="

@@ -41,11 +41,15 @@ ProcessRunner::~ProcessRunner()
     }
 }
 
-void ProcessRunner::start(const QString& program, const QStringList& arguments, const QString& workingDir)
+void ProcessRunner::start(const QString& program, const QStringList& arguments, const QString& workingDir,
+                          const QProcessEnvironment& env)
 {
     if (!workingDir.isEmpty()) {
         m_process.setWorkingDirectory(workingDir);
     }
+    // Always set it: QProcess keeps the last environment, so a run without
+    // overrides must reset to the system one instead of inheriting them.
+    m_process.setProcessEnvironment(env.isEmpty() ? QProcessEnvironment::systemEnvironment() : env);
     m_process.start(program, arguments);
 }
 

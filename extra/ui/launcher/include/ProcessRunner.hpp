@@ -2,6 +2,7 @@
 
 #include <QObject>
 #include <QProcess>
+#include <QProcessEnvironment>
 #include <QString>
 #include <QStringList>
 
@@ -14,7 +15,8 @@ public:
     explicit ProcessRunner(QObject* parent = nullptr);
     ~ProcessRunner() override;
 
-    void start(const QString& program, const QStringList& arguments, const QString& workingDir = "");
+    void start(const QString& program, const QStringList& arguments, const QString& workingDir = "",
+               const QProcessEnvironment& env = {});
     void stop();
     void cancel();
     [[nodiscard]] bool isRunning() const noexcept;

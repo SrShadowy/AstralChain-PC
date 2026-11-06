@@ -111,6 +111,15 @@ QWidget* SettingsDialog::createGraphicsTab()
     m_fpsSpin->setSingleStep(5);
     m_fpsSpin->setValue(60);
 
+    // The game's own rate cap comes from the vendored Dynamic-FPS patch, which is compiled in (a
+    // two-instruction difference), so this toggle changes the next build, not the running one.
+    m_fpsUnlockedCheck = new QCheckBox(
+        "Desbloquear o teto de 60 FPS do jogo (patch Dynamic-Unlocked; exige reconstruir)", page);
+    m_fpsUnlockedCheck->setToolTip(
+        "Sem isto o patch Dynamic-60fps fixa o timer do jogo em 60 FPS.\n"
+        "Com isto o jogo usa o próprio passo medido, de 15 a 480 FPS.\n"
+        "Target FPS continua sendo a taxa de apresentação (AC_FPS).");
+
     m_scaleCombo = new QComboBox(page);
     m_scaleCombo->addItems({"0.5x", "0.75x", "1.0x (Native)", "1.25x", "1.5x", "2.0x"});
 
@@ -138,6 +147,7 @@ QWidget* SettingsDialog::createGraphicsTab()
     layout->addRow("", m_vsyncCheck);
     layout->addRow("Sync Mode:", m_presentModeCombo);
     layout->addRow("Target FPS:", m_fpsSpin);
+    layout->addRow("", m_fpsUnlockedCheck);
     layout->addRow("Internal Scale:", m_scaleCombo);
     layout->addRow("Upscaler:", m_upscalerCombo);
     layout->addRow("Qualidade de Textura:", m_textureQualityCombo);
@@ -216,6 +226,7 @@ void SettingsDialog::loadFromConfig()
     }
     if (pIdx >= 0) m_presentModeCombo->setCurrentIndex(pIdx);
     m_fpsSpin->setValue(g.fpsLimit);
+    m_fpsUnlockedCheck->setChecked(g.fpsUnlocked);
 
     for (int i = 0; i < m_scaleCombo->count(); ++i) {
         if (m_scaleCombo->itemText(i).startsWith(QString::number(g.renderScale))) {
@@ -275,6 +286,7 @@ void SettingsDialog::writeToConfig()
     g.vsync = m_vsyncCheck->isChecked();
     g.presentMode = m_presentModeCombo->currentData().toString();
     g.fpsLimit = m_fpsSpin->value();
+    g.fpsUnlocked = m_fpsUnlockedCheck->isChecked();
     g.upscaler = m_upscalerCombo->currentData().toString();
     g.lodBias = m_textureQualityCombo->currentData().toDouble();
     g.lodMin = m_lodCombo->currentData().toDouble();

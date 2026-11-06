@@ -22,6 +22,7 @@ void Config::load()
     m_graphics.vsync = s.value("vsync", true).toBool();
     m_graphics.presentMode = s.value("present_mode", "mailbox").toString();
     m_graphics.fpsLimit = s.value("fps_limit", 60).toInt();
+    m_graphics.fpsUnlocked = s.value("fps_unlocked", false).toBool();
     m_graphics.renderScale = s.value("render_scale", 1.0).toDouble();
     m_graphics.upscaler = s.value("upscaler", "bilinear").toString();
     m_graphics.lodBias = s.value("lod_bias", 0.0).toDouble();
@@ -79,6 +80,7 @@ void Config::save()
     s.setValue("vsync", m_graphics.vsync);
     s.setValue("present_mode", m_graphics.presentMode);
     s.setValue("fps_limit", m_graphics.fpsLimit);
+    s.setValue("fps_unlocked", m_graphics.fpsUnlocked);
     s.setValue("render_scale", m_graphics.renderScale);
     s.setValue("upscaler", m_graphics.upscaler);
     s.setValue("lod_bias", m_graphics.lodBias);
@@ -213,6 +215,9 @@ QString Config::buildLaunchEnv() const
     }
     env << QString("LARECOMP_VK_PRESENT=%1").arg(mode);
     env << QString("AC_FPS=%1").arg(m_graphics.fpsLimit);
+    // The FPS patch variant is a build input (setup_game.py active_patches); play.sh lifts this
+    // out of --env before the build so toggling it rebuilds instead of silently keeping the old cap.
+    env << QString("AC_FPS_UNLOCKED=%1").arg(m_graphics.fpsUnlocked ? 1 : 0);
     if (m_graphics.fpsLimit == 0) {
         env << "AC_PRESENT_INTERVAL=0";
     }

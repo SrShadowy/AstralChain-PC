@@ -14,6 +14,7 @@ struct GraphicsSettings {
     bool vsync{true};
     QString presentMode{"fifo"};
     int fpsLimit{60};
+    bool fpsUnlocked{false};  // AC_FPS_UNLOCKED: build with the Dynamic-Unlocked FPS patch variant
     double renderScale{1.0};
     QString upscaler{"bilinear"};
     double lodBias{0.0};   // texture quality: global LOD bias (0 = native, + = lighter)
