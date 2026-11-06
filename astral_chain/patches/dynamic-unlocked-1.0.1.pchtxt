@@ -1,0 +1,24 @@
+@nsobid-4B159F0F7A360669738390EE8657B4F0
+// Astral Chain v1.0.1, applied after Dynamic-FPS 1.0.1.pchtxt and before cutscene-catchup (native_trace --patch,
+// in that order). Enabled by AC_FPS_UNLOCKED=1 (setup_game.py); without it this file is not passed at all.
+//
+// The vendored third_party/AstralChain-Dynamic-FPS/1.0.1.pchtxt is the mod's *Dynamic-60fps* variant v1.1.1.
+// Upstream (yogesh1239/AstralChain-Dynamic-FPS, mods/Dynamic-Unlocked/exefs/1.0.1.pchtxt) publishes the same
+// v1.1.1 with the rate cap removed. The two variants are byte-identical except for the two words below, which
+// both flip a single immediate: `mov w1,#1` (fix the game to 60 FPS) -> `mov w1,#0` (keep its measured target).
+// So this is not a second mod: it is the two-word delta, applied as an overlay on the vendored patch.
+//
+// The timer fixes that make >60 FPS safe are already in the base patch: action/input timers count whole
+// 30 FPS ticks instead of frames (so a "15 frame" window means 15/30 s at any refresh rate), the step is
+// measured from real frame time, and the camera smooths by frame time. The step floor is 1/16 tick (480 FPS).
+// AC_CUTSCENE_FPS=30 still selects the original fixed-step cutscene path at runtime.
+//
+// Frame pacing is the port's side of this: AC_FPS (launcher "Target FPS", 0 = unthrottled) sets the present
+// rate, and the runtime's over-budget check derives its threshold from it instead of the hardcoded 60 Hz one.
+
+@flag offset_shift 0x100
+
+@enabled
+009E8D84 01008052 // Init: mov w1,#0 (was #1 in Dynamic-60fps)
+009DB6BC 01008052 // Runtime: mov w1,#0 (was #1 in Dynamic-60fps)
+@stop
