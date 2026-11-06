@@ -110,6 +110,10 @@ else
 fi
 
 echo "--- 7. Frame-Pacing Self-Test (60 fps unchanged, other targets derived) ---"
+PACE_CC="${CC:-gcc}"
+if ! command -v "$PACE_CC" > /dev/null 2>&1; then
+    echo "SKIPPED: no C compiler (frame-pacing self-test)."
+else
 PACE_BIN="$(mktemp -t ac-pace-test.XXXXXX)"
 pace_run() {  # every target the heuristic branches on, plus unusable values
     "$PACE_BIN" > /dev/null \
@@ -124,7 +128,7 @@ pace_run() {  # every target the heuristic branches on, plus unusable values
         && AC_FPS=1234567890123456 "$PACE_BIN" > /dev/null \
         && AC_FPS= AC_TARGET_FPS=90 "$PACE_BIN" > /dev/null
 }
-if gcc -std=c11 -O1 -Wall -Wextra -Werror -I. -o "$PACE_BIN" extra/tools/pace_target_test.c -lm > /dev/null 2>&1 \
+if "$PACE_CC" -std=c11 -O1 -Wall -Wextra -Werror -I. -o "$PACE_BIN" extra/tools/pace_target_test.c -lm > /dev/null 2>&1 \
         && pace_run; then
     rm -f "$PACE_BIN"
     echo "PASSED: pacing heuristic matches the old 60 fps behaviour; thresholds scale."
@@ -133,6 +137,7 @@ else
     rm -f "$PACE_BIN"
     echo "FAILED: frame-pacing self-test (extra/tools/pace_target_test.c)."
     exit 1
+fi
 fi
 
 echo "=== All audits passed successfully! ==="
