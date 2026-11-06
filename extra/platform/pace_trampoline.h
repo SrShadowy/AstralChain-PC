@@ -5,6 +5,7 @@
 #include <time.h>
 #include <sched.h>
 #include "extra/toggles/ac_toggles.h"
+#include "extra/platform/pace_target.h"
 
 /* [extra] Display pacing trampoline with arbitrary AC_FPS support (Linux First).
  *
@@ -19,20 +20,8 @@
 #define EXTRA_RT_TICKS_PER_SECOND 19200000ULL
 #define EXTRA_PACER_SPIN_TICKS    5760ULL /* ~300 us spin window before target tick */
 
-/* Pacing targets, in frames per second. */
-#define EXTRA_DEFAULT_TARGET_FPS 60
-#define EXTRA_CUTSCENE_FPS       30  /* svc #0xB1 in host_runtime.c.in: cutscenes present at 30 */
-
-/* Sentinels for the one-shot environment lookups. UNREAD means "not cached
- * yet"; UNSET means "variable absent or unusable", meaning the caller keeps the
- * game's own value. They must stay distinct so a real value of 0 (unthrottled)
- * can be told apart from "no override configured". */
-#define EXTRA_ENV_UNREAD (-2)
-#define EXTRA_ENV_UNSET  (-1)
-
-/* GetEnvironmentVariableA returns the copied length; a value that fills the
- * whole buffer may have been truncated, so it is rejected. */
-#define EXTRA_ENV_VALUE_MAX 16
+/* Pacing targets and the AC_FPS lookup live in extra/platform/pace_target.h,
+ * which the frame-pacing heuristic in the Vulkan layer also uses. */
 
 /* Flush both streams every N presents. stdout is block-buffered when piped;
  * flushing more often costs a syscall per frame, less often delays crash logs. */
@@ -64,20 +53,6 @@ static inline int extra_env_override(void) {
         char v[EXTRA_ENV_VALUE_MAX];
         DWORD n = GetEnvironmentVariableA("AC_PRESENT_INTERVAL", v, sizeof(v));
         cached = (n && n < sizeof(v)) ? atoi(v) : EXTRA_ENV_UNSET;
-    }
-    return cached;
-}
-
-/* AC_FPS, falling back to the legacy AC_TARGET_FPS spelling, then to 60. */
-static inline int extra_env_target_fps(void) {
-    if (g_extra_fps_override > 0) return g_extra_fps_override; /* [extra] overlay override */
-    static int cached = EXTRA_ENV_UNREAD;
-    if (cached == EXTRA_ENV_UNREAD) {
-        char v[EXTRA_ENV_VALUE_MAX];
-        DWORD n = GetEnvironmentVariableA("AC_FPS", v, sizeof(v));
-        if (!n) n = GetEnvironmentVariableA("AC_TARGET_FPS", v, sizeof(v));
-        cached = (n && n < sizeof(v)) ? atoi(v) : EXTRA_ENV_UNSET;
-        if (cached < 0) cached = EXTRA_DEFAULT_TARGET_FPS;
     }
     return cached;
 }

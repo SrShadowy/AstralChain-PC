@@ -12,6 +12,7 @@
 #include "../../exec_internal.h"
 #include "../../../renderer.h"
 #include "submission_internal.h"
+#include "extra/platform/pace_target.h" // [extra]
 
 // ================================================================== submissions
 // A submission = optional upload command buffer + the main one, signalling the timeline with its number.
@@ -121,8 +122,7 @@ static int vk_counter_mode(void) {
     return counter_mode;
 }
 
-// ---- frame pacing: the game's own 30 fps mode when we can't hold 60
-#define PACE_SLOW_NS 20000000ull
+// ---- frame pacing: the game's own 30 fps mode when we can't hold the target // [extra]
 extern __thread uint64_t g_blocked_ns;  // kernel.c: this thread's time blocked in waits / sleeps
 bool pace_slow;
 uint64_t stat_pace_over;
@@ -131,41 +131,31 @@ void vk_pace_frame(void) {
     static int on = -1;
     if (on < 0) { const char *e = getenv("LARECOMP_PACE"); on = e && atoi(e) != 0; }
     static uint64_t last, last_wait;
-    static uint8_t over[60];
-    static int idx, nover, calm;
-    static double avg;  // busy ms, moving average (~20 frames)
+    static ExtraPaceState pace; // [extra]
     uint64_t now = plat_now_ns(), w = g_blocked_ns;
     uint64_t p = now - last, wt = w - last_wait;
     bool first = !last;
     last = now, last_wait = w;
     if (first || p > 100000000ull) return;  // (loading, a hitch: not a pace)
     double busy = (p > wt ? p - wt : 0) / 1e6;
-    avg = avg ? avg + (busy - avg) * 0.05 : busy;
     static int log = -1;  // LARECOMP_LOG_PACE=1: each frame's period, vsync wait and busy time
     if (log < 0) log = getenv("LARECOMP_LOG_PACE") != NULL;
     if (log) LOG("[pace] period %.2f blocked %.2f busy %.2f ms\n", p / 1e6, wt / 1e6, busy);
-    int o = busy > 16.2;
-    stat_pace_over += o;
-    nover += o - over[idx];
-    over[idx] = (uint8_t)o;
-    idx = (idx + 1) % 60;
-    if (!on) return;  // (measured and counted all the same: LARECOMP_LOG_PACE, the stats)
-    if (!pace_slow && nover >= 12) {
-        pace_slow = true, calm = 0;
-        LOG("[pace] frames don't fit 60 fps (%d of the last 60 over 16.2 ms busy): the game's 30 fps mode\n", nover);
-    } else if (pace_slow) {
-        calm = avg < 13.0 && nover <= 2 ? calm + 1 : 0;
-        if (calm >= 120) {
-            pace_slow = false, nover = 0;
-            memset(over, 0, sizeof over);
-            LOG("[pace] 2 s with headroom: back to the game's own choice\n");
-        }
-    }
+    int over, event = extra_pace_update(&pace, busy, on, &over); // [extra]
+    stat_pace_over += over;
+    pace_slow = pace.slow != 0; // [extra]
+    if (event == EXTRA_PACE_ENTER) // [extra]
+        LOG("[pace] frames don't fit %.0f fps (%d of the last 60 over %.1f ms busy): the game's 30 fps mode\n",
+            (double)extra_env_target_fps(), pace.nover, extra_pace_over_ms());
+    else if (event == EXTRA_PACE_LEAVE) // [extra]
+        LOG("[pace] 2 s with headroom: back to the game's own choice\n"); // [extra]
+    else if (event == EXTRA_PACE_RESET) // [extra]
+        LOG("[pace] %.0f fps: the 30 fps fallback no longer applies\n", (double)extra_env_target_fps()); // [extra]
 }
 
 static uint64_t pace_end_counter(const uint64_t *start_entry, const uint64_t *entry, uint64_t value) {
     if (!pace_slow || !start_entry || (const uint8_t *)entry - (const uint8_t *)start_entry != 16) return value;
-    uint64_t min = start_entry[1] + ns_to_gpu_ticks(PACE_SLOW_NS);
+    uint64_t min = start_entry[1] + ns_to_gpu_ticks(extra_pace_slow_ns()); // [extra]
     return value < min ? min : value;
 }
 

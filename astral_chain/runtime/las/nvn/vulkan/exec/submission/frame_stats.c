@@ -137,7 +137,7 @@ const char *renderer_stats(void) {
         memset(prof_end_line, 0, sizeof prof_end_line);
         n = strlen(stats_text);
         snprintf(stats_text + n, sizeof stats_text - n, " | views created %llu | counters gpu %llu | pace %s, %llu frames over", (unsigned long long)prof_views_created,
-                 (unsigned long long)stat_counters_gpu, pace_slow ? "30" : "60", (unsigned long long)stat_pace_over);
+                 (unsigned long long)stat_counters_gpu, pace_slow ? "30" : "target", (unsigned long long)stat_pace_over); // [extra]
         stat_counters_gpu = stat_pace_over = 0;
         {
             extern uint64_t prof_vc_hits, prof_vc_bypass, prof_vc_copied, prof_vc_queries, prof_vc_scan_pages, prof_vc_scan_ns;
