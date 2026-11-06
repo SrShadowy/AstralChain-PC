@@ -44,7 +44,8 @@ O ciclo de preparação do jogo é orquestrado por scripts Python e utilitários
 
 ### B. Aplicação de Patches Pchtxt
 Antes da etapa de tradução, modificações binárias pontuais são aplicadas ao executável `main` descompactado:
-- **Dynamic-FPS (`1.0.1.pchtxt`)**: Desvincula a taxa de atualização da física interna, permitindo taxa de quadros alvo de 60 FPS com passo de tempo medido pelo frame real. (O teto de ~60 FPS e o caminho para 144 estão documentados em [`docs/fps-cap-144.md`](fps-cap-144.md).)
+- **Dynamic-FPS (`1.0.1.pchtxt`)**: Desvincula a taxa de atualização da física interna, permitindo taxa de quadros alvo de 60 FPS com passo de tempo medido pelo frame real.
+- **Dynamic-Unlocked (`dynamic-unlocked-1.0.1.pchtxt`)**: opcional (`AC_FPS_UNLOCKED=1`), aplicado depois do Dynamic-FPS. Duas palavras removem o cap de 60 FPS do mod, deixando o passo medido valer de 15 a 480 FPS. Detalhes em [`docs/fps-cap-144.md`](fps-cap-144.md).
 - **Cutscene-Catchup (`cutscene-catchup-1.0.1.pchtxt`)**: Permite que cutscenes compensem atrasos pontuais com passos de tempo maiores para preservar sincronização labial e sonora.
 
 ### C. Tradução Estática ARM64 → C (`astral_chain/translator/native_trace.py`)

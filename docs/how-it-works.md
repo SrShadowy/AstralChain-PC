@@ -9,6 +9,9 @@
 2. **Patches.** Two pchtxt patches are applied to `main` before translation:
    - Dynamic-FPS: the measured frame time drives the game step, and the frame cap is 60;
    - `cutscene-catchup`: cutscenes may take larger steps after a stall, so they stay in sync with their audio.
+
+   With `AC_FPS_UNLOCKED=1` a third, two-word patch (`dynamic-unlocked-1.0.1.pchtxt`) is applied between
+   them: it flips the cap (`mov w1,#1` → `mov w1,#0`), and the game keeps its own measured step at any rate.
 3. **Translation** (`native_trace.py`, with LASRecomp's `lifter.py`). Every instruction of the executable segments
    is lifted from ARM64 to C, page by page. A page function `page_XXXX(Cpu *c)` dispatches on the guest PC. The
    play build uses three options:

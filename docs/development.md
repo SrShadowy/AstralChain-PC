@@ -137,7 +137,8 @@ O runtime suporta uma série de variáveis de ambiente para controle de performa
 | Variável | Valores / Padrão | Efeito |
 |---|---|---|
 | `AC_PARALLEL` | `1` (padrão) | Executa threads do guest Horizon em paralelo nas threads do host |
-| `AC_FPS` | `60` (padrão) / `0` (ilimitado) / `30..240` | Taxa de quadros alvo do motor e do pacing NVN |
+| `AC_FPS` | `60` (padrão) / `0` (ilimitado) / `1..1000` | Taxa de quadros alvo do motor e do pacing NVN (valor inválido cai no padrão) |
+| `AC_FPS_UNLOCKED` | `0` (padrão) / `1` | Entrada de **build**: aplica `dynamic-unlocked-1.0.1.pchtxt` e remove o cap de 60 FPS do patch Dynamic-FPS. Mudar o valor reconstrói (o launcher cuida disso) |
 | `AC_ASYNC_SUBMIT` | `1` (launcher) | Submete comandos gráficos e fences em uma thread dedicada do backend Vulkan |
 | `AC_CUTSCENE_FPS` | `60` (padrão) / `30` | `30` roda cutscenes no passo original; `60` utiliza o patch de Dynamic-FPS |
 | `AC_GPU_HANG_MS` | `1200` (ms) | Tempo limite antes de acionar o watchdog interno e encerrar o jogo por travamento de GPU |
