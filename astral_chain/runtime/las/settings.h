@@ -7,14 +7,14 @@
 enum { UPSCALE_BILINEAR = 0, UPSCALE_METALFX = 1, UPSCALE_FSR1 = 2 };
 enum { AA_OFF = 0, AA_SMAA = 1 };
 // [extra] Language definitions and Settings struct // [extra]
-enum { LANG_AUTO = 0, N_LANGUAGES = 12 };
+enum { LANG_AUTO = 0, N_LANGUAGES = 13 }; // [extra]
 static const char *const g_language_codes[N_LANGUAGES] = {
-    "auto", "ja", "en-US", "es", "fr", "de", "it", "nl", "ru", "ko", "zh-CN", "zh-TW"
+    "auto", "ja", "en-US", "es", "fr", "de", "it", "nl", "ru", "ko", "zh-CN", "zh-TW", "pt-BR" // [extra]
 };
 static const char *const g_language_names[N_LANGUAGES] = {
-    "Auto", "Japonês", "Inglês", "Espanhol", "Francês", "Alemão", "Italiano", "Holandês", "Russo", "Coreano", "Chinês Simplificado", "Chinês Tradicional"
+    "Auto", "Japonês", "Inglês", "Espanhol", "Francês", "Alemão", "Italiano", "Holandês", "Russo", "Coreano", "Chinês Simplificado", "Chinês Tradicional", "Português (Brasil)" // [extra]
 };
-typedef struct { int antialias, fullscreen, upscaler, language; } Settings; // [extra]
+typedef struct { int antialias, fullscreen, upscaler, language, voice_language; } Settings; // [extra]
 extern Settings g_settings;
 // [extra] Language helpers for overlay menu and runtime // [extra]
 static inline const char *settings_language(void) {
@@ -32,6 +32,7 @@ static inline const char *settings_language(void) {
     if (!loc || !*loc) loc = getenv("LANG");
     if (loc && *loc) {
         if (!strncmp(loc, "ja", 2)) return "ja";
+        if (!strncmp(loc, "pt", 2)) return "pt-BR"; // [extra]
         if (!strncmp(loc, "es", 2)) return "es";
         if (!strncmp(loc, "fr", 2)) return "fr";
         if (!strncmp(loc, "de", 2)) return "de";
@@ -58,6 +59,11 @@ static inline void settings_save(void) {
     fprintf(f, "# Astral Chain settings\n");
     int idx = g_settings.language >= 0 && g_settings.language < N_LANGUAGES ? g_settings.language : 0;
     fprintf(f, "language = %s\n", g_language_codes[idx]);
+    // [extra]
+    static const char *const vlangs[] = {"auto", "ja", "en"};
+    int vidx = g_settings.voice_language >= 0 && g_settings.voice_language <= 2 ? g_settings.voice_language : 0;
+    fprintf(f, "voice_language = %s\n", vlangs[vidx]);
+    // [extra]
     fclose(f);
 } // [extra]
 static inline void settings_load(void) { // [extra]
@@ -82,6 +88,10 @@ static inline void settings_load(void) { // [extra]
                     if (!strcmp(val, g_language_codes[i])) { g_settings.language = i; break; }
                 }
             }
+            // [extra]
+            else if (sscanf(line, " %31[^= ] = %63[^\n]", key, val) == 2 && !strcmp(key, "voice_language")) {
+                g_settings.voice_language = !strcmp(val, "ja") ? 1 : !strcmp(val, "en") ? 2 : 0;
+            } // [extra]
         }
         fclose(f);
     }
@@ -92,4 +102,13 @@ static inline void settings_load(void) { // [extra]
             if (!strcmp(lang, g_language_codes[i])) { g_settings.language = i; break; }
         }
     } // [extra]
+    // [extra]
+    const char *vlang = getenv("AC_VOICE_LANGUAGE");
+    if (!vlang || !*vlang) vlang = getenv("LARECOMP_VOICE_LANG");
+    if (vlang && *vlang) {
+        if (!strcmp(vlang, "ja") || !strcmp(vlang, "jpn") || !strcmp(vlang, "1")) g_settings.voice_language = 1;
+        else if (!strcmp(vlang, "en") || !strcmp(vlang, "usa") || !strcmp(vlang, "2")) g_settings.voice_language = 2;
+        else g_settings.voice_language = 0;
+    }
+    // [extra]
 } // [extra]

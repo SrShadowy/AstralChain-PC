@@ -36,6 +36,7 @@ static inline uint64_t resolve_system_language(uint64_t fallback) {
             if (!loc || !*loc) loc = getenv("LANG");
             if (loc && *loc) {
                 if (!strncmp(loc, "ja", 2)) env_lang = "ja";
+                else if (!strncmp(loc, "pt", 2)) env_lang = "en-US"; // [extra]
                 else if (!strncmp(loc, "es", 2)) env_lang = "es";
                 else if (!strncmp(loc, "fr", 2)) env_lang = "fr";
                 else if (!strncmp(loc, "de", 2)) env_lang = "de";
@@ -48,6 +49,11 @@ static inline uint64_t resolve_system_language(uint64_t fallback) {
         }
     }
     if (env_lang && *env_lang && strcmp(env_lang, "auto") != 0) {
+        // [extra]
+        if (!strcmp(env_lang, "pt-BR") || !strcmp(env_lang, "pt") || !strncmp(env_lang, "pt_", 3)) {
+            env_lang = "en-US"; // Virtual language: guest engine uses Western/English base slot
+        }
+        // [extra]
         uint64_t code = 0;
         for (int i = 0; env_lang[i] && i < 8; i++) {
             code |= ((uint64_t)(uint8_t)env_lang[i]) << (i * 8);

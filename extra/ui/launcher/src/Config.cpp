@@ -55,6 +55,7 @@ void Config::load()
     m_game.asyncSubmit = s.value("async_submit", true).toBool();
     m_game.buttonPrompts = s.value("button_prompts", "auto").toString();
     m_game.language = s.value("language", "auto").toString();
+    m_game.voiceLanguage = s.value("voice_language", "auto").toString();
     m_game.commandWrapper = s.value("command_wrapper", "").toString();
     m_game.customEnv = s.value("custom_env", "").toString();
     s.endGroup();
@@ -114,6 +115,7 @@ void Config::save()
     s.setValue("async_submit", m_game.asyncSubmit);
     s.setValue("button_prompts", m_game.buttonPrompts);
     s.setValue("language", m_game.language);
+    s.setValue("voice_language", m_game.voiceLanguage);
     s.setValue("command_wrapper", m_game.commandWrapper);
     s.setValue("custom_env", m_game.customEnv);
     s.endGroup();
@@ -205,6 +207,10 @@ QString Config::buildLaunchEnv() const
     if (!m_game.language.isEmpty()) {
         env << QString("AC_LANGUAGE=%1").arg(m_game.language);
         env << QString("LARECOMP_LANG=%1").arg(m_game.language);
+    }
+    if (!m_game.voiceLanguage.isEmpty()) {
+        env << QString("AC_VOICE_LANGUAGE=%1").arg(m_game.voiceLanguage);
+        env << QString("LARECOMP_VOICE_LANG=%1").arg(m_game.voiceLanguage);
     }
     env << QString("AC_MOUSE_SENS=%1").arg((int)m_mouse.sensitivity);
     if (m_mouse.yScale != MouseSettings::kDefaultYScale) env << QString("AC_MOUSE_YSCALE=%1").arg(m_mouse.yScale);

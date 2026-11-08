@@ -14,6 +14,9 @@ static void romfs_open(void) {
   boundary("romfs-backing-identity-mismatch",&state,state.pc);
  romfs_size=(uint64_t)size.QuadPart;
  printf("ROMFS opened read-only size=%llu\n",(unsigned long long)romfs_size);
+ // [extra]
+ extra_romfs_overlay_init((void*)romfs_file, &romfs_size);
+ // [extra]
 #else
  boundary("missing-romfs-image",&state,state.pc);
 #endif
@@ -29,6 +32,7 @@ static void romfs_read(uint64_t offset,uint64_t length,uint64_t address) {
  if(!length) return;
  uint64_t t0=rt_ticks();
  guest_io_prepare(address,length);
+ if (extra_romfs_overlay_read((void*)romfs_file, offset, length, (void*)(uintptr_t)address)) return; // [extra]
  LARGE_INTEGER position;position.QuadPart=(LONGLONG)offset;DWORD read=0;
  if(!SetFilePointerEx(romfs_file,position,NULL,FILE_BEGIN) || !ReadFile(romfs_file,(void*)(uintptr_t)address,(DWORD)length,&read,NULL) || read!=length)
   boundary("romfs-read-failed",&state,state.pc);

@@ -18,7 +18,7 @@ struct Settings {
     std::atomic<bool> show_difficulty{true};
     std::atomic<bool> show_time{true};
     std::atomic<bool> window_open{false};
-    std::string client_id = "1346000000000000000";
+    std::string client_id = "1568955734606086196";
 };
 
 Settings& GetSettings();

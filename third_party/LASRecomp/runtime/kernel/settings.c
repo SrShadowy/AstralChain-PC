@@ -33,10 +33,10 @@ Settings g_settings = {
 // regionJP/JPja, regionKR/KRkr, regionTW/TWch, regionCN/CNch), and the game picks one from the system language it
 // reads back (runtime/services/am.c), exactly as it does on the console. Codes as the Switch reports them.
 const char *const g_language_codes[N_LANGUAGES] = {"auto", "ja", "en-US", "es", "fr", "de", "it", "nl", "ru", "ko",
-                                                   "zh-CN", "zh-TW"};
+                                                   "zh-CN", "zh-TW", "pt-BR"}; // [extra]
 const char *const g_language_names[N_LANGUAGES] = {"Auto", "Japanese", "English", "Spanish", "French", "German",
                                                    "Italian", "Dutch", "Russian", "Korean", "Chinese (Simplified)",
-                                                   "Chinese (Traditional)"};
+                                                   "Chinese (Traditional)", "Português (Brasil)"}; // [extra]
 
 // LANG_AUTO: the host's own language (LANG=es_ES.UTF-8 -> es), en-US when it is none of the game's. Linux only:
 // macOS / Windows apps get no locale variables from the system, so Auto is English there (pick one in settings).
@@ -52,7 +52,7 @@ static const char *host_language(void) {
     size_t n = 0;
     for (const char *p = e; *p && *p != '.' && *p != '@' && *p != '_' && n < sizeof l - 1; p++) l[n++] = *p;
     static const struct { const char *loc, *code; } map[] = {{"ja", "ja"}, {"ko", "ko"}, {"ru", "ru"}, {"nl", "nl"},
-                                                             {"de", "de"}, {"it", "it"}, {"fr", "fr"}, {"es", "es"}};
+                                                             {"de", "de"}, {"it", "it"}, {"fr", "fr"}, {"es", "es"}, {"pt", "pt-BR"}}; // [extra]
     for (size_t i = 0; i < sizeof map / sizeof *map; i++)
         if (!strcmp(l, map[i].loc)) return map[i].code;
     if (!strcmp(l, "zh")) return e[n] == '_' && e[n + 1] == 'T' ? "zh-TW" : "zh-CN";  // (TW / HK: traditional)
@@ -124,6 +124,9 @@ void settings_load(void) {
             for (int i = 1; i < N_LANGUAGES; i++)
                 if (!strcmp(val, g_language_codes[i])) g_settings.language = i;
         }
+        else if (!strcmp(key, "voice_language")) { // [extra]
+            g_settings.voice_language = !strcmp(val, "ja") ? 1 : !strcmp(val, "en") ? 2 : 0;
+        } // [extra]
         else if (!strcmp(key, "tracker")) g_settings.tracker = atoi(val) != 0;
         else if (!strcmp(key, "menu_tip_seen")) g_settings.menu_tip_seen = atoi(val) != 0, tip_key = true;
         else if (!strcmp(key, "aspect_asked")) g_settings.aspect_asked = atoi(val) != 0, aspect_key = true;
@@ -161,6 +164,15 @@ void settings_load(void) {
             }
         }
     } // [extra]
+    // [extra]
+    const char *evl = getenv("AC_VOICE_LANGUAGE");
+    if (!evl || !*evl) evl = getenv("LARECOMP_VOICE_LANG");
+    if (evl && *evl) {
+        if (!strcmp(evl, "ja") || !strcmp(evl, "jpn") || !strcmp(evl, "1")) g_settings.voice_language = 1;
+        else if (!strcmp(evl, "en") || !strcmp(evl, "usa") || !strcmp(evl, "2")) g_settings.voice_language = 2;
+        else g_settings.voice_language = 0;
+    }
+    // [extra]
     LOG("[settings] loaded %s\n", SETTINGS_FILE);
 }
 
@@ -191,6 +203,11 @@ void settings_save(void) {
     fprintf(f, "mirror_mode = %d\n", g_settings.mirror_mode);
     fprintf(f, "language = %s\n", g_language_codes[g_settings.language > LANG_AUTO && g_settings.language < N_LANGUAGES
                                                      ? g_settings.language : LANG_AUTO]);
+    // [extra]
+    static const char *const vlangs[] = {"auto", "ja", "en"};
+    int vidx = g_settings.voice_language >= 0 && g_settings.voice_language <= 2 ? g_settings.voice_language : 0;
+    fprintf(f, "voice_language = %s\n", vlangs[vidx]);
+    // [extra]
     fprintf(f, "tracker = %d\n", g_settings.tracker);
     fprintf(f, "aspect_asked = %d\n", g_settings.aspect_asked);
     fprintf(f, "menu_tip_seen = %d\n", g_settings.menu_tip_seen);

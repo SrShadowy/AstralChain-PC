@@ -24,6 +24,7 @@ title.keys
 # User Data, Saves & Shaders (Saves, logs, launcher config, captures)
 # ==============================================================================
 /userdata/
+/mods/
 /cache/
 /frames/
 frame_*.png

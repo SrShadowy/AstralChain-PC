@@ -91,6 +91,9 @@ O repositório foi reorganizado em pastas por domínio/módulo, sem alteração 
 | `astral_chain/runtime/kernel/heap_memory.h` | `snapshot`/`query`/`resize_heap` | `kernel/heap_memory.h` | Módulo dedicado de gestão de heap hóspede e query de mapeamentos virtuais sem constantes mágicas | 278 lines |
 | `astral_chain/runtime/services/ipc_session.h` | tabelas e handles IPC | `services/ipc_session.h` | Tipos, ciclo de vida de sessões e empacotamento de respostas CMIF com partições explícitas de handles | 240 lines |
 | `astral_chain/runtime/services/ipc_dispatch.h` | roteamento CMIF | `services/ipc_dispatch.h` | Despacho de mensagens IPC e roteamento de comandos de serviços Switch legível e sem números mágicos | 650 lines |
+| `astral_chain/runtime/services/ipc_dispatch.h` | `resolve_system_language` | `services/ipc_dispatch.h` | Mapeamento virtual de pt-BR para slot en-US (renderizador latino) | 6 lines |
+| `astral_chain/runtime/storage/romfs_storage.h` | `extra_romfs_overlay_init` / `extra_romfs_overlay_read` | `extra/storage/romfs_overlay.h` | LayeredFS virtual não-destrutivo para mods/traducao_ptbr e mods/ | 5 lines |
+| `third_party/LASRecomp/runtime/kernel/settings.c` | `voice_language` e `pt-BR` | `third_party/LASRecomp/runtime/kernel/settings.c` | Suporte a idioma virtual pt-BR e persistência de dublagem | 22 lines |
 | `astral_chain/runtime/kernel/svc_dispatch.h` | `rt_svc`/`rt_svc_body` | `kernel/svc_dispatch.h` | Despachante central de chamadas de supervisor (SVC) e frame pacing descompactado e legível | 420 lines |
 
 ---
@@ -546,13 +549,13 @@ O repositório foi reorganizado em pastas por domínio/módulo, sem alteração 
      - Formatação compacta em linhas de até 100 caracteres mantendo o arquivo gerado em 161 linhas (meta ideal ≤ 300 linhas).
   2. **Agregador de Dados de Jogo (`extra/rpc/ac_game_data.h` / `.cpp`)**:
      - Leitura segura de memória guest (`ac_reinfo_probe.c`), resolução de IDs de área, missão, file, boss e dificuldade, cálculo de tempo de sessão decorrido e total de playtime do save.
-     - Formatação determinística de payloads de atividade e prévia (`ActivityDisplay`).
+     - Formatação determinística de payloads de atividade e prévia (`ActivityDisplay`), com resolução dinâmica de asset keys para o Discord: `large_image` mapeia para as 22 áreas do jogo (`01_hypermegafloat_ark`, etc.) e `small_image` mapeia para o capítulo atual (`file_01` a `file_11`), mantendo fallbacks para `astral_chain_logo` e `neuron_badge`.
   3. **Cliente Discord IPC Linux Nativo (`extra/rpc/ac_discord_rpc.h` / `.cpp`)**:
      - Conexão direta a sockets de domínio UNIX (`AF_UNIX`) cobrindo `$XDG_RUNTIME_DIR/discord-ipc-0..9`, caminhos Flatpak, Discord Canary, `/run/user/<uid>/` e `/tmp/`.
      - Worker thread em background não-bloqueante com auto-reconexão, handshake (opcode 0) e envio periódico de `SET_ACTIVITY` (opcode 1).
   4. **Overlay ImGui & Card de Prévia em Tempo Real (`extra/ui/overlay/ac_overlay_rpc.h` / `.cpp`)**:
      - Seção no menu principal (Insert) com indicador de status colorido (Verde = Conectado, Amarelo = Procurando, Cinza = Desativado) e botão para abrir a janela dedicada.
-     - Janela de configuração com opções granulares: Exibir Arquivo/Capítulo, Exibir Caso/Missão, Exibir Dificuldade, Exibir Área, Exibir Boss, Exibir Tempo e personalização de Client ID.
+     - Janela de configuração com opções granulares: Exibir Arquivo/Capítulo, Exibir Caso/Missão, Exibir Dificuldade, Exibir Área, Exibir Boss, Exibir Tempo e personalização de Client ID (padrão oficial `1568955734606086196` com override via `AC_DISCORD_CLIENT_ID`).
      - **Card de Prévia ao Vivo do Discord**: child box estilizado na paleta escura do Discord (`#121315`), com badge customizada 50x50 com contorno teal e texto "AC", título "Astral Chain", e linhas de detalhes/estado/tempo atualizadas em tempo real conforme as opções e o estado do jogo mudam.
   5. **Integração**:
      - `extra/ui/overlay/ac_menu.cpp`: adicionada `section_discord` e altura padrão ajustada para 720 px.
@@ -633,4 +636,27 @@ O repositório foi reorganizado em pastas por domínio/módulo, sem alteração 
   - `./extra/tools/audit.sh`: 100% aprovado nas 8 etapas (marcadores, limites ≤ 400 linhas, compilação do launcher Qt6 e 5 autotestes).
   - `.venv/bin/python -m astral_chain.build.setup_game --rebuild-if-stale`: Compilação e link do executável nativo `build/game/round-00/trace` aprovados em 11.1s.
   - `SKIP_RUNTIME=1 ./extra/tools/qa_runner.sh`: 100% aprovado.
+
+#### 24. Suporte a Idioma Virtual (Português do Brasil) e Seletor de Idioma de Dublagem / Vozes
+- **Objetivo**: Implementar suporte a idioma virtual para Português (Brasil) (pt-BR) através de overlay não-destrutivo do RomFS (sem modificar os dados originais do jogo) e adicionar opção de idioma das vozes / dublagem (Automático, Japonês, Inglês) no Launcher Qt6 e no menu in-game (Insert).
+- **Mecanismo de Idioma Virtual (`pt-BR`)**:
+  - Como o Astral Chain original para Switch não possui suporte nativo ao código `pt-BR`, expor o código diretamente causaria fallback para japonês ou falha de inicialização.
+  - Implementado mapeamento transparente em `resolve_system_language()` (`astral_chain/runtime/services/ipc_dispatch.h`): quando `pt-BR` ou `pt` é selecionado, o Switch guest recebe o slot de linguagem base `en-US` (modo texto latino ocidental com suporte a acentuação UTF-8: `ç`, `ã`, `é`, `ó`).
+  - Implementado interceptador e LayeredFS de RomFS não-destrutivo em `extra/storage/romfs_overlay.h` (`extra_romfs_overlay_init()` e `extra_romfs_overlay_read()`), conectado via hooks pontuais em `astral_chain/runtime/storage/romfs_storage.h`. Ele inspeciona a tabela `file_meta` no boot, mapeia arquivos de substituição em `mods/traducao_ptbr/` e `mods/` (como `Text/Text.pkz` e `ui/ui.pkz`), atualiza os offsets virtuais e serve os dados substituídos sem tocar em nenhum byte da imagem física `game/romfs.bin`.
+- **Seletor e Controle de Dublagem / Vozes (Voice Language)**:
+  - Engenharia reversa no binário do jogo (`main`) identificou o subsistema de áudio Wwise e as estruturas de opções:
+    - `OptionManager::SetVoiceLanguage` (`main+0x8e1a40`): lê/escreve a opção de voz através do ponteiro relocável em `AC_MAIN_BASE + 0xdc13b0` (que aponta para `0xdafb14`: `0` = Japonês `"Japanese"`, `1` = Inglês `"English(US)"`, `-1` = Automático).
+    - Sinaliza `dirty flag 1` em `*[AC_MAIN_BASE + 0xdc13b8]` (aponta para `0xcca5974`) e `dirty flag 2` em `*[AC_MAIN_BASE + 0xdc13c0]` (aponta para `0xcca5978`).
+    - No loop principal por frame (`main+0x8ef3e0`), ao detectar `dirty flag 2 == 1`, a função `main+0x9cb820` é disparada chamando diretamente `AK::StreamMgr::SetCurrentLanguage()` com a tabela de strings Wwise em `0xdb5da0`, recarregando os bancos sonoros (`sound/Japanese/vo_*.bnk` ou `sound/English(US)/vo_*.bnk`) e limpando a flag.
+    - Idioma ativo do motor sonoro é exposto em `*[AC_MAIN_BASE + 0xdc2908]` (aponta para `0xdb5cb0`). O slot `*[AC_MAIN_BASE + 0xdc26f8]` governa o idioma mestre dos textos do sistema e é mantido intacto para preservar legendas e interface em português/inglês.
+  - Implementado `extra_get_guest_voice_language()` e `extra_set_guest_voice_language()` em `extra/ui/overlay/ac_reinfo_probe.c` manipulando exclusivamente os ponteiros de dublagem (`0xdc13b0`) e acionando as dirty flags (`0xdc13b8`, `0xdc13c0`) para recarregar o banco de som Wwise sem interferir no texto/UI.
+  - Implementado monitoramento de boot em `apply_boot_voice_language()` (`ac_overlay.cpp`), garantindo que a preferência do usuário (ex: Japonês) persista mesmo que o jogo reinicialize opções durante os primeiros frames de carregamento.
+- **Configuração no Launcher Qt6 e Menu In-Game**:
+  - `extra/ui/launcher/include/Config.hpp` e `Config.cpp`: campo `voiceLanguage` ("auto", "ja", "en"), persistência em `userdata/launcher.ini`, e variáveis de ambiente `AC_VOICE_LANGUAGE` e `LARECOMP_VOICE_LANG`.
+  - `extra/ui/launcher/src/SettingsDialog.cpp`: combobox de vozes ("Automático (Segue o Idioma do Texto)", "Japonês", "Inglês") e opção "Português (Brasil) [Tradução]" no combobox de idiomas.
+  - `extra/ui/overlay/ac_menu.cpp`: combo "Idioma das Vozes" na seção "Jogo & Idioma" com alteração imediata da memória guest do jogo e persistência em `larecomp.ini`.
+- **Verificação**:
+  - `./extra/tools/audit.sh`: 100% aprovado nas 8 etapas (marcadores, limites ≤ 400 linhas, compilação do launcher Qt6 e todos os testes).
+  - `python3 -m astral_chain.build.setup_game --rebuild-if-stale`: Fast-Relink concluído com sucesso e executável nativo atualizado.
+
 

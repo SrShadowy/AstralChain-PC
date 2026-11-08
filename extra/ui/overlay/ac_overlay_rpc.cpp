@@ -130,7 +130,7 @@ void RenderWindow() {
     }
     ImGui::SameLine();
     if (ImGui::Button("Padrão (Astral Chain)")) {
-        s.client_id = "1346000000000000000";
+        s.client_id = "1568955734606086196";
     }
     Hint("ID da aplicação Discord. Permite apontar para sua própria aplicação de Rich Presence no Developer Portal.");
 

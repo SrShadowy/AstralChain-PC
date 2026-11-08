@@ -15,6 +15,7 @@
 #include "extra/gpu/vulkan_trampoline.h"
 #include "extra/sdl/audio_trampoline.h"
 #include "extra/storage/storage_trampoline.h"
+#include "extra/storage/romfs_overlay.h"
 #include "extra/storage/find_trampoline.h"
 #include "extra/platform/time_trampoline.h"
 #include "extra/ui/font_trampoline.h"

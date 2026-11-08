@@ -55,6 +55,7 @@ struct GameSettings {
     bool asyncSubmit{true};
     QString buttonPrompts{"auto"};
     QString language{"auto"};
+    QString voiceLanguage{"auto"};
     QString commandWrapper{""};
     QString customEnv{""};
 };

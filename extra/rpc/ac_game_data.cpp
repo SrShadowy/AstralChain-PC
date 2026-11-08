@@ -201,6 +201,38 @@ ActivityDisplay FormatActivity(const PresenceSnapshot& snap, bool show_file, boo
         return act;
     }
 
+    // Dynamic location for large_image
+    static const struct { unsigned id; const char* key; } k_area_keys[] = {
+        {0x5000, "01_hypermegafloat_ark"}, {0x5010, "02_astral_plane"},
+        {0x5100, "03_restricted_district"}, {0x5110, "04_aegis_research_institute"},
+        {0x5120, "05_zone_09"}, {0x5130, "06_sector_v"},
+        {0x5140, "07_zone_10"}, {0x5150, "08_ark_police_headquarters"},
+        {0x5160, "09_special_ops_bureau_hq"}, {0x5170, "10_zone_30"},
+        {0x5180, "11_maison_forest"}, {0x5190, "12_zone_32"},
+        {0x51a0, "13_ark_mall"}, {0x51b0, "14_zone_33"},
+        {0x51c0, "15_harmony_square"}, {0x51d0, "16_harmony_square_station"},
+        {0x51e0, "17_zone_36"}, {0x51f0, "18_central_city"},
+        {0x5200, "19_eastside_highway"}, {0x5210, "20_rayleigh_plaza"},
+        {0x5220, "21_grand_avenue"}, {0x5230, "22_ark_sewer_management"}
+    };
+    for (const auto& ak : k_area_keys) {
+        if (ak.id == snap.area_id) {
+            act.large_image = ak.key;
+            if (!snap.area_name.empty()) act.large_text = snap.area_name;
+            break;
+        }
+    }
+
+    // File / Chapter for small_image
+    if (snap.file_num >= 1 && snap.file_num <= 11) {
+        char fkey[16];
+        std::snprintf(fkey, sizeof fkey, "file_%02u", snap.file_num);
+        act.small_image = fkey;
+        char ftitle[32];
+        std::snprintf(ftitle, sizeof ftitle, "File %02u", snap.file_num);
+        act.small_text = ftitle;
+    }
+
     // Details Line: File / Chapter + Mission or Difficulty
     std::string d;
     if (show_file && snap.file_num > 0) {

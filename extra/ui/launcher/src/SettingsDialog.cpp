@@ -66,6 +66,7 @@ QWidget* SettingsDialog::createGameTab()
 
     m_languageCombo = new QComboBox(page);
     m_languageCombo->addItem("Automático (Padrão do Sistema / Host)", "auto");
+    m_languageCombo->addItem("Português (Brasil) [Tradução]", "pt-BR");
     m_languageCombo->addItem("Inglês (en-US)", "en-US");
     m_languageCombo->addItem("Japonês (ja)", "ja");
     m_languageCombo->addItem("Espanhol (es)", "es");
@@ -77,7 +78,13 @@ QWidget* SettingsDialog::createGameTab()
     m_languageCombo->addItem("Chinês Tradicional (zh-TW)", "zh-TW");
     m_languageCombo->addItem("Coreano (ko)", "ko");
     m_languageCombo->addItem("Holandês (nl)", "nl");
-    form->addRow("Idioma do Jogo:", m_languageCombo);
+    form->addRow("Idioma dos Textos:", m_languageCombo);
+
+    m_voiceLangCombo = new QComboBox(page);
+    m_voiceLangCombo->addItem("Automático (Acompanha Idioma)", "auto");
+    m_voiceLangCombo->addItem("Japonês (ja)", "ja");
+    m_voiceLangCombo->addItem("Inglês (en)", "en");
+    form->addRow("Idioma das Vozes:", m_voiceLangCombo);
 
     m_mouseWidget = new MouseSettingsWidget(page);
 
@@ -285,6 +292,8 @@ void SettingsDialog::loadFromConfig()
     if (prIdx >= 0) m_promptsCombo->setCurrentIndex(prIdx);
     const int langIdx = m_languageCombo->findData(gm.language);
     if (langIdx >= 0) m_languageCombo->setCurrentIndex(langIdx);
+    const int voiceIdx = m_voiceLangCombo->findData(gm.voiceLanguage);
+    if (voiceIdx >= 0) m_voiceLangCombo->setCurrentIndex(voiceIdx);
 
     if (m_mouseWidget) {
         m_mouseWidget->loadFrom(m_config.mouse());
@@ -322,6 +331,7 @@ void SettingsDialog::writeToConfig()
     gm.ignoreFocus = m_ignoreFocusCheck->isChecked();
     gm.buttonPrompts = m_promptsCombo->currentData().toString();
     gm.language = m_languageCombo->currentData().toString();
+    gm.voiceLanguage = m_voiceLangCombo->currentData().toString();
     gm.bc7Precompute = m_bc7Check->isChecked();
     gm.forceShaders = m_forceShadersCheck->isChecked();
     gm.verboseLog = m_verboseLogCheck->isChecked();

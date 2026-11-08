@@ -225,6 +225,9 @@ static void section_graphics(void) {
     ImGui::TextDisabled("VSync aplica ao vivo; demais itens valem no proximo frame.");
 }
 
+extern "C" int extra_get_guest_voice_language(void);
+extern "C" void extra_set_guest_voice_language(int voice_lang);
+
 static void section_game(void) {
     if (!ImGui::CollapsingHeader("Jogo & Idioma", ImGuiTreeNodeFlags_DefaultOpen)) return;
 
@@ -240,16 +243,34 @@ static void section_game(void) {
         "Russo (ru)\0"
         "Coreano (ko)\0"
         "Chines Simplificado (zh-CN)\0"
-        "Chines Tradicional (zh-TW)\0";
+        "Chines Tradicional (zh-TW)\0"
+        "Portugues (Brasil) (pt-BR)\0";
 
     int cur_lang = (g_settings.language >= 0 && g_settings.language < N_LANGUAGES) ? g_settings.language : 0;
-    if (ImGui::Combo("Idioma do Jogo", &cur_lang, lang_items)) {
+    if (ImGui::Combo("Idioma dos Textos", &cur_lang, lang_items)) {
         g_settings.language = cur_lang;
         settings_save();
         printf("[overlay] idioma -> %s (%s)\n", g_language_codes[cur_lang], g_language_names[cur_lang]);
     }
     ImGui::TextDisabled("Ativo: %s (%s)", settings_language(), settings_language_name());
     ImGui::TextDisabled("Textos carregam no boot; reinicie o jogo para aplicar.");
+
+    ImGui::Spacing();
+    static const char *const voice_items =
+        "Auto (Acompanha Idioma)\0"
+        "Japones (ja)\0"
+        "Ingles (en-US)\0";
+    int cur_voice = (g_settings.voice_language >= 0 && g_settings.voice_language <= 2) ? g_settings.voice_language : 0;
+    if (ImGui::Combo("Idioma das Vozes", &cur_voice, voice_items)) {
+        g_settings.voice_language = cur_voice;
+        settings_save();
+        if (cur_voice == 1) extra_set_guest_voice_language(0);
+        else if (cur_voice == 2) extra_set_guest_voice_language(1);
+        else if (cur_voice == 0) extra_set_guest_voice_language(-1);
+        printf("[overlay] vozes -> %s\n", cur_voice == 1 ? "ja" : cur_voice == 2 ? "en" : "auto");
+    }
+    int g_v = extra_get_guest_voice_language();
+    ImGui::TextDisabled("Vozes no motor: %s", g_v == 0 ? "Japones (ja)" : g_v == 1 ? "Ingles (en-US)" : "Aguardando boot");
 }
 
 static void section_debug(void) {

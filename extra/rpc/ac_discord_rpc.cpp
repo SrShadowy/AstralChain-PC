@@ -201,6 +201,10 @@ Settings& GetSettings() {
 
 void Init() {
     if (g_running.exchange(true)) return;
+    const char* env_cid = std::getenv("AC_DISCORD_CLIENT_ID");
+    if (env_cid && *env_cid) {
+        g_settings.client_id = env_cid;
+    }
     AcGameData::Init();
     g_stop_flag.store(false);
     g_worker = std::thread(WorkerLoop);
