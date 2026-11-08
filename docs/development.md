@@ -144,6 +144,7 @@ O runtime suporta uma série de variáveis de ambiente para controle de performa
 | `AC_GPU_HANG_MS` | `1200` (ms) | Tempo limite antes de acionar o watchdog interno e encerrar o jogo por travamento de GPU |
 | `AC_FULLSCREEN` | `1` / `0` | Inicializa a janela em tela cheia sem bordas (borderless fullscreen) |
 | `AC_OVERLAY` | `1` / `0` (padrão) | Inicia com o menu ImGui in-game aberto (o mesmo da tecla **Insert**; útil para validação headless de renderização em conjunto com `LARECOMP_WINDOW_SHOT=<frame>`) |
+| `AC_REINFO` | `1` / `0` (padrão) | Inicia com a janela **RE Info** aberta (a mesma da tecla **F8**): valores ao vivo dos slots de estado do jogo e as tabelas id→nome extraídas do texto. Somente leitura |
 | `AC_HANDHELD` | `1` / `0` | Simula modo portátil do Switch (renderiza 1280x720 recortado para janela 1600x900) |
 | `AC_VERBOSE` | `1` / `0` | Ativa saída verbosa de logs no terminal (padrão enxuto mantido em 0) |
 

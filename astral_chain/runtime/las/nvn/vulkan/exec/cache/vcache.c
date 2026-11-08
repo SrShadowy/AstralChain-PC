@@ -314,15 +314,18 @@ bool guest_direct(uint64_t addr, uint64_t size, VkBuffer *buf, VkDeviceSize *off
     }
     if (copy || addr < HEAP_BASE) return false;
 #ifndef _WIN32 // [extra]
-    // Linux lacks page write tracking (pt_init() false), so device mirror (gmem_buf)
-    // is never refreshed for CPU-written buffers. UI, HUD, text, dynamic quads (small buffers)
-    // must be copied directly from host RAM. Large static meshes stay direct in gmem_buf.
-    static uint64_t min_direct = 0;
-    if (!min_direct) {
-        const char *m = getenv("LARECOMP_VK_DIRECT_MIN_SIZE");
-        min_direct = m ? (uint64_t)strtoull(m, NULL, 0) : (512ull * 1024);
-    }
-    if (size < min_direct) return false;
+    // If page write tracking is unavailable, CPU-written buffers are not mirrored, // [extra]
+    // so small dynamic buffers must be copied from host RAM.
+    // When pt_init() is active (userfaultfd / soft-dirty), gmem_sync mirrors dirty pages,
+    // enabling direct zero-copy VRAM binding across all sizes.
+    if (!pt_init()) {
+        static uint64_t min_direct = 0;
+        if (!min_direct) {
+            const char *m = getenv("LARECOMP_VK_DIRECT_MIN_SIZE");
+            min_direct = m ? (uint64_t)strtoull(m, NULL, 0) : (512ull * 1024);
+        }
+        if (size < min_direct) return false;
+    } // [extra]
 #endif // [extra]
     if (!gmem_ensure_size(addr, size)) return false;
     gmem_interest(addr, size);

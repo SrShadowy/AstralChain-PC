@@ -36,16 +36,16 @@ void MainWindow::setupUi()
 
     leftLayout->addSpacing(18);
 
-    m_playBtn = new CustomButton("▶  PLAY", m_sidePanel, true /* isPrimary */);
+    m_playBtn = new CustomButton("▶  JOGAR", m_sidePanel, true /* isPrimary */);
     m_playBtn->setFixedHeight(52);
     leftLayout->addWidget(m_playBtn);
     leftLayout->addSpacing(10);
 
-    m_diagBtn = new CustomButton("  Play (Diagnostics)", m_sidePanel);
-    m_setupBtn = new CustomButton("  Setup Game", m_sidePanel);
-    m_shadersBtn = new CustomButton("  Compile Shaders", m_sidePanel);
-    m_settingsBtn = new CustomButton("  Settings", m_sidePanel);
-    m_controlsBtn = new CustomButton("  Controls", m_sidePanel);
+    m_diagBtn = new CustomButton("  Jogar (Diagnósticos)", m_sidePanel);
+    m_setupBtn = new CustomButton("  Configurar Jogo", m_sidePanel);
+    m_shadersBtn = new CustomButton("  Compilar Shaders", m_sidePanel);
+    m_settingsBtn = new CustomButton("  Configurações", m_sidePanel);
+    m_controlsBtn = new CustomButton("  Controles", m_sidePanel);
 
     for (auto* btn : {m_diagBtn, m_setupBtn, m_shadersBtn, m_settingsBtn, m_controlsBtn}) {
         btn->setFixedHeight(42);
@@ -70,7 +70,7 @@ void MainWindow::setupUi()
     m_statusDot->setAlignment(Qt::AlignCenter);
     statusRow->addWidget(m_statusDot);
 
-    m_statusLabel = new QLabel("Checking game installation...", rightBox);
+    m_statusLabel = new QLabel("Verificando instalação do jogo...", rightBox);
     m_statusLabel->setObjectName("statusLabel");
     statusRow->addWidget(m_statusLabel);
     statusRow->addStretch();

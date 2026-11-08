@@ -9,11 +9,13 @@
 #include "imgui_impl_sdl3.h"
 
 #include "extra/ui/overlay/ac_overlay.h"
+#include "extra/ui/overlay/ac_overlay_rpc.h"
+#include "extra/ui/overlay/ac_reinfo.h"
 
 extern "C" bool ac_vk_imgui_init(void);
 extern "C" void ac_vk_imgui_new_frame(void);
 extern "C" void ac_vk_imgui_render(void *cmd);
-void ac_menu_frame(void);              // (ac_menu.cpp: needs a live ImGui frame)
+void ac_menu_frame(void);
 void ac_menu_apply_style(void);        // (ac_menu.cpp: bbport dark theme)
 void ac_menu_apply_pending(void);      // (ac_menu.cpp: deferred swapchain work)
 
@@ -79,6 +81,8 @@ extern "C" void ac_overlay_frame(void) {
     ImGui_ImplSDL3_NewFrame();
     ImGui::NewFrame();
     if (s_visible) ac_menu_frame();
+    ac_reinfo_frame();  // [extra] its own window and toggle (AC_REINFO=0 starts closed)
+    AcOverlayRpc::RenderWindow();  // [extra] Discord Rich Presence config and preview card
     ImGui::Render();
     extern void *vk_frame_cmd(void);  // (device/present.c: current submission's command buffer)
     ac_vk_imgui_render(vk_frame_cmd());

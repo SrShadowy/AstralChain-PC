@@ -20,8 +20,8 @@ SettingsDialog::SettingsDialog(Config& config, QWidget* parent)
     : QDialog(parent)
     , m_config(config)
 {
-    setWindowTitle("Astral Chain - Settings");
-    resize(480, 410);
+    setWindowTitle("Astral Chain - Configurações");
+    resize(480, 420);
     setupUi();
     loadFromConfig();
 }
@@ -31,15 +31,15 @@ void SettingsDialog::setupUi()
     auto* mainLayout = new QVBoxLayout(this);
 
     auto* tabs = new QTabWidget(this);
-    tabs->addTab(createGameTab(), "Game");
-    tabs->addTab(createGraphicsTab(), "Graphics");
-    tabs->addTab(createAudioTab(), "Audio");
-    tabs->addTab(createAdvancedTab(), "Advanced");
+    tabs->addTab(createGameTab(), "Jogo");
+    tabs->addTab(createGraphicsTab(), "Gráficos");
+    tabs->addTab(createAudioTab(), "Áudio");
+    tabs->addTab(createAdvancedTab(), "Avançado");
     mainLayout->addWidget(tabs);
 
     auto* buttonLayout = new QHBoxLayout();
-    auto* saveBtn = new QPushButton("Save", this);
-    auto* cancelBtn = new QPushButton("Cancel", this);
+    auto* saveBtn = new QPushButton("Salvar", this);
+    auto* cancelBtn = new QPushButton("Cancelar", this);
     buttonLayout->addStretch();
     buttonLayout->addWidget(saveBtn);
     buttonLayout->addWidget(cancelBtn);
@@ -54,8 +54,8 @@ QWidget* SettingsDialog::createGameTab()
     auto* page = new QWidget(this);
     auto* layout = new QVBoxLayout(page);
 
-    m_parallelCheck = new QCheckBox("Enable Parallel Thread Execution (Recommended)", page);
-    m_ignoreFocusCheck = new QCheckBox("Keep Playing When Window Loses Focus", page);
+    m_parallelCheck = new QCheckBox("Execução Paralela de Threads (Recomendado)", page);
+    m_ignoreFocusCheck = new QCheckBox("Continuar Executando ao Perder o Foco da Janela", page);
 
     auto* form = new QFormLayout();
     m_promptsCombo = new QComboBox(page);
@@ -63,6 +63,21 @@ QWidget* SettingsDialog::createGameTab()
     m_promptsCombo->addItem("Nintendo Switch / Controle (Original)", "switch");
     m_promptsCombo->addItem("Teclado & Mouse (PC)", "keyboard");
     form->addRow("Ícones de Botões (Prompts):", m_promptsCombo);
+
+    m_languageCombo = new QComboBox(page);
+    m_languageCombo->addItem("Automático (Padrão do Sistema / Host)", "auto");
+    m_languageCombo->addItem("Inglês (en-US)", "en-US");
+    m_languageCombo->addItem("Japonês (ja)", "ja");
+    m_languageCombo->addItem("Espanhol (es)", "es");
+    m_languageCombo->addItem("Francês (fr)", "fr");
+    m_languageCombo->addItem("Alemão (de)", "de");
+    m_languageCombo->addItem("Italiano (it)", "it");
+    m_languageCombo->addItem("Russo (ru)", "ru");
+    m_languageCombo->addItem("Chinês Simplificado (zh-CN)", "zh-CN");
+    m_languageCombo->addItem("Chinês Tradicional (zh-TW)", "zh-TW");
+    m_languageCombo->addItem("Coreano (ko)", "ko");
+    m_languageCombo->addItem("Holandês (nl)", "nl");
+    form->addRow("Idioma do Jogo:", m_languageCombo);
 
     m_mouseWidget = new MouseSettingsWidget(page);
 
@@ -82,8 +97,8 @@ QWidget* SettingsDialog::createGraphicsTab()
     m_resolutionCombo = new QComboBox(page);
     m_resolutionCombo->addItems({"1280x720", "1600x900", "1920x1080", "2560x1440", "3840x2160"});
 
-    m_fullscreenCheck = new QCheckBox("Exclusive / Borderless Fullscreen", page);
-    m_vsyncCheck = new QCheckBox("Enable VSync", page);
+    m_fullscreenCheck = new QCheckBox("Tela Cheia Exclusiva / Sem Bordas", page);
+    m_vsyncCheck = new QCheckBox("Ativar VSync", page);
 
     m_presentModeCombo = new QComboBox(page);
     m_presentModeCombo->addItem("Mailbox (Sem Tearing / Baixa Latência - Recomendado)", "mailbox");
@@ -121,7 +136,7 @@ QWidget* SettingsDialog::createGraphicsTab()
         "Target FPS continua sendo a taxa de apresentação (AC_FPS).");
 
     m_scaleCombo = new QComboBox(page);
-    m_scaleCombo->addItems({"0.5x", "0.75x", "1.0x (Native)", "1.25x", "1.5x", "2.0x"});
+    m_scaleCombo->addItems({"0.5x", "0.75x", "1.0x (Nativo)", "1.25x", "1.5x", "2.0x"});
 
     m_upscalerCombo = new QComboBox(page);
     m_upscalerCombo->addItem("Bilinear (Padrão)", "bilinear");
@@ -142,16 +157,16 @@ QWidget* SettingsDialog::createGraphicsTab()
 
     m_noShadowCheck = new QCheckBox("Desativar Sombras (mais FPS)", page);
 
-    layout->addRow("Resolution:", m_resolutionCombo);
+    layout->addRow("Resolução:", m_resolutionCombo);
     layout->addRow("", m_fullscreenCheck);
     layout->addRow("", m_vsyncCheck);
-    layout->addRow("Sync Mode:", m_presentModeCombo);
-    layout->addRow("Target FPS:", m_fpsSpin);
+    layout->addRow("Modo de Sincronização:", m_presentModeCombo);
+    layout->addRow("FPS Alvo:", m_fpsSpin);
     layout->addRow("", m_fpsUnlockedCheck);
-    layout->addRow("Internal Scale:", m_scaleCombo);
+    layout->addRow("Escala de Renderização:", m_scaleCombo);
     layout->addRow("Upscaler:", m_upscalerCombo);
-    layout->addRow("Qualidade de Textura:", m_textureQualityCombo);
-    layout->addRow("Nível de LoD:", m_lodCombo);
+    layout->addRow("Qualidade de Textura (LOD Bias):", m_textureQualityCombo);
+    layout->addRow("Nível de LoD Mínimo:", m_lodCombo);
     layout->addRow("", m_noShadowCheck);
     return page;
 }
@@ -173,9 +188,9 @@ QWidget* SettingsDialog::createAudioTab()
         m_volumeLabel->setText(QString("%1%").arg(val));
     });
 
-    m_muteUnfocusCheck = new QCheckBox("Mute Audio When Unfocused", page);
+    m_muteUnfocusCheck = new QCheckBox("Silenciar Áudio ao Perder o Foco", page);
 
-    layout->addRow("Master Volume:", volLayout);
+    layout->addRow("Volume Principal:", volLayout);
     layout->addRow("", m_muteUnfocusCheck);
     return page;
 }
@@ -185,8 +200,8 @@ QWidget* SettingsDialog::createAdvancedTab()
     auto* page = new QWidget(this);
     auto* layout = new QVBoxLayout(page);
 
-    m_bc7Check = new QCheckBox("Precompute BC7 Textures (Faster in-game loading, takes ~16GB)", page);
-    m_forceShadersCheck = new QCheckBox("Force Full Shader Cache Recompilation On Launch", page);
+    m_bc7Check = new QCheckBox("Pré-computar Texturas BC7 (Carregamento mais rápido, ocupa ~16GB)", page);
+    m_forceShadersCheck = new QCheckBox("Forçar Recompilação Completa de Shaders no Início", page);
     m_verboseLogCheck = new QCheckBox("Habilitar Log Detalhado do Motor (AC_VERBOSE=1)", page);
     m_cutscene30Check = new QCheckBox("Travar Cutscenes em 30 FPS nativo (AC_CUTSCENE_FPS=30 para A/V sync estrito)", page);
     m_asyncSubmitCheck = new QCheckBox("Submissão Gráfica Assíncrona (AC_ASYNC_SUBMIT=1 - Maior FPS)", page);
@@ -200,11 +215,11 @@ QWidget* SettingsDialog::createAdvancedTab()
     auto* form = new QFormLayout();
     m_wrapperEdit = new QLineEdit(page);
     m_wrapperEdit->setPlaceholderText("ex: mangohud, gamemoderun, gamescope");
-    form->addRow("Command Wrapper (Exec):", m_wrapperEdit);
+    form->addRow("Comando Wrapper (Exec / MangoHud / GameMode):", m_wrapperEdit);
 
     m_customEnvEdit = new QLineEdit(page);
     m_customEnvEdit->setPlaceholderText("ex: MANGOHUD=1 RADV_PERFTEST=aco");
-    form->addRow("Variáveis de Ambiente (Env):", m_customEnvEdit);
+    form->addRow("Variáveis de Ambiente Adicionais (Env):", m_customEnvEdit);
     layout->addLayout(form);
 
     layout->addStretch();
@@ -268,6 +283,8 @@ void SettingsDialog::loadFromConfig()
     m_customEnvEdit->setText(gm.customEnv);
     const int prIdx = m_promptsCombo->findData(gm.buttonPrompts);
     if (prIdx >= 0) m_promptsCombo->setCurrentIndex(prIdx);
+    const int langIdx = m_languageCombo->findData(gm.language);
+    if (langIdx >= 0) m_languageCombo->setCurrentIndex(langIdx);
 
     if (m_mouseWidget) {
         m_mouseWidget->loadFrom(m_config.mouse());
@@ -304,6 +321,7 @@ void SettingsDialog::writeToConfig()
     gm.parallelThreads = m_parallelCheck->isChecked();
     gm.ignoreFocus = m_ignoreFocusCheck->isChecked();
     gm.buttonPrompts = m_promptsCombo->currentData().toString();
+    gm.language = m_languageCombo->currentData().toString();
     gm.bc7Precompute = m_bc7Check->isChecked();
     gm.forceShaders = m_forceShadersCheck->isChecked();
     gm.verboseLog = m_verboseLogCheck->isChecked();

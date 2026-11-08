@@ -42,6 +42,7 @@ private:
     QCheckBox* m_parallelCheck{nullptr};
     QCheckBox* m_ignoreFocusCheck{nullptr};
     QComboBox* m_promptsCombo{nullptr};
+    QComboBox* m_languageCombo{nullptr};
     MouseSettingsWidget* m_mouseWidget{nullptr};
 
     // Graphics

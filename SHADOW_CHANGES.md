@@ -57,10 +57,10 @@ O repositório foi reorganizado em pastas por domínio/módulo, sem alteração 
 | `astral_chain/runtime/las/las_compat.h` | `#ifndef _WIN32` | `extra/storage/storage_trampoline.h` | Inclusão de rotinas de compatibilidade POSIX | 4 lines |
 | `astral_chain/translator/native_trace.py` | `run-env.txt` | `run_guarded.sh` | Exportação de backend vinculado e glslang | 4 lines |
 | `astral_chain/runtime/las/nvn/vulkan/exec.c` | `vk_exec_reset` | `exec.c` | Inclusão de `guest_vcopy_flush()` no reset do backend Vulkan | 1 line |
-| `astral_chain/runtime/las/nvn/vulkan/exec/cache/vcache.c` | `guest_direct` (`min_direct`) | `vcache.c` | Fallback adaptativo de buffers dinâmicos de interface (≤ 512 KB) para cópia da RAM do host no Linux | 11 lines |
+| `astral_chain/runtime/las/nvn/vulkan/exec/cache/vcache.c` | `guest_direct` (`min_direct` / `pt_init`) | `vcache.c` | Bypassa fallback de cópia quando write tracking (pt_init) está ativo, permitindo VRAM direta em todos os tamanhos | 15 lines |
 | `astral_chain/runtime/las/nvn/vulkan/exec/cache/gcopy.c` | `guest_copy_flush` | `gcopy.c` | Desacoplamento da invalidação do cache de vértices de atualizações de cbuf | 2 lines |
 | `astral_chain/runtime/las/nvn/vulkan/exec/cache/vcopy.c` | `guest_copy_vtx` | `vcopy.c` | Hash de 64-bit incluindo `size` e correspondência estrita `size == size` | 4 lines |
-| `astral_chain/runtime/las/nvn/vulkan/exec/commands/draw.c` | `draw_` (streams & IB) | `draw.c` | Unificação de chave de cópia para buffers ≤ 512 KB e cópia transiente isolada de índices | 27 lines |
+| `astral_chain/runtime/las/nvn/vulkan/exec/commands/draw.c` | `draw_` (streams & IB) | `draw.c` | Redução do limiar small_max de 1024 para 16 vértices e teto de cópia de 64 KB, liberando bind direto de malhas | 24 lines |
 | `astral_chain/runtime/las/nvn/vulkan/exec/commands/present.c` | `vk_present_draw` / `post_pass` | `present.c` | Sincronização de scissor filter via `ss_forget()` eliminando corte retangular escuro | 7 lines |
 | `astral_chain/runtime/las/nvn/objects.c` | `register_texture` | `objects.c` | Invalidação do gerador de views de textura (`vk_view_gen++`) no registro de pools | 1 line |
 | `astral_chain/runtime/las/nvn/vulkan/textures.c` | `mark_dynamic` | `extra/gpu/vulkan_trampoline.h` | Amostragem FNV para texturas de vídeo dinâmicas | 5 lines |
@@ -77,8 +77,21 @@ O repositório foi reorganizado em pastas por domínio/módulo, sem alteração 
 | `astral_chain/runtime/las/nvn/objects.c` | `aq_enabled` + `#include "extra/toggles/ac_toggles.h"` | `extra/toggles/ac_toggles.h` | Kill switch runtime da submissão assíncrona (A/B de flicker via menu Insert) | 2 lines |
 | `astral_chain/runtime/las/nvn/vulkan/device/swapchain.c` | `dev_present_mode` + include | `extra/toggles/ac_toggles.h` | Override do present mode pela overlay com recriação de swapchain | 3 lines |
 | `astral_chain/runtime/las/nvn/vulkan/device/postprocess.c` | `backend_present` + include | `extra/ui/overlay/ac_overlay.h` | Menu ImGui in-game (Insert): pré-frame (swapchain pendente) e desenho na imagem da janela | 3 lines |
-| `astral_chain/runtime/las/nvn/vulkan/textures.c` | `vk_sampler` (`extra_lod_bias`/`extra_lod_min`/`extra_no_shadow`) + include | `extra/toggles/ac_toggles.h` | Override ao vivo de bias de LOD (qualidade de textura), piso de LoD e desligamento de sombra na montagem de samplers | 6 lines |
 | `astral_chain/runtime/las/game_hooks_neutral.c` | `smaa_area_tex`/`smaa_search_tex`/`smaa_hlsl_src` (stubs removidos) | `nvn/smaa_data.c` | Vendorização do SMAA 1x: os três símbolos deixam os stubs `FATAL` e passam a vir dos dados vendidos | 1 line |
+| `astral_chain/runtime/host_runtime.c.in` | `mapping_generation` / `resize_heap` | `kernel/exclusive_pair.h` | Geração incremental de mapeamentos de memória para cache de validação em operações atômicas | 3 lines |
+| `astral_chain/runtime/gpu/memory_attributes.h` | `update_uncached` | `kernel/exclusive_pair.h` | Invalidação de cache em alteração de atributos de memória não cacheada | 1 line |
+| `astral_chain/runtime/input/shared_memory.h` | `shared_granules` (`SHARED_GRANULE_COUNT`) | `kernel/exclusive_pair.h` / `input/shared_memory.h` | Expansão de grânulos de 64 para 1024 (previne STOP shared-granule-limit em sessões longas) e invalidação de cache | 8 lines |
+| `astral_chain/runtime/kernel/stack_memory.h` | `stack_map` / `stack_unmap` | `kernel/exclusive_pair.h` | Invalidação de cache em mapeamento de pilhas de threads hóspedes | 2 lines |
+| `astral_chain/runtime/kernel/transfer_memory.h` | `transfer_create` / `transfer_release` | `kernel/exclusive_pair.h` | Invalidação de cache em criação/liberação de memória de transferência | 2 lines |
+| `astral_chain/runtime/kernel/exclusive_pair.h` | `pair_memory` | `kernel/exclusive_pair.h` | Cache TLS do último intervalo validado eliminando sobrecarga repetida de `query()` (~6.5% de ganho de CPU) | 9 lines |
+| `astral_chain/runtime/gpu/nvn_hle.h` | `nvn_heap_mirror_interest` | `gpu/nvn_hle.h` | Tabela hash TLS de 1024 entradas para retorno imediato de faixas registradas no espelho do heap (-0.7ms render worker) | 10 lines |
+| `astral_chain/runtime/las/nvn/vulkan/exec/memory/gfast.c` | `gfast_prepare` | `exec/memory/gfast.c` | Desativação por padrão de cópias de compute global em GPUs integradas (Intel Arc/AMD APUs/Steam Deck) | 4 lines |
+| `astral_chain/runtime/host_runtime.c.in` | modularização arquitetural | `kernel/heap_memory.h`, `services/ipc_session.h`, `services/ipc_dispatch.h`, `kernel/svc_dispatch.h`, `kernel/horizon_defs.h` | Desmembramento do monólito de 1.389 linhas para orquestrador enxuto de 221 linhas | 5 módulos |
+| `astral_chain/runtime/kernel/horizon_defs.h` | `HorizonSvc`/`HorizonResult`/`HorizonHandleRange` | `kernel/horizon_defs.h` | Definições arquiteturais do Horizon OS eliminando números mágicos no subsistema kernel/IPC | 170 lines |
+| `astral_chain/runtime/kernel/heap_memory.h` | `snapshot`/`query`/`resize_heap` | `kernel/heap_memory.h` | Módulo dedicado de gestão de heap hóspede e query de mapeamentos virtuais sem constantes mágicas | 278 lines |
+| `astral_chain/runtime/services/ipc_session.h` | tabelas e handles IPC | `services/ipc_session.h` | Tipos, ciclo de vida de sessões e empacotamento de respostas CMIF com partições explícitas de handles | 240 lines |
+| `astral_chain/runtime/services/ipc_dispatch.h` | roteamento CMIF | `services/ipc_dispatch.h` | Despacho de mensagens IPC e roteamento de comandos de serviços Switch legível e sem números mágicos | 650 lines |
+| `astral_chain/runtime/kernel/svc_dispatch.h` | `rt_svc`/`rt_svc_body` | `kernel/svc_dispatch.h` | Despachante central de chamadas de supervisor (SVC) e frame pacing descompactado e legível | 420 lines |
 
 ---
 
@@ -478,4 +491,146 @@ O repositório foi reorganizado em pastas por domínio/módulo, sem alteração 
   4. **`LogWidget.cpp`**:
      - Divisão da barra de ferramentas do log em duas barras dedicadas: superior (status, busca e filtro de canais) e inferior (checkbox de autoscroll e botões de ação), eliminando sobreposição visual e truncamento de texto.
 - **Verificação**: `./extra/tools/audit.sh` executado com sucesso (todos os arquivos <= 300 linhas, compilação limpa via CMake/Ninja e teste offscreen sem falhas).
+
+#### 18. Modularização de `host_runtime.c.in` e Eliminação de Números Mágicos no Kernel Horizon (`kernel/`, `services/`, `horizon_defs.h`)
+- **Problema**: O arquivo herdado `astral_chain/runtime/host_runtime.c.in` era um monólito de 1.389 linhas misturando inicialização de SO, gerenciamento de heap/páginas, tabelas de sessões IPC, despacho de centenas de comandos CMIF e o dispatcher de chamadas de sistema (SVCs). Além disso, a lógica de compensação de cutscenes injetada via patches continha dezenas de números mágicos sem qualquer documentação ou constantes explicativas (`19200000.0`, `9000.0f`, `6.0f`, `30.0f`, `7.0f`, etc.), prejudicando a manutenção e a legibilidade do código.
+- **Resoluções**:
+  1. **Separação Modular da Arquitetura Horizon**:
+     - `astral_chain/runtime/kernel/horizon_defs.h`: Definições globais do Horizon OS (enums de SVCs, faixas de Handles, resultados de Kernel, Memory Types/Permissions, CMIF protocols e constantes de temporização do hardware Switch).
+     - `astral_chain/runtime/kernel/heap_memory.h`: Gerenciamento de heap, alocação virtual, proteção de páginas (Vulkan lazy write-back) e dumps de diagnóstico (`STOP_DUMP`).
+     - `astral_chain/runtime/services/ipc_session.h`: Enumeração de tipos de serviço (`SESSION_*`), descritores de sessões e empacotamento de requisições IPC/CMIF.
+     - `astral_chain/runtime/services/ipc_dispatch.h`: Despacho e ciclo de vida de chamadas IPC (`ipc_svc`).
+     - `astral_chain/runtime/kernel/svc_dispatch.h`: Dispatcher central de chamadas de sistema (`rt_svc`, `rt_svc_body`) e pacing dinâmico de cutscenes desacoplado.
+     - Redução de `host_runtime.c.in` de 1.389 linhas para apenas **~220 linhas**.
+  2. **Eliminação de Números Mágicos e Documentação Autodescritiva**:
+     - `HORIZON_SYSTEM_TICK_FREQ` (19200000.0) / `HORIZON_SYSTEM_TICK_FREQ_U64` (19200000ULL): Frequência do contador genérico do ARM Cortex-A57 / Tegra X1 da Nintendo Switch (`CNTFRQ_EL0`, 19.2 MHz / 1 tick $\approx$ 52.083 ns). Implementação de `horizon_ticks_to_seconds(ticks)`.
+     - `CUTSCENE_BASE_FPS` (30.0f) e `CUTSCENE_FRAME_MS_BASE` (1000.0f / 30.0f $\approx$ 33.333 ms): Cadência base fixa de renderização das animações de cutscenes de *Astral Chain*.
+     - `CUTSCENE_STALL_THRESHOLD_STEPS` (6.0f): Limite de alerta de travamento (6 frames a 30 FPS $\approx$ 200 ms), limiar onde o engasgo se torna perceptível e gera dessincronização de áudio/vídeo.
+     - `CUTSCENE_MAX_SANITY_STEPS` (9000.0f): Teto de sanidade (9.000 frames a 30 FPS = 300 segundos / 5 minutos) para descartar transições de cena, telas de carregamento ou floats não inicializados no registrador de medição.
+     - `CUTSCENE_MAX_CATCHUP_PER_FRAME` (7.0f), `CUTSCENE_MIN_DEBT_LIMIT` (-2.0f), `CUTSCENE_DEFAULT_STEP` (1.0f), `CUTSCENE_MAX_MEASURED_STEP` (30.0f) e `CUTSCENE_TRACK_SLOT_COUNT` (64): Controle de recuperação e amortecimento de dívida temporal na reprodução das faixas de animação.
+     - `SVC_LOCK_WARNING_THRESHOLD_MS` (30.0 ms): Limite de alerta de tempo de execução sob o lock de kernel.
+     - Constantes de mapa de memória virtual: `HORIZON_ALIAS_REGION_ADDRESS` (0x4000000000ULL), `HORIZON_ALIAS_REGION_SIZE` (0x1000000000ULL), `HORIZON_STACK_REGION_SIZE` (0x100000000ULL).
+  3. **Legibilidade e Estrutura Sem Condensação Artificial**:
+     - Funções `handle_cutscene_pace(Cpu *c)` e `handle_cutscene_carry(Cpu *c)` extraídas com nomenclatura expressiva, espaçamento generoso e formatação não-exaustiva.
+- **Verificação**:
+  - `./extra/tools/audit.sh`: 100% aprovado em todas as 7 etapas.
+  - Fast-Relink via `setup_game --rebuild-if-stale`: compilado e linkado em ~12 segundos.
+  - `qa_runner.sh`: 100% de sucesso.
+
+#### 19. Janela RE Info (F8) — Estado ao Vivo e Tabelas id→nome (`extra/ui/overlay/ac_reinfo.*`, `extra/tools/reinfo_tables.py`)
+- **Objetivo**: expor em jogo, numa janela ImGui separada do menu Insert, todos os achados de engenharia reversa estática (área, missão, boss, playtime, dificuldade, slots, chaves de texto e tabelas id→nome) sem recompilar nem reiniciar a sessão.
+- **Implementação**:
+  1. **`extra/ui/overlay/ac_reinfo.cpp` / `.h`**: janela própria com toggle **F8** e visibilidade independente do menu Insert; inicia fechada (`AC_REINFO=1` abre, mesmo contrato do `AC_OVERLAY`). Seções: estado ao vivo (três colunas campo/id/nome), slots globais crus e tabelas completas com filtro de texto. Fecha/abre via `ac_reinfo_visible`/`ac_reinfo_toggle` (ABI C).
+  2. **`extra/ui/overlay/ac_reinfo_probe.c`**: shim C de 16 linhas que expõe `ac_reinfo_main_base/guest_lo/guest_hi` (`AC_MAIN_BASE` + `GUEST_LO`/`GUEST_HI` de `rt.h`), mantendo o header do runtime ARM64 fora do TU C++ que inclui ImGui.
+  3. **Leitura somente leitura e segura**: cada slot é uma dupla desreferência (slot → bloco → valor) com checagem de faixa `GUEST_LO..GUEST_HI` e de alinhamento; slot nulo ou fora do guest vira `(n/d)` em vez de derrubar o jogo.
+  4. **`extra/ui/overlay/ac_reinfo_tables.h`**: tabelas `id → nome` embutidas (22 áreas, 71 missões, 82 ids de boss), sem ler `romfs.bin` em runtime.
+  5. **`extra/tools/reinfo_tables.py`**: gerador versionado que lê `game/romfs.bin → /Text/Text.pkz`, descomprime com `zstandard` (fallback ao binário `zstd`), resolve os registros PTD por hash e escreve o header. Não entra no build — rodar após atualizar o RomFS.
+- **Bug corrigido (filtro das tabelas não aceitava digitação)**: o buffer do `InputTextWithHint` era um `char[32]` local de `table_section`, zerado a cada frame — o ImGui edita o mesmo buffer entre frames, então o texto nunca persistia. Os três buffers (`f_areas`/`f_missions`/`f_bosses`) agora são `static` em `ac_reinfo_frame` e passados por parâmetro; `PushID(label)`/`PopID()` isola o estado de cada caixa.
+- **Bug corrigido (extração de nomes de boss)**: o arquivo mantém cópias da tabela com **só os hashes** e strings vazias (`0xa448`); a tabela real de valores fica em `0x988a`, um offset **2-alinhado**. A varredura antiga com passo 4 pulava a tabela boa e produzia 50/75 acertos em `-----`. O gerador agora varre com passo 2 e resolve cada hash individualmente.
+- **Detalhes de apresentação**: quebras de linha duras do texto do jogo (`ASTRAEUS-\r\nCAPANEUS`) são colapsadas; letras gregas (α/β/γ/Δ, usadas pelos Homunculus) são transliteradas porque o overlay usa a fonte default do ImGui (Latin-1) — `// shortcut` no gerador, revisar quando houver fonte com cobertura grega.
+- **Integração**: `astral_chain/gpu/nvn_build.py` inclui os dois fontes novos no backend Vulkan; `ac_overlay.cpp` chama `ac_reinfo_frame()` a cada frame; `extra/sdl/window_trampoline.h` trata F8, suprime o repasse ao jogo com qualquer janela aberta e suspende/restaura o mouse; `ac_menu.cpp` (About) ganhou o bullet do F8.
+- **Abertura**: três caminhos, todos idempotentes — (a) tecla **F8**; (b) checkbox **"Janela RE Info (F8)"** na seção Debug do menu Insert (`ac_menu.cpp`, chama `ac_reinfo_toggle`); (c) env `AC_REINFO=1` para abrir já no boot. A janela tem visibilidade independente do menu: fechar o Insert não fecha o RE Info e vice-versa. Altura padrão do menu Insert subiu de 560 para 660 px para o checkbox caber sem rolagem.
+- **Dois bugs de integração corrigidos no link** (só aparecem no link completo, não na compilação isolada):
+  1. `ac_overlay.cpp` declarava `void ac_reinfo_frame(void)` sem `extern "C"` — o compilador gerava `_Z15ac_reinfo_framev` e o linker não achava o símbolo C. Resolvido incluindo `ac_reinfo.h` (que tem o bloco `extern "C"`) em vez de redeclarar.
+  2. `ac_reinfo_probe.c` lia `g_modules[0].base`, mas o build Linux **não linka `loader.c`** (as imagens entram por `reserve()` fixo gerado em `native_trace`). Substituído por `AC_MAIN_BASE`, derivado do layout do linker.
+- **Base do `main` é `0x7000010000`, não `0x7000000000`**: `astral_chain/translator/linker.py` empacota `rtld` (16 KiB), `main` e `sdk` a partir de `0x7000000000`, então `main` é o segundo módulo. `MAIN_BASE` de `rt.h` é a base do *primeiro* módulo. Confirmado por leitura do binário em execução (área, missão, scene phase e dificuldade passaram a bater com a tela de título).
+- **Verificação**: `./extra/tools/audit.sh` 100% aprovado (7 etapas); compilação limpa com `-Wall -Wextra -Werror` em `ac_overlay.cpp`, `ac_menu.cpp` e `ac_reinfo.cpp`; `ac_reinfo_probe.c` compila em C; `reinfo_tables.py` regenera 22/71/82 nomes com autotestes embutidos; `./extra/tools/qa_runner.sh 40 1200` passou nas 4 fases (build, runtime 40 s a 60 fps, save íntegro, frame 1200 sem artefatos); captura com `AC_REINFO=1 LARECOMP_WINDOW_SHOT=420` confirmou a janela desenhada com as tabelas expandidas mostrando nomes reais.
+- **Limitação**: a maior parte dos valores ao vivo foi conferida apenas na tela de título (área/missão `-1`/`0xffffffff`, `scene phase 0x0138`, dificuldade `casual`); playtime, boss e batalha exigem uma sessão com save carregado.
+
+#### 20. Discord Rich Presence (RPC) Nativo Linux e Overlay com Card de Prévia ao Vivo (`extra/rpc/*`, `extra/ui/overlay/ac_overlay_rpc.*`)
+- **Objetivo**: prover suporte completo a Discord Rich Presence no Linux nativo com formatação de alta fidelidade e uma interface ImGui contendo configurações granulares e um **Card de Prévia em Tempo Real do Perfil do Discord**, seguindo o mesmo padrão estético e funcional de `bloodborne_pc`.
+- **Implementação**:
+  1. **Expansão de Missões e Capítulos (`extra/tools/reinfo_tables.py`, `extra/ui/overlay/ac_reinfo_tables.h`)**:
+     - Descoberta das chaves `FILE_MISSION_` em `GameWord_USen.bin`, expandindo as missões conhecidas de 71 (apenas File 12) para **292 missões únicas** abrangendo todos os 11 Files da campanha principal e subcasos.
+     - Mapeamento estático dos 12 Files (`k_ac_files`: *Startup, Awake, Link, Siege, Accord, Complicit, Wild, Peace, Salvation, Madness, Reckoning, Rebirth*) e das 5 Legions (`k_ac_legions`: *Sword, Arrow, Arm, Beast, Axe*).
+     - Formatação compacta em linhas de até 100 caracteres mantendo o arquivo gerado em 161 linhas (meta ideal ≤ 300 linhas).
+  2. **Agregador de Dados de Jogo (`extra/rpc/ac_game_data.h` / `.cpp`)**:
+     - Leitura segura de memória guest (`ac_reinfo_probe.c`), resolução de IDs de área, missão, file, boss e dificuldade, cálculo de tempo de sessão decorrido e total de playtime do save.
+     - Formatação determinística de payloads de atividade e prévia (`ActivityDisplay`).
+  3. **Cliente Discord IPC Linux Nativo (`extra/rpc/ac_discord_rpc.h` / `.cpp`)**:
+     - Conexão direta a sockets de domínio UNIX (`AF_UNIX`) cobrindo `$XDG_RUNTIME_DIR/discord-ipc-0..9`, caminhos Flatpak, Discord Canary, `/run/user/<uid>/` e `/tmp/`.
+     - Worker thread em background não-bloqueante com auto-reconexão, handshake (opcode 0) e envio periódico de `SET_ACTIVITY` (opcode 1).
+  4. **Overlay ImGui & Card de Prévia em Tempo Real (`extra/ui/overlay/ac_overlay_rpc.h` / `.cpp`)**:
+     - Seção no menu principal (Insert) com indicador de status colorido (Verde = Conectado, Amarelo = Procurando, Cinza = Desativado) e botão para abrir a janela dedicada.
+     - Janela de configuração com opções granulares: Exibir Arquivo/Capítulo, Exibir Caso/Missão, Exibir Dificuldade, Exibir Área, Exibir Boss, Exibir Tempo e personalização de Client ID.
+     - **Card de Prévia ao Vivo do Discord**: child box estilizado na paleta escura do Discord (`#121315`), com badge customizada 50x50 com contorno teal e texto "AC", título "Astral Chain", e linhas de detalhes/estado/tempo atualizadas em tempo real conforme as opções e o estado do jogo mudam.
+  5. **Integração**:
+     - `extra/ui/overlay/ac_menu.cpp`: adicionada `section_discord` e altura padrão ajustada para 720 px.
+     - `extra/ui/overlay/ac_overlay.cpp`: renderiza a janela de configuração do Discord RPC mesmo com o menu Insert fechado.
+     - `astral_chain/gpu/nvn_build.py`: inclusão de `ac_game_data.cpp`, `ac_discord_rpc.cpp` e `ac_overlay_rpc.cpp` nos fontes Vulkan.
+  6. **Autoteste de Formatação (`extra/tools/rpc_format_test.cpp`)**:
+     - Teste de unidade cobrindo cenários de título, exploração de capítulo, combate a boss e combinações de toggles.
+     - Integrado como etapa 8 do `./extra/tools/audit.sh`.
+- **Verificação**:
+  - `./extra/tools/audit.sh`: 100% aprovado nas 8 etapas.
+  - `python3 -m astral_chain.build.setup_game --rebuild-if-stale`: Fast-Relink concluído em ~9 segundos com símbolos conferidos via `nm`.
+  - Autoteste de formatação executado com sucesso.
+
+#### 21. Extrator de Ícones e Assets PNG de Áreas, Legions, Ranks e Arquivos (`extra/tools/extract_icons.py`)
+- **Objetivo**: extrair e converter do RomFS todos os ícones, badges, miniaturas e ilustrações de regiões/áreas do jogo para arquivos PNG transparentes organizados e prontos para uso em Rich Presence, interfaces e documentação externa (`/home/shadowy/Imagens/Icons AstralChain/`).
+- **Pipeline de Deswizzling e Decodificação**:
+  1. **Acesso ao RomFS e Descompactação Zstandard**: leitura direta do `game/romfs.bin` e extração de arquivos `.dat` e `.dtt` dos pacotes `.pkz` em `/miscTex/`.
+  2. **Deswizzle Nativo Tegra X1 (`libtegra.so`)**: compilação e invocação via `ctypes` das rotinas de deswizzling de blocos lineares Tegra (`tegra.c` / `formats.c`), com cálculo dinâmico de `level_block_height` para evitar transbordamento de buffers em texturas pequenas.
+  3. **Metadados UVD e Recorte Preciso**: leitura das coordenadas UVD embutidas nos arquivos `.dat` para recortar automaticamente o canvas inflado para a resolução útil exata de cada ícone (ex.: 240x240 para Legions, 1280x720 para Áreas, 1280x620 para Files, 54x54 para Armas, 158x158 para Ranks).
+- **Categorias Extraídas (719 imagens totais)**:
+  - `Areas/`: 22 ilustrações completas de áreas e regiões (`01_Hypermegafloat_Ark` a `22_Ark_Sewer_Management`) + miniatura panorâmica de Central City.
+  - `Landmarks/`: 28 ilustrações de pontos de interesse e marcos da Arca (`Five-Story_Pagoda`, `Bar_District`, `Hermit_Base`, `Red_Moon`, etc.).
+  - `Files/`: 12 banners de capítulos (`File_01_Startup` a `File_12_Rebirth`).
+  - `Cases/`: 77 miniaturas de casos e missões (`Case_0100` a `Case_1100`).
+  - `Legions/`: 5 ícones das Legions (`Legion_Sword`, `Legion_Arrow`, `Legion_Arm`, `Legion_Beast`, `Legion_Axe`).
+  - `Characters/`: Retratos dos protagonistas masculino e feminino (`Protagonist_Male`, `Protagonist_Female`).
+  - `Ranks/`: 20 patentes da polícia (`Police_Ranks/rank_thumb_01..20`) + 7 insígnias de avaliação (`Evaluation_Badges/Rank_Evaluation_D..S_Plus`).
+  - `Weapons/`: 3 modos da X-Baton (`Weapon_XBaton`, `Weapon_Blaster`, `Weapon_Gladius`).
+  - `Heliports/`: 6 miniaturas de zonas de viagem rápida por heliporto (`Heliport_01..06`).
+  - `Abilities/` & `Shortcuts/`: 10 ícones de slots de habilidade e 12 de atalhos.
+  - `Items/`: 541 ícones de itens e consumíveis.
+- **Verificação**:
+  - Execução de `.venv/bin/python3 extra/tools/extract_icons.py` gerando todas as 719 imagens em ~5 segundos sem erros.
+  - `./extra/tools/audit.sh` 100% aprovado (344 linhas, dentro do limite).
+
+#### 22. Resolução Precisa de Áreas e Capítulos via Scene Struct e Correção de "Unknown Zone"
+- **Problema Diagnosticado**: Durante exploração/investigação (como na busca por desaparecidos em Maison Forest, File 03), o Discord Rich Presence exibia `"Unknown Zone (Explorando)"` e omitia o capítulo (File 03) e caso ("Missing").
+  - **Causa Raiz 1 (`0xdbcf10` não-inicializado)**: O slot de área `0xdbcf10` é inicializado como `-1` (`0xFFFFFFFF`) e só é preenchido temporariamente ao cruzar gatilhos de volume de mapa. Como `0xFFFFFFFF` é interpretado como unsigned int sem correspondência em `k_ac_areas`, caía no fallback de erro `"Unknown Zone"`.
+  - **Causa Raiz 2 (`mission_id == 0` na exploração)**: O slot `0xdbc420` só contém um ID não-nulo durante combates/sub-missões ativas. Na exploração livre, seu valor é `0`, fazendo `derive_file_num` retornar 0 e omitir o capítulo.
+  - **Causa Raiz 3 (Scene Struct negligenciada)**: O ponteiro global `0xdb84c8` aponta para a `Scene Struct` do jogo, cujo campo em `+0x180` contém o `scene_id` canônico autoritativo (ex.: `0x1301` para File 03 Case 0301).
+- **Implementação e Solução**:
+  1. **Tabela e Mapeamento Canônico de Cenas (`extra/ui/overlay/ac_reinfo_tables.h` e `extra/tools/reinfo_tables.py`)**:
+     - Definição de `AcSceneEntry` e da tabela `k_ac_scenes` com 54 cenas da história principal e pós-jogo (`0x1100..0x1c00`), associando cada `scene_id` à sua respectiva área canônica (`area_id` em `k_ac_areas`) e nome de caso oficial extraído dos arquivos de texto do jogo (`MENU_SELECT_CASE_NAME_`).
+  2. **Leitor de Memória e Agregador (`extra/rpc/ac_game_data.cpp` e `.h`)**:
+     - Leitura direta de `scene_ptr` em `slot64(0xdb84c8)` e do `scene_id` em `scene_ptr + 0x180`.
+     - Tratamento explícito de `0xFFFFFFFF` (uninitialized -1) no slot de área `0xdbcf10`.
+     - Fallback canônico: se a área por gatilho não estiver ativa, recupera a área canônica a partir do `scene_id` (ex.: `0x1301` / `0x1303` mapeiam diretamente para `0x5180` = "Maison Forest").
+     - Derivação autoritativa do File: caso `mission_id == 0`, o capítulo é deduzido via `((scene_id >> 8) & 0xFF) - 0x10`, garantindo 100% de detecção de File 01..12 em qualquer fase (cutscenes, investigação, exploração e combate).
+     - Nome do caso como missão durante exploração: quando não há missão de combate ativa, `mission_name` passa a exibir o nome do caso da história (ex.: `"Missing"` em Maison Forest).
+     - Eliminação de qualquer exibição de `"Unknown Zone"`, com fallback seguro para `"Explorando a Arca"`.
+  3. **RE Info Overlay (`extra/ui/overlay/ac_reinfo.cpp`)**:
+     - Integração de `disp_area` e exibição do nome do caso ao lado do `scene_id` na tabela de estado ao vivo.
+  4. **Autoteste de Formatação (`extra/tools/rpc_format_test.cpp`)**:
+     - Casos 5 e 6 adicionados simulando o estado de exploração em Maison Forest e garantindo ausência de `"Unknown Zone"`.
+- **Verificação**:
+  - `./extra/tools/audit.sh`: 100% aprovado nas 8 etapas.
+  - `python3 -m astral_chain.build.setup_game --rebuild-if-stale`: Fast-Relink concluído em ~9 segundos.
+  - `SKIP_RUNTIME=1 ./extra/tools/qa_runner.sh`: aprovado.
+
+#### 23. Seletor de Idioma do Jogo e Unificação Completa da Interface em Português
+- **Objetivo**: Adicionar seletor de idiomas para o jogo (`Settings \ Game` no Launcher e no Overlay `Insert`), e unificar a interface eliminando o mix inconsistente de inglês e português.
+- **Engenharia Reversa e Integração de Idiomas**:
+  - Investigação da seleção de idiomas do Astral Chain no binário (`main+0x9c2870` que chama `GetDesiredLanguage` via PLT `0xa0e3d0`, command 21 de `SESSION_APPLICATION_FUNCTIONS` e command 0 de `SESSION_SETTINGS`).
+  - Verificação dos 10 pacotes de texto empacotados no RomFS (`_USen.bin`, `_JPja.bin`, `_EUfr.bin`, `_EUde.bin`, `_EUes.bin`, `_EUit.bin`, `_EUru.bin`, `_CNzh.bin`, `_TWzh.bin`, `_KRko.bin`).
+  - Implementação de `resolve_system_language()` em `astral_chain/runtime/services/ipc_dispatch.h`, convertendo a escolha do usuário em código little-endian de 64 bits (`uint64_t`), consultando dinamicamente `AC_LANGUAGE` / `LARECOMP_LANG` do ambiente, `larecomp.ini` ou locale do sistema (`LC_ALL` / `LANG`), com fallback seguro para `APPLICATION_LANGUAGE`.
+  - Suporte completo no shim do runtime em `astral_chain/runtime/las/settings.h` e em `third_party/LASRecomp/runtime/kernel/settings.c` com `g_language_codes` e `g_language_names`, além de persistência automática em `larecomp.ini`.
+- **Configuração no Launcher Qt6 (`extra/ui/launcher/`)**:
+  - Adição de `QString language{"auto"}` em `GameSettings` (`Config.hpp` / `Config.cpp`), persistência em `userdata/launcher.ini` e exportação de `AC_LANGUAGE` e `LARECOMP_LANG` em `buildLaunchEnv()`.
+  - Inclusão do seletor `m_languageCombo` em `SettingsDialog` com 12 opções: Automático (Padrão do Sistema / Host), Inglês (en-US), Japonês (ja), Espanhol (es), Francês (fr), Alemão (de), Italiano (it), Russo (ru), Chinês Simplificado (zh-CN), Chinês Tradicional (zh-TW), Coreano (ko) e Holandês (nl).
+- **Seletor no Menu In-Game Overlay (`extra/ui/overlay/ac_menu.cpp`)**:
+  - Nova seção `"Jogo & Idioma"` com combobox interativo ImGui, exibição do idioma ativo e salvamento imediato em `larecomp.ini`.
+- **Unificação Integral dos Textos da Interface em Português**:
+  - `SettingsDialog`: Janela renomeada para `"Astral Chain - Configurações"`, abas traduzidas (`"Jogo"`, `"Gráficos"`, `"Áudio"`, `"Avançado"`), botões `"Salvar"` / `"Cancelar"`, e todos os checkboxes e rótulos traduzidos com precisão técnica.
+  - `ControlsDialog`: Janela renomeada para `"Astral Chain - Configuração de Controles"`, cabeçalho, colunas da tabela (`"Ação"`, `"Tecla / Mouse"`) e botões (`"Restaurar Padrões"`, `"Salvar"`, `"Cancelar"`).
+  - `MainWindowUi` / `MainWindow`: Botões principais unificados (`"▶  JOGAR"`, `"  Jogar (Diagnósticos)"`, `"  Configurar Jogo"`, `"  Compilar Shaders"`, `"  Configurações"`, `"  Controles"`), e mensagens de status traduzidas.
+  - `ac_menu.cpp`: Seções renomeadas para Adwaita em português (`"Desempenho"`, `"Graficos"`, `"Jogo & Idioma"`, `"Discord Rich Presence"`, `"Depuracao (Debug)"`, `"Sobre"`).
+- **Verificação**:
+  - `./extra/tools/audit.sh`: 100% aprovado nas 8 etapas (marcadores, limites ≤ 400 linhas, compilação do launcher Qt6 e 5 autotestes).
+  - `.venv/bin/python -m astral_chain.build.setup_game --rebuild-if-stale`: Compilação e link do executável nativo `build/game/round-00/trace` aprovados em 11.1s.
+  - `SKIP_RUNTIME=1 ./extra/tools/qa_runner.sh`: 100% aprovado.
 

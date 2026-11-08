@@ -10,6 +10,8 @@
 
 #include "extra/toggles/ac_toggles.h"
 #include "extra/ui/overlay/ac_overlay.h"
+#include "extra/ui/overlay/ac_overlay_rpc.h"
+#include "extra/ui/overlay/ac_reinfo.h"
 
 extern "C" const char *ac_vk_gpu_name(void);   // (ac_vk_glue.cpp)
 extern "C" void ac_vk_recreate_swapchain(void);
@@ -163,7 +165,7 @@ static void section_performance(void) {
     hist[pos] = io.Framerate;
     pos = (pos + 1) % 120;
     if (filled < 120) filled++;
-    if (ImGui::CollapsingHeader("Performance", ImGuiTreeNodeFlags_DefaultOpen)) {
+    if (ImGui::CollapsingHeader("Desempenho", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::Text("%.1f FPS  (%.2f ms)", io.Framerate, io.Framerate > 0 ? 1000.0 / io.Framerate : 0);
         ImGui::PlotLines("##fps", hist, filled, 0, nullptr, 0.0f, 200.0f, ImVec2(-1, 60));
         ImGui::Text("Present mode: %s", s_present_modes[present_index()]);
@@ -173,7 +175,7 @@ static void section_performance(void) {
 }
 
 static void section_graphics(void) {
-    if (!ImGui::CollapsingHeader("Graphics", ImGuiTreeNodeFlags_DefaultOpen)) return;
+    if (!ImGui::CollapsingHeader("Graficos", ImGuiTreeNodeFlags_DefaultOpen)) return;
 
     int aa = g_settings.antialias;
     if (ImGui::Combo("Antialiasing", &aa, "Off\0SMAA\0")) {
@@ -223,8 +225,35 @@ static void section_graphics(void) {
     ImGui::TextDisabled("VSync aplica ao vivo; demais itens valem no proximo frame.");
 }
 
+static void section_game(void) {
+    if (!ImGui::CollapsingHeader("Jogo & Idioma", ImGuiTreeNodeFlags_DefaultOpen)) return;
+
+    static const char *const lang_items =
+        "Auto (Sistema)\0"
+        "Japones (ja)\0"
+        "Ingles (en-US)\0"
+        "Espanhol (es)\0"
+        "Frances (fr)\0"
+        "Alemao (de)\0"
+        "Italiano (it)\0"
+        "Holandes (nl)\0"
+        "Russo (ru)\0"
+        "Coreano (ko)\0"
+        "Chines Simplificado (zh-CN)\0"
+        "Chines Tradicional (zh-TW)\0";
+
+    int cur_lang = (g_settings.language >= 0 && g_settings.language < N_LANGUAGES) ? g_settings.language : 0;
+    if (ImGui::Combo("Idioma do Jogo", &cur_lang, lang_items)) {
+        g_settings.language = cur_lang;
+        settings_save();
+        printf("[overlay] idioma -> %s (%s)\n", g_language_codes[cur_lang], g_language_names[cur_lang]);
+    }
+    ImGui::TextDisabled("Ativo: %s (%s)", settings_language(), settings_language_name());
+    ImGui::TextDisabled("Textos carregam no boot; reinicie o jogo para aplicar.");
+}
+
 static void section_debug(void) {
-    if (!ImGui::CollapsingHeader("Debug", ImGuiTreeNodeFlags_DefaultOpen)) return;
+    if (!ImGui::CollapsingHeader("Depuracao (Debug)", ImGuiTreeNodeFlags_DefaultOpen)) return;
 
     bool guard = eff_guard();
     if (ImGui::Checkbox("Vertex guard (clamp de vertex explosion)", &guard)) {
@@ -257,26 +286,36 @@ static void section_debug(void) {
         g_debug_frame_request = 1;
         printf("[overlay] debug frame dump requested\n");
     }
+    bool reinfo = ac_reinfo_visible() != 0;
+    if (ImGui::Checkbox("Janela RE Info (F8)", &reinfo)) ac_reinfo_toggle();
     ImGui::TextDisabled("A/B do flicker: desligue Async submit e observe.");
 }
 
+static void section_discord(void) {
+    if (!ImGui::CollapsingHeader("Discord Rich Presence", ImGuiTreeNodeFlags_DefaultOpen)) return;
+    AcOverlayRpc::RenderSection();
+}
+
 static void section_about(void) {
-    if (!ImGui::CollapsingHeader("About")) return;
+    if (!ImGui::CollapsingHeader("Sobre")) return;
     ImGui::Text("Astral Chain PC (Linux First)");
     ImGui::Text("GPU: %s", ac_vk_gpu_name());
     ImGui::Text("ImGui %s", ImGui::GetVersion());
     ImGui::Separator();
     ImGui::BulletText("Insert: abre/fecha este menu");
+    ImGui::BulletText("F8: janela RE Info (valores de engenharia reversa)");
     ImGui::BulletText("F9: dump do frame | F10: captura do mouse");
-    ImGui::BulletText("F11: fullscreen | Alt+F4: sair");
+    ImGui::BulletText("F11: tela cheia | Alt+F4: sair");
 }
 
 void ac_menu_frame(void) {
-    ImGui::SetNextWindowSize(ImVec2(460, 560), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(460, 740), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowPos(ImVec2(40, 40), ImGuiCond_FirstUseEver);
     ImGui::Begin("Astral Chain PC", nullptr, ImGuiWindowFlags_NoCollapse);
     section_performance();
     section_graphics();
+    section_game();
+    section_discord();
     section_debug();
     section_about();
     ImGui::End();

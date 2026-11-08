@@ -49,7 +49,7 @@ ControlsDialog::ControlsDialog(Config& config, QWidget* parent)
     : QDialog(parent)
     , m_config(config)
 {
-    setWindowTitle("Astral Chain - Controls Configuration");
+    setWindowTitle("Astral Chain - Configuração de Controles");
     resize(480, 520);
     setupUi();
     loadBindings();
@@ -59,20 +59,20 @@ void ControlsDialog::setupUi()
 {
     auto* layout = new QVBoxLayout(this);
 
-    auto* header = new QLabel("Double-click a cell under 'Key / Mouse' to edit binding:", this);
+    auto* header = new QLabel("Dê um duplo clique na célula em 'Tecla / Mouse' para editar a tecla:", this);
     layout->addWidget(header);
 
     m_table = new QTableWidget(kDefaultActions.size(), 2, this);
-    m_table->setHorizontalHeaderLabels({"Action", "Key / Mouse"});
+    m_table->setHorizontalHeaderLabels({"Ação", "Tecla / Mouse"});
     m_table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
     m_table->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
     m_table->setSelectionBehavior(QAbstractItemView::SelectRows);
     layout->addWidget(m_table);
 
     auto* btnLayout = new QHBoxLayout();
-    m_resetButton = new QPushButton("Reset Defaults", this);
-    m_saveButton = new QPushButton("Save", this);
-    m_cancelButton = new QPushButton("Cancel", this);
+    m_resetButton = new QPushButton("Restaurar Padrões", this);
+    m_saveButton = new QPushButton("Salvar", this);
+    m_cancelButton = new QPushButton("Cancelar", this);
 
     btnLayout->addWidget(m_resetButton);
     btnLayout->addStretch();

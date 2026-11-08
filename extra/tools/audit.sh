@@ -140,4 +140,21 @@ else
 fi
 fi
 
+echo "--- 8. Discord RPC Formatting Self-Test ---"
+CXX="${CXX:-g++}"
+if ! command -v "$CXX" > /dev/null 2>&1; then
+    echo "SKIPPED: no C++ compiler (Discord RPC self-test)."
+else
+    RPC_BIN="$(mktemp -t ac-rpc-test.XXXXXX)"
+    if "$CXX" -std=c++20 -O1 -Wall -Wextra -Werror -I. -o "$RPC_BIN" extra/rpc/ac_game_data.cpp extra/tools/rpc_format_test.cpp > /dev/null 2>&1 \
+            && "$RPC_BIN" > /dev/null; then
+        rm -f "$RPC_BIN"
+        echo "PASSED: Discord Rich Presence format and activity snapshot self-test."
+    else
+        rm -f "$RPC_BIN"
+        echo "FAILED: Discord Rich Presence self-test (extra/tools/rpc_format_test.cpp)."
+        exit 1
+    fi
+fi
+
 echo "=== All audits passed successfully! ==="

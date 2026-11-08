@@ -9,6 +9,7 @@
 #include "extra/platform/platform_posix.h"
 #include "extra/input/mouse_mode.h"
 #include "extra/ui/overlay/ac_overlay.h"
+#include "extra/ui/overlay/ac_reinfo.h"
 
 typedef void *HWND;
 typedef void *HDC;
@@ -258,7 +259,7 @@ static inline int extra_window_poll_events(void (*key_cb)(uint8_t vk, int down),
     SDL_Event e;
     while (SDL_PollEvent(&e)) {
         ac_overlay_process_event(&e);
-        int menu = ac_overlay_visible();
+        int menu = ac_overlay_visible() || ac_reinfo_visible();
         switch (e.type) {
             case SDL_EVENT_QUIT:
             case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
@@ -274,9 +275,10 @@ static inline int extra_window_poll_events(void (*key_cb)(uint8_t vk, int down),
                 break;
             case SDL_EVENT_KEY_DOWN:
                 extra_set_active_device(1);
-                if (e.key.key == SDLK_INSERT && !e.key.repeat) {
-                    ac_overlay_toggle();
-                    if (ac_overlay_visible()) extra_mouse_mode_suspend(g_sdl_window);
+                if ((e.key.key == SDLK_INSERT || e.key.key == SDLK_F8) && !e.key.repeat) {
+                    if (e.key.key == SDLK_INSERT) ac_overlay_toggle();
+                    else ac_reinfo_toggle();
+                    if (ac_overlay_visible() || ac_reinfo_visible()) extra_mouse_mode_suspend(g_sdl_window);
                     else if (g_sdl_input_focus) extra_mouse_mode_resume(g_sdl_window);
                 } else if (e.key.key == SDLK_F11 && !e.key.repeat) {
                     extra_window_set_fullscreen(!g_sdl_fullscreen);
@@ -290,7 +292,8 @@ static inline int extra_window_poll_events(void (*key_cb)(uint8_t vk, int down),
                 }
                 break;
             case SDL_EVENT_KEY_UP:
-                if (key_cb && !menu && e.key.key != SDLK_F11 && e.key.key != SDLK_F10 && e.key.key != SDLK_INSERT)
+                if (key_cb && !menu && e.key.key != SDLK_F11 && e.key.key != SDLK_F10 &&
+                    e.key.key != SDLK_INSERT && e.key.key != SDLK_F8)
                     key_cb(extra_sdl_to_vk(e.key.key), 0);
                 break;
             case SDL_EVENT_MOUSE_MOTION:

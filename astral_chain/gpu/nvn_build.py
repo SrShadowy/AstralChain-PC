@@ -67,13 +67,15 @@ def nvn_sources(backend):
         raise ValueError(f'unknown NVN backend {backend!r}')
     sources = [LAS/name for name in OBJECT_LAYER+BACKENDS[backend]]
     # [extra] Runtime toggles overlay (extra/toggles/ac_toggles.c) rides in every
-    # backend; the ImGui overlay and imgui itself only build for vulkan.
     overlay = PROJECT/'extra'/'ui'/'overlay'
+    rpc = PROJECT/'extra'/'rpc'
     sources.append(PROJECT/'extra'/'toggles'/'ac_toggles.c')
     if backend == 'vulkan':
         sources += sorted(IMGUI.glob('*.cpp'))
         sources += [IMGUI/'backends'/'imgui_impl_sdl3.cpp', IMGUI/'backends'/'imgui_impl_vulkan.cpp',
-                    overlay/'ac_overlay.cpp', overlay/'ac_vk_glue.cpp', overlay/'ac_menu.cpp']
+                    overlay/'ac_overlay.cpp', overlay/'ac_vk_glue.cpp', overlay/'ac_menu.cpp',
+                    overlay/'ac_reinfo.cpp', overlay/'ac_reinfo_probe.c',
+                    rpc/'ac_game_data.cpp', rpc/'ac_discord_rpc.cpp', overlay/'ac_overlay_rpc.cpp']
     return sources
 
 

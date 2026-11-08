@@ -385,6 +385,84 @@ ferramenta reutilizável. Para reproduzir ou estender:
 
 - Esta análise é **somente leitura**; nenhum arquivo de código foi modificado.
 - Os endereços citados são relativos ao `main` com base `0x7000010000` e valem para o build v1.0.1
-  com os patches `1.0.1.pchtxt` + `cutscene-catchup-1.0.1.pchtxt` aplicados. Qualquer rebase/re-patch
-  invalida os offsets e exige re-derivação.
+  com os patches `1.0.1.pchtxt` + `cutscene-catchup-1.0.1.pchtxt` aplicados. O linker
+  (`astral_chain/translator/linker.py`) empacota `rtld`, `main` e `sdk` a partir de `0x7000000000`;
+  como `rtld` ocupa 16 KiB, `main` é o **segundo** módulo e começa em `0x7000010000`. `MAIN_BASE` em
+  `third_party/LASRecomp/runtime/cpu/rt.h` é a base do *primeiro* módulo, não do `main`. Qualquer
+  rebase/re-patch invalida os offsets e exige re-derivação.
 - Nenhum asset proprietário, dump, chave ou shader foi versionado.
+
+---
+
+## 10. Slots de estado e a janela RE Info (overlay F8)
+
+O overlay `extra/ui/overlay/ac_reinfo.cpp` expõe estes valores ao vivo, em modo somente leitura. Cada
+slot global em `.data`/`.bss` guarda um **ponteiro** para o bloco real, então todo valor custa duas
+desreferências (`base + slot → ponteiro → valor`), com `base = 0x7000010000` (ver §9: `main` é o
+segundo módulo, depois do `rtld`). Toda leitura é checada contra a janela guest
+(`GUEST_LO 0x7000000000` .. `GUEST_HI 0x7320000000`) antes de acontecer; slot nulo ou fora da faixa
+aparece como `(n/d)` em vez de derrubar o jogo.
+
+### 10.1 Slots globais
+
+| Offset | Tipo | Campo | Getter |
+|---|---|---|---|
+| `0xdbcf10` | `u32` | área | `0x56c240` |
+| `0xdbcf20` | `u32` | sub-área | `0x56c270` |
+| `0xdbc420` | `u32` | missão | `0x4be600` |
+| `0xdbc950` | `u32` | id do boss | `0x69f5a0` (resolvedor de nome) |
+| `0xdbc928` | `u32` | boss ativo | `0x5407f0` (`== 1`) |
+| `0xdbc930` | `u32` | fase do boss | — |
+| `0xdbc940` | `u32` | estado de batalha | — |
+| `0xdbc948` | `f32` | timer de batalha | reset para `30.0f` (`0x41f00000`) |
+| `0xdb83d8` | `ptr` | struct de save | — |
+| `0xdb84c8` | `ptr` | struct de cena | — |
+
+Campos derivados das structs: playtime `u64` em `save+0`, dificuldade raw em `save+0xaefa0`, flags em
+`save+0xa8b8c`; cena em `scene+0x180` (id) e `scene+0x100` (fase). O acesso a `+0xaefa0`/`+0xa8b8c`
+usa `mov`/`movk` porque o deslocamento não cabe nos 12 bits imediatos.
+
+### 10.2 Dificuldade
+
+O getter `0x4c26e0` (`game_difficult_type`) indexa a tabela de saltos em `0xbe08fc` com
+`índice = valor + 2`, válida para `-2..2`:
+`-2 super_casual`, `-1 error`, `0 casual`, `1 standard`, `2 hardcore`.
+O jogo normaliza o valor salvo antes de exibir (`0x6f2240`, `0x6f6588`): flags `+0xa8b8c == 0` força
+`-2`, e o campo `+0xaefa0` é reescrito com o índice selecionado.
+
+### 10.3 Chaves de texto
+
+| Offset | Formato | Uso |
+|---|---|---|
+| `0xb6327d` | `MENU_DATA_AREA_NAME_%04x` | nome da área (`menu_text`) |
+| `0xb76832` | `MENU_MISSION_NAME_%04x` | nome da missão (`menu_text`) |
+| `0xb74339` | `EVENT_BOSS_NAME_%04x` | nome do boss (`GameWord`) |
+| `0xb61e7c` | `CORE_MAP_AREA_%04x` | chave do mapa (`Core_text`) |
+| `0xb6a2d3` | `CORE_MAP_AREA_%02x` | idem, índice de 1 byte (`área >> 8`) |
+| `0xb62fb7` | `%03d:%02d:%02d` | playtime |
+
+### 10.4 Tabelas id→nome
+ 
+`extra/ui/overlay/ac_reinfo_tables.h` é **gerado** por `extra/tools/reinfo_tables.py`, que lê
+`game/romfs.bin → /Text/Text.pkz`, descomprime `menu_text_USen.bin` e `GameWord_USen.bin` e resolve o
+PTD (cabeçalho `PTD\0`, contagem em `+0x0C`, tabela de chaves em `+0x10`; registro de 16 bytes
+`{hash, offset relativo, chars, bytes}`, string UTF-16LE com bias `0x2626`, `bytes == chars*2`).
+
+Resultado:
+- **22 áreas** (`MENU_DATA_AREA_NAME_*` em `menu_text`)
+- **292 missões** (`FILE_MISSION_*` em `GameWord` cobrindo os 11 Files da campanha + subcasos + `MENU_MISSION_NAME_*` pós-jogo File 12)
+- **82 ids de boss** (`EVENT_BOSS_NAME_*` em `GameWord`)
+- **12 Files da história** (`k_ac_files`: Startup, Awake, Link, Siege, Accord, Complicit, Wild, Peace, Salvation, Madness, Reckoning, Rebirth)
+- **5 Legions** (`k_ac_legions`: Sword, Arrow, Arm, Beast, Axe)
+
+> **Armadilha registrada.** O arquivo guarda cópias da tabela que contêm **só os hashes**, com todas as
+> strings vazias (é o caso de `0xa448`). A tabela real de nomes de boss fica em `0x988a`, um offset
+> **2-alinhado** — uma varredura com passo 4 a ignora e cai na cópia vazia. O gerador varre com passo 2 e
+> resolve cada hash individualmente.
+>
+> **Derivação de File / Capítulo.** O ID de missão carrega o capítulo no byte alto: `0x21xx`..`0x2cxx`
+> corresponde aos Files 01 a 12 (`(id >> 8) - 0x20`), e `0x31xx`..`0x3bxx` aos subcasos dos Files 01 a 11
+> (`(id >> 8) - 0x30`). Essa relação alimenta o cliente de Discord Rich Presence (`extra/rpc/ac_game_data.cpp`).
+
+
+

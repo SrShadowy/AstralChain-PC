@@ -60,6 +60,15 @@ static const char *host_language(void) {
 }
 
 const char *settings_language(void) {
+    // [extra] Environment variable override (from launcher or CLI) // [extra]
+    const char *env_lang = getenv("AC_LANGUAGE");
+    if (!env_lang || !*env_lang) env_lang = getenv("LARECOMP_LANG");
+    if (env_lang && *env_lang) {
+        if (!strcmp(env_lang, "auto")) return host_language();
+        for (int i = 1; i < N_LANGUAGES; i++) {
+            if (!strcmp(env_lang, g_language_codes[i])) return g_language_codes[i];
+        }
+    } // [extra]
     int i = g_settings.language;
     return i > LANG_AUTO && i < N_LANGUAGES ? g_language_codes[i] : host_language();
 }
@@ -137,6 +146,21 @@ void settings_load(void) {
     if (!aspect_key) g_settings.aspect_asked = true;  // (likewise: the aspect ratio was chosen already)
     if (g_settings.volume < 0) g_settings.volume = 0;
     if (g_settings.volume > 2) g_settings.volume = 2;
+    // [extra] Language environment override takes precedence // [extra]
+    const char *el = getenv("AC_LANGUAGE");
+    if (!el || !*el) el = getenv("LARECOMP_LANG");
+    if (el && *el) {
+        if (!strcmp(el, "auto")) {
+            g_settings.language = LANG_AUTO;
+        } else {
+            for (int i = 1; i < N_LANGUAGES; i++) {
+                if (!strcmp(el, g_language_codes[i])) {
+                    g_settings.language = i;
+                    break;
+                }
+            }
+        }
+    } // [extra]
     LOG("[settings] loaded %s\n", SETTINGS_FILE);
 }
 

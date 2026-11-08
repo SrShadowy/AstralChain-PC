@@ -4,7 +4,12 @@
 static HANDLE shared_handles[64],shared_sources[64];
 static unsigned shared_permissions[64];
 static uint64_t shared_sizes[64];
-static struct { uint64_t base; unsigned occupied; } shared_granules[64];
+// [extra]
+#ifndef SHARED_GRANULE_COUNT
+#define SHARED_GRANULE_COUNT 1024
+#endif
+static struct { uint64_t base; unsigned occupied; } shared_granules[SHARED_GRANULE_COUNT];
+// [extra]
 typedef PVOID (WINAPI *HostAlloc2)(HANDLE,PVOID,SIZE_T,ULONG,ULONG,MEM_EXTENDED_PARAMETER*,ULONG);
 typedef PVOID (WINAPI *HostMap3)(HANDLE,HANDLE,PVOID,ULONG64,SIZE_T,ULONG,ULONG,MEM_EXTENDED_PARAMETER*,ULONG);
 typedef BOOL (WINAPI *HostUnmap2)(HANDLE,PVOID,ULONG);
@@ -41,10 +46,12 @@ static void shared_map(uint64_t handle,uint64_t address,uint64_t size,uint64_t p
  shared_api();
  for(uint64_t offset=0;offset<size;offset+=4096) {
  uint64_t page_address=address+offset,base=page_address&~65535ull;
- unsigned granule=0;while(granule<64 && shared_granules[granule].base!=base) granule++;
- if(granule==64) {
-  granule=0;while(granule<64 && shared_granules[granule].base) granule++;
-  if(granule==64) boundary("shared-granule-limit",&state,state.pc);
+ // [extra]
+ unsigned granule=0;while(granule<SHARED_GRANULE_COUNT && shared_granules[granule].base!=base) granule++;
+ if(granule==SHARED_GRANULE_COUNT) {
+  granule=0;while(granule<SHARED_GRANULE_COUNT && shared_granules[granule].base) granule++;
+  if(granule==SHARED_GRANULE_COUNT) boundary("shared-granule-limit",&state,state.pc);
+ // [extra]
   if(shared_alloc2(GetCurrentProcess(),(void*)(uintptr_t)base,65536,MEM_RESERVE|MEM_RESERVE_PLACEHOLDER,PAGE_NOACCESS,NULL,0)!=(void*)(uintptr_t)base)
    boundary("host-shared-placeholder-reserve",&state,state.pc);
   shared_granules[granule].base=base;
@@ -67,8 +74,10 @@ static void shared_unmap(uint64_t handle,uint64_t address,uint64_t size) {
  if(shared_views[view].size!=size) boundary("shared-unmap-size",&state,state.pc);
  for(uint64_t offset=0;offset<size;offset+=4096) {
  uint64_t page_address=address+offset,base=page_address&~65535ull;unsigned granule=0;
- while(granule<64 && shared_granules[granule].base!=base) granule++;
- if(granule==64 || !shared_unmap2(GetCurrentProcess(),(void*)(uintptr_t)page_address,MEM_PRESERVE_PLACEHOLDER)) boundary("host-shared-unmap",&state,state.pc);
+ // [extra]
+ while(granule<SHARED_GRANULE_COUNT && shared_granules[granule].base!=base) granule++;
+ if(granule==SHARED_GRANULE_COUNT || !shared_unmap2(GetCurrentProcess(),(void*)(uintptr_t)page_address,MEM_PRESERVE_PLACEHOLDER)) boundary("host-shared-unmap",&state,state.pc);
+ // [extra]
  shared_granules[granule].occupied&=~(1u<<((page_address-base)/4096));
  if(!shared_granules[granule].occupied) {
   for(unsigned page=0;page<16;page++)

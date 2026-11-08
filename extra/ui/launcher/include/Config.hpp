@@ -54,6 +54,7 @@ struct GameSettings {
     bool cutscene30Fps{false};
     bool asyncSubmit{true};
     QString buttonPrompts{"auto"};
+    QString language{"auto"};
     QString commandWrapper{""};
     QString customEnv{""};
 };

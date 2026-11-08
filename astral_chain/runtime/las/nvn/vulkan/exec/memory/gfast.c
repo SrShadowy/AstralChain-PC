@@ -34,7 +34,11 @@ VkDescriptorBufferInfo gfast_info(void) {
 
 void gfast_prepare(VkCommandBuffer cb) {
     static int on = -1;
-    if (on < 0) { const char *e = getenv("LARECOMP_VK_GMEM_FAST"); on = !e || atoi(e) != 0; }
+    if (on < 0) { // [extra]
+        const char *e = getenv("LARECOMP_VK_GMEM_FAST");
+        on = e ? atoi(e) != 0 : g_vk.props.deviceType != VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU;
+        LOG("[vk] compute global memory copies %s\n", on ? "on" : e ? "off (LARECOMP_VK_GMEM_FAST=0)" : "off (integrated GPU: shared memory)");
+    } // [extra]
     memset(gmap_tab, 0, sizeof gmap_tab);
     gfast_n = 0;
     gmem_info();  // (the heap import, made on first use)

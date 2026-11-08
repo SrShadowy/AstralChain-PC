@@ -91,8 +91,8 @@ void MainWindow::refreshGameStatus()
             m_buildStatus = obj.value("build").toString();
             m_shaderStatus = obj.value("shaders").toString();
 
-            m_statusLabel->setText(QString("Game: %1  |  Build: %2  |  Shaders: %3")
-                .arg(m_installed ? "Ready" : "Not extracted").arg(m_buildStatus).arg(m_shaderStatus));
+            m_statusLabel->setText(QString("Jogo: %1  |  Compilação: %2  |  Shaders: %3")
+                .arg(m_installed ? "Pronto" : "Não extraído").arg(m_buildStatus).arg(m_shaderStatus));
             m_statusDot->setStyleSheet(m_installed ? "font-size: 11px; color: #66bb6a;" : "font-size: 11px; color: #ff7043;");
 
             if (!m_runner.isRunning()) {
@@ -115,7 +115,7 @@ void MainWindow::setRunningUi(bool running, qint64 pid)
         m_playBtn->setEnabled(true);
         m_statusDot->setStyleSheet("font-size: 11px; color: #66bb6a;");
     } else {
-        m_playBtn->setText("▶  PLAY");
+        m_playBtn->setText("▶  JOGAR");
         m_playBtn->setDangerMode(false);
         m_playBtn->setEnabled(m_installed);
         m_statusDot->setStyleSheet("font-size: 11px; color: #42a5f5;");
