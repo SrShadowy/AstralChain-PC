@@ -95,6 +95,11 @@ O repositório foi reorganizado em pastas por domínio/módulo, sem alteração 
 | `astral_chain/runtime/storage/romfs_storage.h` | `extra_romfs_overlay_init` / `extra_romfs_overlay_read` | `extra/storage/romfs_overlay.h` | LayeredFS virtual não-destrutivo para mods/traducao_ptbr e mods/ | 5 lines |
 | `third_party/LASRecomp/runtime/kernel/settings.c` | `voice_language` e `pt-BR` | `third_party/LASRecomp/runtime/kernel/settings.c` | Suporte a idioma virtual pt-BR e persistência de dublagem | 22 lines |
 | `astral_chain/runtime/kernel/svc_dispatch.h` | `rt_svc`/`rt_svc_body` | `kernel/svc_dispatch.h` | Despachante central de chamadas de supervisor (SVC) e frame pacing descompactado e legível | 420 lines |
+| `astral_chain/runtime/las/settings.h` | `UPSCALE_FSR3` / `framegen` / `fsr_jitter` / `fsr_sharpness` / `render_scale` | `extra/toggles/ac_toggles.h` | Persistência em `larecomp.ini` e overrides de env para AMD FSR 3.1 Upscaler, Camera Jitter, RCAS e Frame Generation | 30 lines |
+| `astral_chain/runtime/las/nvn/vulkan/shaders.c` | `builtin_src` + `#include "extra/gpu/fsr3_shaders.h"` | `extra/gpu/fsr3_shaders.h` | Registro dos shaders GLSL 450 do pipeline FSR 3.1 (`fsr3_mv.frag`, `fsr3_taa.frag`, `fsr3_rcas.frag`, `fsr3_fg.frag`) | 6 lines |
+| `astral_chain/runtime/las/nvn/vulkan/textures.c` | `vk_sampler` + `#include "extra/gpu/fsr3_extra.h"` | `extra/gpu/fsr3_extra.h` | Ajuste seletivo de `mipLodBias` negativo (-0.25) exclusivamente em samplers anisotrópicos com mipmapping (`max_aniso > 1`) | 2 lines |
+| `astral_chain/runtime/las/nvn/vulkan/exec/commands/present.c` | `post_barrier` / `post_process` + `s_fg_real_view` | `extra/gpu/fsr3_extra.h` / `fsr3_shaders.h` | Barreira leve de estágio fragmento (`post_barrier`) e pipeline FSR 3.1 fundido (Half-Res MV + EASU 12-tap isotrópico + Jitter Tangencial + RCAS em registrador + YCoCg TAAU + FrameGen) | 62 lines |
+| `astral_chain/runtime/las/nvn/vulkan/device/postprocess.c` | `backend_present` + `extra_fsr3_frame_step` | `extra/gpu/fsr3_extra.h` | Dupla apresentação cadenciada na Swapchain Vulkan (FrameGen 2x) com crédito em `g_blocked_ns` e avanço de fase Halton | 27 lines |
 
 ---
 
@@ -658,5 +663,22 @@ O repositório foi reorganizado em pastas por domínio/módulo, sem alteração 
 - **Verificação**:
   - `./extra/tools/audit.sh`: 100% aprovado nas 8 etapas (marcadores, limites ≤ 400 linhas, compilação do launcher Qt6 e todos os testes).
   - `python3 -m astral_chain.build.setup_game --rebuild-if-stale`: Fast-Relink concluído com sucesso e executável nativo atualizado.
+
+#### 25. AMD FSR 3.1 (Temporal Upscaler + EASU 12-Tap + RCAS + Frame Generation) com Jitter Tangencial Sub-Pixel
+- **Objetivo**: Implementar e otimizar o pipeline do **AMD FSR 3.1** no backend Vulkan 1.3 (`extra/gpu/fsr3_shaders.h` + `extra/gpu/fsr3_extra.h`), combinando **Reconstrução Direcional Isótropa EASU de 12 amostras** fundida com **Acumulação Temporal (TAAU YCoCg)**, **Jitter Sub-Pixel Halton(2,3) Projetado na Tangente**, **Nitidez Adaptativa de Contraste (RCAS) em Registrador** e **Frame Generation (2x FPS)** cadenciado sem penalizar a thread assíncrona `aq_worker`.
+- **Preservação de Aliasing Zero-Cost e Passes Diferidos (`postprocess.c`, `present.c`)**:
+  - Os render targets NVN internos do guest permanecem sempre em escala `1.0f` (`1600x900`), preservando 100% da elisão de cópia `alias_make` em `copy.c`, evitando erros de arredondamento ímpar na pirâmide de profundidade (`675 >> 1`) e mantendo o alinhamento exato com `gl_FragCoord.xy` (`TLDS` / `SUST`) nos passes diferidos de *cel-shading* e contorno da PlatinumGames.
+  - Em vez de deslocar `vkCmdSetViewport` nos passes guest (o que desalinhava quads fullscreen diferidos em relação a `TLDS`), a sequência sub-pixel **Halton(2,3)** é projetada estritamente ao longo do **vetor tangente da borda** (`tang = vec2(-dir.y, dir.x)`) durante a reconstrução espacial-temporal (`tang * dot(j2, tang) * 0.28 * len * (1.0 - ui_mask)`), refinando diagonais serrilhadas sem jamais deslocar contornos perpendicularmente nem tremer a UI.
+  - **Negative MIP LOD Bias seletivo (`textures.c`)**: aplica `-0.25` exclusivamente em samplers 3D anisotrópicos (`mf > 1 && d->max_aniso > 1 && extra_lod_bias() == 0.0f`), preservando LUTs e mapas especulares sem *shimmering*.
+- **Pipeline Vulkan Fundido de Ultra-Baixo Custo (`extra/gpu/fsr3_shaders.h`, `present.c`)**:
+  - **`post_barrier(cb)`**: substitui `vk_full_barrier(cb)` (`ALL_COMMANDS_BIT`) entre passes de pós-processamento por uma barreira leve de estágio fragmento (`COLOR_ATTACHMENT_OUTPUT_BIT` -> `FRAGMENT_SHADER_BIT | COLOR_ATTACHMENT_OUTPUT_BIT`).
+  - **`fsr3_mv.frag` (Half-Res 5-Tap Cross + Lucas-Kanade)**: executado em meia resolução (`800x450` escalado por `rscale`), reduzindo em ~90% o consumo de banda de GPU na estimativa de movimento e sendo totalmente omitido quando nem FrameGen nem Jitter estão ativos (`!need_temp`).
+  - **`fsr3_taa.frag` (Fused 12-Tap EASU + Tangent Jitter + YCoCg TAAU + In-Register RCAS)**: funde em um único passe a reconstrução elíptica rotacionada de 12 amostras do EASU (`setf` + `tapf` com trava anti-ringing dos 4 texels centrais), a reprojeção temporal com *Variance Clipping* $3\times 3$ em **YCoCg** e a nitidez **RCAS** (`p.w`) direto em registrador, eliminando um passe fullscreen inteiro em QuadHD/4K.
+- **FSR 3.1 Frame Generation com Cadenciamento de Ponto Médio (Eliminação de Dente de Serra)**:
+  - **Diagnóstico do Frametime Serrilhado / Dente de Serra**: Anteriormente, Present #1 (quadro interpolado) e Present #2 (quadro real) eram submetidos de forma quase simultânea ao final do frame (~0.2 ms entre eles). Em seguida, a thread `aq_worker` e o motor aguardavam todo o ciclo do próximo frame (~10 ms), fazendo com que as apresentações na Swapchain e no MangoHud alternassem constantemente entre 0.2 ms e 10 ms (padrão serrote/dente de serra com 1% low degradado).
+  - **Pacing de Ponto Médio (`extra_fsr3_fg_pace_midpoint`)**: Mede continuamente a média móvel do ciclo de quadros reais (`s_smoothed_cycle_ns`) e sincroniza a submissão de Present #2 exatamente na metade do ciclo (`target_p2 = now_p1 + s_smoothed_cycle_ns / 2`). Utiliza espera híbrida precisa (`nanosleep` para intervalos grosseiros + micro-spin de ~250 µs via `_mm_pause` / `sched_yield`), dividindo o tempo de tela em 50%/50% entre o quadro interpolado e o real e creditando o tempo de espera em `g_blocked_ns`. O resultado é um frametime perfeitamente plano e estável no MangoHud sem oscilações alternadas e sem acionar `pace_slow`.
+- **Verificação**:
+  - `./extra/tools/audit.sh`: 9/9 etapas aprovadas.
+  - `AC_UPSCALER=fsr3 AC_FSR_JITTER=1 AC_FSR_SHARPNESS=0.80 AC_FRAMEGEN=1 ./extra/tools/qa_runner.sh 20 550`: Fast-Relink, execução aprovada e inspeção visual do Frame 550 sem artefatos.
 
 

@@ -24,7 +24,10 @@ void Config::load()
     m_graphics.fpsLimit = s.value("fps_limit", 60).toInt();
     m_graphics.fpsUnlocked = s.value("fps_unlocked", false).toBool();
     m_graphics.renderScale = s.value("render_scale", 1.0).toDouble();
-    m_graphics.upscaler = s.value("upscaler", "bilinear").toString();
+    m_graphics.upscaler = s.value("upscaler", "fsr3").toString();
+    m_graphics.frameGen = s.value("frame_gen", false).toBool();
+    m_graphics.fsrJitter = s.value("fsr_jitter", true).toBool();
+    m_graphics.fsrSharpness = s.value("fsr_sharpness", 0.80).toDouble();
     m_graphics.lodBias = s.value("lod_bias", 0.0).toDouble();
     m_graphics.lodMin = s.value("lod_min", 0.0).toDouble();
     m_graphics.noShadow = s.value("no_shadow", false).toBool();
@@ -85,6 +88,9 @@ void Config::save()
     s.setValue("fps_unlocked", m_graphics.fpsUnlocked);
     s.setValue("render_scale", m_graphics.renderScale);
     s.setValue("upscaler", m_graphics.upscaler);
+    s.setValue("frame_gen", m_graphics.frameGen);
+    s.setValue("fsr_jitter", m_graphics.fsrJitter);
+    s.setValue("fsr_sharpness", m_graphics.fsrSharpness);
     s.setValue("lod_bias", m_graphics.lodBias);
     s.setValue("lod_min", m_graphics.lodMin);
     s.setValue("no_shadow", m_graphics.noShadow);
@@ -194,7 +200,11 @@ QString Config::buildLaunchEnv() const
         env << "LARECOMP_BC7=1";
     }
     if (m_graphics.fullscreen) env << "AC_FULLSCREEN=1";
-    if (m_graphics.upscaler == "fsr1") env << "AC_UPSCALER=fsr1";
+    if (!m_graphics.upscaler.isEmpty()) env << QString("AC_UPSCALER=%1").arg(m_graphics.upscaler);
+    if (m_graphics.renderScale > 0.0) env << QString("AC_RENDER_SCALE=%1").arg(m_graphics.renderScale, 0, 'f', 2);
+    if (m_graphics.frameGen) env << "AC_FRAMEGEN=1";
+    env << QString("AC_FSR_JITTER=%1").arg(m_graphics.fsrJitter ? 1 : 0);
+    env << QString("AC_FSR_SHARPNESS=%1").arg(m_graphics.fsrSharpness, 0, 'f', 2);
     if (m_graphics.lodBias > 0.0) env << QString("LARECOMP_LOD_BIAS=%1").arg(m_graphics.lodBias);
     if (m_graphics.lodMin > 0.0) env << QString("LARECOMP_LOD_MIN=%1").arg(m_graphics.lodMin);
     if (m_graphics.noShadow) env << "LARECOMP_NO_SHADOW=1";

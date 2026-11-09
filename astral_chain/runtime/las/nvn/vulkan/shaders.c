@@ -6,6 +6,7 @@
 #include <sys/stat.h>
 
 #include "shaders.h"
+#include "extra/gpu/fsr3_shaders.h" // [extra]
 
 void vk_shaders_init(void) {  // (compilers are per thread: check shaderc works at all)
     shaderc_compiler_t c = shaderc_compiler_initialize();
@@ -282,6 +283,10 @@ static const char *builtin_src(const char *name, int *stage) {
                "  o = vec4((lobe * (b + d + f + h) + e) / (4.0 * lobe + 1.0), 1.0);\n"
                "}\n";
     }
+    if (!strcmp(name, "fsr3_mv.frag")) { *stage = STAGE_FRAGMENT; return fsr3_mv_frag_src; } // [extra]
+    if (!strcmp(name, "fsr3_taa.frag")) { *stage = STAGE_FRAGMENT; return fsr3_taa_frag_src; }
+    if (!strcmp(name, "fsr3_rcas.frag")) { *stage = STAGE_FRAGMENT; return fsr3_rcas_frag_src; }
+    if (!strcmp(name, "fsr3_fg.frag")) { *stage = STAGE_FRAGMENT; return fsr3_fg_frag_src; } // [extra]
     if (!strcmp(name, "clear.vert")) {
         *stage = STAGE_VERTEX;
         return "#version 450\n"

@@ -16,7 +16,10 @@ struct GraphicsSettings {
     int fpsLimit{60};
     bool fpsUnlocked{false};  // AC_FPS_UNLOCKED: build with the Dynamic-Unlocked FPS patch variant
     double renderScale{1.0};
-    QString upscaler{"bilinear"};
+    QString upscaler{"fsr3"};
+    bool frameGen{false};
+    bool fsrJitter{true};
+    double fsrSharpness{0.80};
     double lodBias{0.0};   // texture quality: global LOD bias (0 = native, + = lighter)
     double lodMin{0.0};    // LoD floor: min-LOD (0 = off)
     bool noShadow{false};  // disable shadow-map sampling

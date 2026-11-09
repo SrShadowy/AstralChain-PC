@@ -9,6 +9,7 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QSpinBox>
+#include <QDoubleSpinBox>
 #include <QSlider>
 #include <QLabel>
 #include <QLineEdit>
@@ -143,11 +144,26 @@ QWidget* SettingsDialog::createGraphicsTab()
         "Target FPS continua sendo a taxa de apresentação (AC_FPS).");
 
     m_scaleCombo = new QComboBox(page);
-    m_scaleCombo->addItems({"0.5x", "0.75x", "1.0x (Nativo)", "1.25x", "1.5x", "2.0x"});
+    m_scaleCombo->addItem("0.50x (FSR Performance)", 0.50);
+    m_scaleCombo->addItem("0.58x (FSR Balanced)", 0.58);
+    m_scaleCombo->addItem("0.67x (FSR Quality)", 0.67);
+    m_scaleCombo->addItem("0.75x (FSR Ultra Quality)", 0.75);
+    m_scaleCombo->addItem("1.00x (Nativo / FSR 3.1 Native AA)", 1.00);
+    m_scaleCombo->addItem("1.25x (Supersampling)", 1.25);
+    m_scaleCombo->addItem("1.50x (Supersampling)", 1.50);
+    m_scaleCombo->addItem("2.00x (Supersampling)", 2.00);
 
     m_upscalerCombo = new QComboBox(page);
-    m_upscalerCombo->addItem("Bilinear (Padrão)", "bilinear");
+    m_upscalerCombo->addItem("AMD FSR 3.1 (Temporal + Jitter + RCAS)", "fsr3");
     m_upscalerCombo->addItem("AMD FSR 1.0 (EASU + RCAS)", "fsr1");
+    m_upscalerCombo->addItem("Bilinear (Desligado)", "bilinear");
+
+    m_fsrJitterCheck = new QCheckBox("Camera Jitter Sub-Pixel Halton(2,3) (Nitidez Temporal)", page);
+    m_fsrSharpnessSpin = new QDoubleSpinBox(page);
+    m_fsrSharpnessSpin->setRange(0.0, 1.0);
+    m_fsrSharpnessSpin->setSingleStep(0.05);
+    m_fsrSharpnessSpin->setDecimals(2);
+    m_frameGenCheck = new QCheckBox("AMD FSR 3.1 Frame Generation (Interpolação Óptica 2x FPS)", page);
 
     m_textureQualityCombo = new QComboBox(page);
     m_textureQualityCombo->addItem("Nativa (0)", 0.0);
@@ -170,8 +186,11 @@ QWidget* SettingsDialog::createGraphicsTab()
     layout->addRow("Modo de Sincronização:", m_presentModeCombo);
     layout->addRow("FPS Alvo:", m_fpsSpin);
     layout->addRow("", m_fpsUnlockedCheck);
-    layout->addRow("Escala de Renderização:", m_scaleCombo);
+    layout->addRow("Escala / Qualidade FSR:", m_scaleCombo);
     layout->addRow("Upscaler:", m_upscalerCombo);
+    layout->addRow("", m_fsrJitterCheck);
+    layout->addRow("Nitidez FSR 3.1 (RCAS):", m_fsrSharpnessSpin);
+    layout->addRow("", m_frameGenCheck);
     layout->addRow("Qualidade de Textura (LOD Bias):", m_textureQualityCombo);
     layout->addRow("Nível de LoD Mínimo:", m_lodCombo);
     layout->addRow("", m_noShadowCheck);
@@ -250,17 +269,13 @@ void SettingsDialog::loadFromConfig()
     m_fpsSpin->setValue(g.fpsLimit);
     m_fpsUnlockedCheck->setChecked(g.fpsUnlocked);
 
-    for (int i = 0; i < m_scaleCombo->count(); ++i) {
-        if (m_scaleCombo->itemText(i).startsWith(QString::number(g.renderScale))) {
-            m_scaleCombo->setCurrentIndex(i);
-            break;
-        }
-    }
-
     const int upIdx = m_upscalerCombo->findData(g.upscaler);
     if (upIdx >= 0) m_upscalerCombo->setCurrentIndex(upIdx);
+    m_fsrJitterCheck->setChecked(g.fsrJitter);
+    m_fsrSharpnessSpin->setValue(g.fsrSharpness);
+    m_frameGenCheck->setChecked(g.frameGen);
 
-    // nearest-preset selection for discrete graphics toggles (bias / LoD)
+    // nearest-preset selection for discrete graphics toggles (scale / bias / LoD)
     auto selectNearest = [](QComboBox* combo, double value) {
         int best = 0; double bestDelta = 1e18;
         for (int i = 0; i < combo->count(); ++i) {
@@ -269,6 +284,7 @@ void SettingsDialog::loadFromConfig()
         }
         combo->setCurrentIndex(best);
     };
+    selectNearest(m_scaleCombo, g.renderScale);
     selectNearest(m_textureQualityCombo, g.lodBias);
     selectNearest(m_lodCombo, g.lodMin);
     m_noShadowCheck->setChecked(g.noShadow);
@@ -313,7 +329,11 @@ void SettingsDialog::writeToConfig()
     g.presentMode = m_presentModeCombo->currentData().toString();
     g.fpsLimit = m_fpsSpin->value();
     g.fpsUnlocked = m_fpsUnlockedCheck->isChecked();
+    g.renderScale = m_scaleCombo->currentData().toDouble();
     g.upscaler = m_upscalerCombo->currentData().toString();
+    g.fsrJitter = m_fsrJitterCheck->isChecked();
+    g.fsrSharpness = m_fsrSharpnessSpin->value();
+    g.frameGen = m_frameGenCheck->isChecked();
     g.lodBias = m_textureQualityCombo->currentData().toDouble();
     g.lodMin = m_lodCombo->currentData().toDouble();
     g.noShadow = m_noShadowCheck->isChecked();

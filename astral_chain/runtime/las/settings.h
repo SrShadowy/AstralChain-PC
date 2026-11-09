@@ -4,7 +4,7 @@
 #include <stdio.h> // [extra]
 #include <stdlib.h> // [extra]
 #include <string.h> // [extra]
-enum { UPSCALE_BILINEAR = 0, UPSCALE_METALFX = 1, UPSCALE_FSR1 = 2 };
+enum { UPSCALE_BILINEAR = 0, UPSCALE_METALFX = 1, UPSCALE_FSR1 = 2, UPSCALE_FSR3 = 3 }; // [extra]
 enum { AA_OFF = 0, AA_SMAA = 1 };
 // [extra] Language definitions and Settings struct // [extra]
 enum { LANG_AUTO = 0, N_LANGUAGES = 13 }; // [extra]
@@ -14,7 +14,7 @@ static const char *const g_language_codes[N_LANGUAGES] = {
 static const char *const g_language_names[N_LANGUAGES] = {
     "Auto", "Japonês", "Inglês", "Espanhol", "Francês", "Alemão", "Italiano", "Holandês", "Russo", "Coreano", "Chinês Simplificado", "Chinês Tradicional", "Português (Brasil)" // [extra]
 };
-typedef struct { int antialias, fullscreen, upscaler, language, voice_language; } Settings; // [extra]
+typedef struct { int antialias, fullscreen, upscaler, language, voice_language, framegen, fsr_jitter; float fsr_sharpness, render_scale; } Settings; // [extra]
 extern Settings g_settings;
 // [extra] Language helpers for overlay menu and runtime // [extra]
 static inline const char *settings_language(void) {
@@ -64,13 +64,26 @@ static inline void settings_save(void) {
     int vidx = g_settings.voice_language >= 0 && g_settings.voice_language <= 2 ? g_settings.voice_language : 0;
     fprintf(f, "voice_language = %s\n", vlangs[vidx]);
     // [extra]
+    const char *ustr = g_settings.upscaler == UPSCALE_FSR3 ? "fsr3" : g_settings.upscaler == UPSCALE_FSR1 ? "fsr1" : "bilinear"; // [extra]
+    fprintf(f, "upscaler = %s\n", ustr);
+    fprintf(f, "framegen = %d\n", g_settings.framegen ? 1 : 0);
+    fprintf(f, "fsr_jitter = %d\n", g_settings.fsr_jitter ? 1 : 0);
+    fprintf(f, "fsr_sharpness = %.2f\n", g_settings.fsr_sharpness);
+    fprintf(f, "render_scale = %.2f\n", g_settings.render_scale > 0.0f ? g_settings.render_scale : 1.0f);
+    // [extra]
     fclose(f);
 } // [extra]
 static inline void settings_load(void) { // [extra]
+    g_settings.upscaler = UPSCALE_FSR3; // [extra]
+    g_settings.fsr_jitter = 1;
+    g_settings.fsr_sharpness = 0.80f;
+    g_settings.framegen = 0;
+    g_settings.render_scale = 1.0f; // [extra]
     const char *u = getenv("AC_UPSCALER");
     if (u) {
-        if (!strcmp(u, "fsr1") || !strcmp(u, "fsr") || !strcmp(u, "2")) g_settings.upscaler = UPSCALE_FSR1;
-        else if (!strcmp(u, "bilinear") || !strcmp(u, "0")) g_settings.upscaler = UPSCALE_BILINEAR;
+        if (!strcmp(u, "fsr3") || !strcmp(u, "3")) g_settings.upscaler = UPSCALE_FSR3; // [extra]
+        else if (!strcmp(u, "fsr1") || !strcmp(u, "fsr") || !strcmp(u, "2")) g_settings.upscaler = UPSCALE_FSR1; // [extra]
+        else if (!strcmp(u, "bilinear") || !strcmp(u, "none") || !strcmp(u, "0")) g_settings.upscaler = UPSCALE_BILINEAR; // [extra]
     }
     const char *aa = getenv("AC_ANTIALIAS");
     if (aa) {
@@ -92,6 +105,21 @@ static inline void settings_load(void) { // [extra]
             else if (sscanf(line, " %31[^= ] = %63[^\n]", key, val) == 2 && !strcmp(key, "voice_language")) {
                 g_settings.voice_language = !strcmp(val, "ja") ? 1 : !strcmp(val, "en") ? 2 : 0;
             } // [extra]
+            else if (sscanf(line, " %31[^= ] = %63[^\n]", key, val) == 2 && !strcmp(key, "upscaler") && !u) { // [extra]
+                g_settings.upscaler = !strcmp(val, "fsr3") ? UPSCALE_FSR3 : !strcmp(val, "fsr1") ? UPSCALE_FSR1 : UPSCALE_BILINEAR;
+            }
+            else if (sscanf(line, " %31[^= ] = %63[^\n]", key, val) == 2 && !strcmp(key, "framegen")) {
+                g_settings.framegen = atoi(val) != 0;
+            }
+            else if (sscanf(line, " %31[^= ] = %63[^\n]", key, val) == 2 && !strcmp(key, "fsr_jitter")) {
+                g_settings.fsr_jitter = atoi(val) != 0;
+            }
+            else if (sscanf(line, " %31[^= ] = %63[^\n]", key, val) == 2 && !strcmp(key, "fsr_sharpness")) {
+                g_settings.fsr_sharpness = (float)atof(val);
+            }
+            else if (sscanf(line, " %31[^= ] = %63[^\n]", key, val) == 2 && !strcmp(key, "render_scale")) {
+                g_settings.render_scale = (float)atof(val);
+            } // [extra]
         }
         fclose(f);
     }
@@ -110,5 +138,16 @@ static inline void settings_load(void) { // [extra]
         else if (!strcmp(vlang, "en") || !strcmp(vlang, "usa") || !strcmp(vlang, "2")) g_settings.voice_language = 2;
         else g_settings.voice_language = 0;
     }
+    const char *fg = getenv("AC_FRAMEGEN"); // [extra]
+    if (fg && *fg) g_settings.framegen = (atoi(fg) != 0 || !strcmp(fg, "true") || !strcmp(fg, "on"));
+    const char *jit = getenv("AC_FSR_JITTER");
+    if (jit && *jit) g_settings.fsr_jitter = (atoi(jit) != 0 || !strcmp(jit, "true") || !strcmp(jit, "on"));
+    const char *shp = getenv("AC_FSR_SHARPNESS");
+    if (shp && *shp) g_settings.fsr_sharpness = (float)atof(shp);
+    const char *rsc = getenv("AC_RENDER_SCALE");
+    if (rsc && *rsc) g_settings.render_scale = (float)atof(rsc);
+    if (g_settings.fsr_sharpness < 0.0f) g_settings.fsr_sharpness = 0.0f;
+    if (g_settings.fsr_sharpness > 1.0f) g_settings.fsr_sharpness = 1.0f;
+    if (g_settings.render_scale < 0.5f || g_settings.render_scale > 2.0f) g_settings.render_scale = 1.0f; // [extra]
     // [extra]
 } // [extra]

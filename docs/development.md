@@ -180,6 +180,16 @@ ImGui (Insert) e persistidos pelo launcher Qt6; a env continua sendo o default d
 | `LARECOMP_LOD_MIN` | `0` (padrão) / `0..4` | Piso de LOD (`si.minLod = max(minLod, valor)`) em texturas com mipmapping |
 | `LARECOMP_NO_SHADOW` | ausente / `1` | `1` troca o teste de comparação de shadow-map para `VK_COMPARE_OP_ALWAYS` (sombras desligadas) |
 
+### C.2 AMD FSR 3.1 (Temporal Upscaler, Camera Jitter, RCAS & Frame Generation)
+Configuráveis ao vivo no menu ImGui (**Insert**) e persistidos em `larecomp.ini` e no Launcher oficial Qt6:
+| Variável | Valores / Padrão | Efeito |
+|---|---|---|
+| `AC_UPSCALER` | `fsr3` (padrão) / `fsr1` / `bilinear` | Seleciona o motor de upscaling: `fsr3` (AMD FSR 3.1 Temporal + Jitter + RCAS), `fsr1` (Espacial EASU+RCAS) ou `bilinear` |
+| `AC_RENDER_SCALE` | `1.00` (padrão) / `0.50..2.00` | Escala de resolução interna / preset de qualidade FSR (`0.50` Performance, `0.58` Balanced, `0.67` Quality, `0.77` Ultra Quality, `1.00` Native AA / FSRAA) |
+| `AC_FSR_JITTER` | `1` (padrão) / `0` | Ativa o Camera Jitter Sub-Pixel **Halton(2,3)** nos passes 3D com depth test e Negative MIP LOD Bias automático nos samplers |
+| `AC_FSR_SHARPNESS` | `0.80` (padrão) / `0.00..1.00` | Intensidade do estágio **RCAS** (Robust Contrast-Adaptive Sharpening) do FSR 3.1 |
+| `AC_FRAMEGEN` | `0` (padrão) / `1` | Ativa o **FSR 3.1 Frame Generation (2x FPS)** com interpolação óptica bidirecional ($U_{t-0.5}$), proteção de HUD/UI e dupla apresentação cadenciada na Swapchain Vulkan |
+
 ### D. Input Determinístico e Controles
 - **`AC_INPUT_SCRIPT="t0-t1:mask[@period/duty];..."`**:
   Permite injetar sequências automatizadas de entrada baseadas em timestamps (em segundos) desde o primeiro quadro.

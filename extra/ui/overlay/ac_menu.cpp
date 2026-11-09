@@ -166,11 +166,13 @@ static void section_performance(void) {
     pos = (pos + 1) % 120;
     if (filled < 120) filled++;
     if (ImGui::CollapsingHeader("Desempenho", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::Text("%.1f FPS  (%.2f ms)", io.Framerate, io.Framerate > 0 ? 1000.0 / io.Framerate : 0);
+        ImGui::Text("%.1f FPS  (%.2f ms)%s", io.Framerate, io.Framerate > 0 ? 1000.0 / io.Framerate : 0,
+                    (g_extra_framegen >= 0 ? g_extra_framegen : g_settings.framegen) ? " [FSR 3.1 FG 2x]" : "");
         ImGui::PlotLines("##fps", hist, filled, 0, nullptr, 0.0f, 200.0f, ImVec2(-1, 60));
         ImGui::Text("Present mode: %s", s_present_modes[present_index()]);
-        int fps = g_extra_fps_override > 0 ? g_extra_fps_override : 60;
-        ImGui::Text("FPS alvo: %d%s", fps, g_extra_fps_override > 0 ? "" : " (AC_FPS/env)");
+        int fps = g_extra_fps_override >= 0 ? g_extra_fps_override : 60;
+        if (fps > 0) ImGui::Text("FPS alvo: %d%s", fps, g_extra_fps_override > 0 ? "" : " (AC_FPS/env)");
+        else ImGui::Text("FPS alvo: Ilimitado%s", g_extra_fps_override == 0 ? "" : " (AC_FPS/env)");
     }
 }
 
@@ -182,10 +184,39 @@ static void section_graphics(void) {
         g_settings.antialias = aa;
         printf("[overlay] antialias -> %s\n", aa == AA_SMAA ? "smaa" : "off");
     }
-    int up = g_settings.upscaler == UPSCALE_FSR1 ? 1 : 0;
-    if (ImGui::Combo("Upscaler", &up, "Off (bilinear)\0FSR1\0")) {
-        g_settings.upscaler = up ? UPSCALE_FSR1 : UPSCALE_BILINEAR;
-        printf("[overlay] upscaler -> %s\n", up ? "fsr1" : "bilinear");
+    int up = g_settings.upscaler == UPSCALE_FSR3 ? 2 : (g_settings.upscaler == UPSCALE_FSR1 ? 1 : 0);
+    if (ImGui::Combo("Upscaler", &up, "Off (Bilinear)\0AMD FSR 1.0 (Spatial)\0AMD FSR 3.1 (Temporal + Jitter + RCAS)\0")) {
+        g_settings.upscaler = (up == 2) ? UPSCALE_FSR3 : (up == 1 ? UPSCALE_FSR1 : UPSCALE_BILINEAR);
+        settings_save();
+        printf("[overlay] upscaler -> %s\n", up == 2 ? "fsr3.1" : (up == 1 ? "fsr1" : "bilinear"));
+    }
+    static const float s_scales[] = {0.50f, 0.58f, 0.67f, 0.75f, 1.00f, 1.25f, 1.50f, 2.00f};
+    float cur_sc = g_extra_render_scale > 0.0f ? g_extra_render_scale : (g_settings.render_scale > 0.0f ? g_settings.render_scale : 1.0f);
+    int sc_idx = 4;
+    for (int i = 0; i < 8; i++) if (cur_sc >= s_scales[i] - 0.03f && cur_sc <= s_scales[i] + 0.03f) sc_idx = i;
+    if (ImGui::Combo("Escala / Qualidade FSR", &sc_idx,
+                     "0.50x (Performance)\00.58x (Balanced)\00.67x (Quality)\00.75x (Ultra Quality)\0"
+                     "1.00x (Native AA)\01.25x (SSAA)\01.50x (SSAA)\02.00x (SSAA)\0")) {
+        g_extra_render_scale = g_settings.render_scale = s_scales[sc_idx];
+        settings_save();
+        printf("[overlay] render scale -> %.2fx\n", s_scales[sc_idx]);
+    }
+    bool jit = (g_extra_fsr_jitter >= 0 ? g_extra_fsr_jitter : g_settings.fsr_jitter) != 0;
+    if (ImGui::Checkbox("Camera Jitter Sub-Pixel (Halton 2,3)", &jit)) {
+        g_extra_fsr_jitter = g_settings.fsr_jitter = jit ? 1 : 0;
+        settings_save();
+        printf("[overlay] fsr3 jitter -> %s\n", jit ? "on" : "off");
+    }
+    float shp = g_extra_fsr_sharpness >= 0.0f ? g_extra_fsr_sharpness : g_settings.fsr_sharpness;
+    if (ImGui::SliderFloat("Nitidez FSR 3.1 (RCAS)", &shp, 0.0f, 1.0f, "%.2f", ImGuiSliderFlags_AlwaysClamp)) {
+        g_extra_fsr_sharpness = g_settings.fsr_sharpness = shp;
+        settings_save();
+    }
+    bool fg = (g_extra_framegen >= 0 ? g_extra_framegen : g_settings.framegen) != 0;
+    if (ImGui::Checkbox("FSR 3.1 Frame Generation (2x FPS)", &fg)) {
+        g_extra_framegen = g_settings.framegen = fg ? 1 : 0;
+        settings_save();
+        printf("[overlay] fsr3 framegen -> %s\n", fg ? "on" : "off");
     }
 
     // Texture quality (global LOD bias) + LoD floor + shadow — all live overrides

@@ -157,4 +157,17 @@ else
     fi
 fi
 
+echo "--- 9. FSR 3.1 Jitter & Math Self-Test ---"
+if command -v "$PACE_CC" > /dev/null 2>&1; then
+    FSR_BIN="$(mktemp -t ac-fsr3-test.XXXXXX)"
+    if "$PACE_CC" -std=c11 -O1 -Wall -Wextra -Werror -I. -o "$FSR_BIN" extra/tools/fsr3_jitter_test.c -lm > /dev/null 2>&1 \
+            && "$FSR_BIN"; then
+        rm -f "$FSR_BIN"
+    else
+        rm -f "$FSR_BIN"
+        echo "FAILED: FSR 3.1 jitter self-test (extra/tools/fsr3_jitter_test.c)."
+        exit 1
+    fi
+fi
+
 echo "=== All audits passed successfully! ==="

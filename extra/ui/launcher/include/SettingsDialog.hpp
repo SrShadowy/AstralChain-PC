@@ -55,6 +55,9 @@ private:
     QCheckBox* m_fpsUnlockedCheck{nullptr};
     QComboBox* m_scaleCombo{nullptr};
     QComboBox* m_upscalerCombo{nullptr};
+    QCheckBox* m_frameGenCheck{nullptr};
+    QCheckBox* m_fsrJitterCheck{nullptr};
+    QDoubleSpinBox* m_fsrSharpnessSpin{nullptr};
     QComboBox* m_textureQualityCombo{nullptr};
     QComboBox* m_lodCombo{nullptr};
     QCheckBox* m_noShadowCheck{nullptr};

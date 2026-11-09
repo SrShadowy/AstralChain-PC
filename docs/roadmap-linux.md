@@ -121,8 +121,8 @@ Todas as frentes de trabalho são classificadas em quatro categorias explícitas
   - [x] Implementar telemetria de percentis P50, P95 e P99 de apresentação de quadros no backend Vulkan.
   - [x] Suportar perfilamento amostral de CPU via `AC_PROFILE=1`.
   - [ ] Investigar pausas pontuais na compressão de texturas BC7 sob demanda em GPU (*Planejado*).
-  - [ ] Avaliar upscaling espacial (AMD FSR 1.0) para resoluções acima de 1080p (*Melhoria Opcional*).
-- **Critérios Objetivos de Aceitação**: Taxa estável de 60 FPS com frame time consistente e sem hitches perceptíveis.
+  - [x] Implementar upscaling espacial (AMD FSR 1.0) e temporal (AMD FSR 3.1 TAAU + Camera Jitter Halton(2,3) + RCAS + Frame Generation 2x) para máxima nitidez e fluidez.
+- **Critérios Objetivos de Aceitação**: Taxa estável de 60 FPS (ou 120 FPS efetivos com FSR 3.1 Frame Generation) com frame time consistente e sem hitches perceptíveis.
 - **Riscos / Pontos Não Resolvidos**: Otimizações agressivas em estruturas centrais do runtime podem causar regressões sutis em cutscenes.
 
 ---
@@ -156,6 +156,6 @@ Todas as frentes de trabalho são classificadas em quatro categorias explícitas
 | **09** | Validação Estendida de Drivers (AMD Mesa / Intel ANV) | Tarefa Planejada | **Em Andamento** |
 | **10** | Campanha Completa de Jogo em Linux | Tarefa Planejada | **Em Andamento** |
 | **11** | Alternativa de Write-Watch via `userfaultfd` | Hipótese sob Investigação | **Investigação** |
-| **12** | Upscaling Espacial FSR 1.0 e Vibração Avançada | Melhoria Opcional | **Opcional** |
+| **12** | Upscaling AMD FSR 3.1 (TAAU + Jitter + RCAS + FrameGen) & FSR 1.0 | Melhoria Opcional | **Concluído** |
 | **13** | Backend DirectX 12 / Ferramentas Windows | Fora de Escopo | **Descartado / Irrelevante** |
 | **14** | Suporte a 144 FPS (desacoplar câmera/input/timers) | Hipótese sob Investigação | **Adiado — ver [`fps-cap-144.md`](fps-cap-144.md)** |

@@ -1,6 +1,7 @@
 // [extra]
 #include "../device_internal.h"
 #include "extra/ui/overlay/ac_overlay.h" // [extra]
+#include "extra/gpu/fsr3_extra.h" // [extra]
 
 uint64_t renderer_present_count(void) { return g_dev_state.total_frames; }
 uint64_t vk_frame_counter(void) { return g_dev_state.frame_counter; }
@@ -56,7 +57,7 @@ void backend_present(NvnTexture *t) {
         static int p_log = 0;
         if (p_log++ < 5) LOG("[present] sc=%ux%u tex=%ux%u crop=[%d,%d,%d,%d] v=(%.1f,%.1f,%.1f,%.1f)\n",
             g_vk.sc_extent.width, g_vk.sc_extent.height, t->width, t->height, cr[0], cr[1], cr[2], cr[3], vx, vy, vw, vh);
-        renderer_set_scale(1.0f, 1.0f);
+        g_extra_fsr3.fg_presenting_interp = extra_fsr3_eff_framegen() ? 1 : 0; // [extra]
         VkCommandBuffer cb = vk_cmd();
         float pv[8] = {renderer_origin_lower_left() ? 1.0f : 0.0f, 0, 0, 0, uv[0], uv[1], uv[2], uv[3]};
         vk_present_draw(cb, b, (float)vx, (float)vy, (float)vw, (float)vh, pv);
@@ -64,7 +65,36 @@ void backend_present(NvnTexture *t) {
         static long win_shot = -1;
         if (win_shot < 0) win_shot = getenv("LARECOMP_WINDOW_SHOT") ? atol(getenv("LARECOMP_WINDOW_SHOT")) : 0;
         bool shot = win_shot && (long)g_dev_state.total_frames + 1 == win_shot;
-        vk_frame_end(shot ? "window.png" : NULL);
+        if (g_extra_fsr3.fg_ready) { // [extra]
+            static uint64_t s_last_p1_ns;
+            static uint64_t s_smoothed_cycle_ns = 16666666ull;
+            uint64_t now_p1 = SDL_GetTicksNS();
+            if (s_last_p1_ns) {
+                uint64_t delta = now_p1 - s_last_p1_ns;
+                if (delta >= 4000000ull && delta <= 60000000ull) {
+                    s_smoothed_cycle_ns = (s_smoothed_cycle_ns * 3 + delta) / 4;
+                }
+            }
+            s_last_p1_ns = now_p1;
+            uint64_t target_p2_ns = now_p1 + (s_smoothed_cycle_ns / 2);
+
+            vk_frame_end(NULL);
+            g_dev_state.frames++;
+            extra_fsr3_fg_pace_midpoint(target_p2_ns);
+            g_extra_fsr3.fg_presenting_interp = 2;
+            if (vk_frame_begin(black)) {
+                VkCommandBuffer cb2 = vk_cmd();
+                vk_present_draw(cb2, b, (float)vx, (float)vy, (float)vw, (float)vh, pv);
+                ac_overlay_frame();
+                vk_frame_end(shot ? "window.png" : NULL);
+            } else {
+                renderer_submit();
+            }
+        } else {
+            vk_frame_end(shot ? "window.png" : NULL);
+        }
+        g_extra_fsr3.fg_presenting_interp = 0; // [extra]
+        extra_fsr3_frame_step(b->width ? b->width : 1920u, (uint32_t)lround(vw > 0 ? vw : dw)); // [extra]
     } else {
         renderer_submit();
     }

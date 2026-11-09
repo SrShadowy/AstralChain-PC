@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "extra/toggles/ac_toggles.h" // [extra]
+#include "extra/gpu/fsr3_extra.h" // [extra]
 
 #include "vk.h"
 #include "../astc.h"
@@ -1306,7 +1307,7 @@ VkSampler vk_sampler(NvnSamplerDesc *d) {
     si.maxLod = d->lod_max > 1000 ? VK_LOD_CLAMP_NONE : d->lod_max;
     if (mf <= 1) si.maxLod = si.minLod + 0.25f;  // not mipmapped: stay on the base level
     if (si.maxLod < si.minLod) si.maxLod = si.minLod;
-    si.mipLodBias = d->lod_bias + extra_lod_bias(); // [extra]
+    si.mipLodBias = d->lod_bias + extra_lod_bias() + (mf > 1 && d->max_aniso > 1 && extra_lod_bias() == 0.0f ? extra_fsr3_mip_bias() : 0.0f); // [extra]
     if (d->max_aniso > 1) { si.anisotropyEnable = VK_TRUE; si.maxAnisotropy = fminf(d->max_aniso, 16); }
     float lodmin = extra_lod_min(); // [extra]
     if (lodmin > 0 && mf > 1) si.minLod = fmaxf(si.minLod, lodmin);
