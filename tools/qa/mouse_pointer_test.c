@@ -11,9 +11,9 @@
 #include <SDL3/SDL.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "extra/input/mouse_mode.h"
-#include "extra/input/mouse_menu.h"
-#include "extra/input/menu_detect.h"
+#include "hooks/input/mouse_mode.h"
+#include "hooks/input/mouse_menu.h"
+#include "hooks/input/menu_detect.h"
 
 static uint64_t t_now = 0;
 static uint64_t tick(uint64_t ns) { t_now += ns; return t_now; }

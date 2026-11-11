@@ -256,7 +256,7 @@ static bool prec_add(const PipeRec *r) {
 
 void prec_load(void) {
     prec_n = 0;
-    FILE *f = fopen("cache/pipelines.bin", "rb");
+    FILE *f = fopen("build/game/cache/pipelines.bin", "rb");
     if (!f) return;
     uint32_t magic = 0;
     PipeRec r;
@@ -264,7 +264,7 @@ void prec_load(void) {
         while (fread(&r, sizeof r, 1, f) == 1)
             if (prec_find(r.ident, &r.k) < 0 && !prec_add(&r)) break;
     fclose(f);
-    if (magic != PREC_MAGIC) remove("cache/pipelines.bin");
+    if (magic != PREC_MAGIC) remove("build/game/cache/pipelines.bin");
     LOG("[vk] pipeline warm-up: %d recorded pipelines\n", prec_n);
 }
 
@@ -278,7 +278,7 @@ const PipeRec *prec_entry(int i) {
 }
 
 int prec_old_pipelines(long bytes) {
-    FILE *f = fopen("cache/pipelines.bin", "rb");
+    FILE *f = fopen("build/game/cache/pipelines.bin", "rb");
     if (!f) return 0;
     int n = 0;
     uint32_t magic = 0;
@@ -308,8 +308,8 @@ void pipe_record(const Prog *p, const PipeKey *k) {
     r.k.prog = NULL;
     if (prec_find(r.ident, &r.k) >= 0 || !prec_add(&r)) return;
     if (!prec_out) {
-        mkdir("cache", 0755);
-        prec_out = fopen("cache/pipelines.bin", "ab");
+        mkdir("build/game/cache", 0755);
+        prec_out = fopen("build/game/cache/pipelines.bin", "ab");
         if (prec_out && fseek(prec_out, 0, SEEK_END) == 0 && ftell(prec_out) == 0) { uint32_t m = PREC_MAGIC; fwrite(&m, 4, 1, prec_out); }
     }
     if (prec_out) { fwrite(&r, sizeof r, 1, prec_out); fflush(prec_out); }

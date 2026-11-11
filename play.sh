@@ -40,10 +40,11 @@ if [ "${#ENV_ITEMS[@]}" -gt 0 ]; then
     done
 fi
 
+export PYTHONPATH="$PROJECT_ROOT/src${PYTHONPATH:+:$PYTHONPATH}"
 "$PY_EXEC" -m astral_chain.build.setup_game --rebuild-if-stale
 
 if [ "$HAS_ENV" -eq 1 ]; then
-    exec ./astral_chain/tools/run_guarded.sh --run build/game --seconds 604800 "$@"
+    exec ./src/astral_chain/tools/run_guarded.sh --run build/game --seconds 604800 "$@"
 else
-    exec ./astral_chain/tools/run_guarded.sh --run build/game --seconds 604800 --env "$DEFAULT_ENV" "$@"
+    exec ./src/astral_chain/tools/run_guarded.sh --run build/game --seconds 604800 --env "$DEFAULT_ENV" "$@"
 fi

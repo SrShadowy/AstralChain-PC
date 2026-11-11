@@ -155,9 +155,19 @@ static inline void extra_mouse_menu_window_size(void *sdl_win, int *w, int *h) {
 /* Window point -> touch panel point. The game presents a 16:9 image, so the
  * mapping is a centred 16:9 rectangle inside the window (letterbox on the odd
  * axis), with no knowledge of the game's render crop. */
+#define SWITCH_TOUCH_MAX_CONTACTS 16
+#define SWITCH_TOUCH_CONTACT_STRIDE 40
+
 static inline void extra_mouse_menu_panel_point(int win_w, int win_h, int32_t *px, int32_t *py) {
-    if (win_w <= 0 || win_h <= 0) { *px = *py = 0; return; }
-    float vw = (float)win_w, vh = (float)win_h, ox = 0.0f, oy = 0.0f;
+    if (win_w <= 0 || win_h <= 0) {
+        *px = 0;
+        *py = 0;
+        return;
+    }
+    float vw = (float)win_w;
+    float vh = (float)win_h;
+    float ox = 0.0f;
+    float oy = 0.0f;
     if ((float)win_w > (float)win_h * AC_TOUCH_ASPECT) {
         vw = (float)win_h * AC_TOUCH_ASPECT;
         ox = ((float)win_w - vw) * 0.5f;
@@ -165,9 +175,18 @@ static inline void extra_mouse_menu_panel_point(int win_w, int win_h, int32_t *p
         vh = (float)win_w / AC_TOUCH_ASPECT;
         oy = ((float)win_h - vh) * 0.5f;
     }
-    float nx = (g_mouse_cursor_x - ox) / vw, ny = (g_mouse_cursor_y - oy) / vh;
-    if (nx < 0.0f) nx = 0.0f; else if (nx > 1.0f) nx = 1.0f;
-    if (ny < 0.0f) ny = 0.0f; else if (ny > 1.0f) ny = 1.0f;
+    float nx = (g_mouse_cursor_x - ox) / vw;
+    float ny = (g_mouse_cursor_y - oy) / vh;
+    if (nx < 0.0f) {
+        nx = 0.0f;
+    } else if (nx > 1.0f) {
+        nx = 1.0f;
+    }
+    if (ny < 0.0f) {
+        ny = 0.0f;
+    } else if (ny > 1.0f) {
+        ny = 1.0f;
+    }
     *px = (int32_t)(nx * (float)SWITCH_TOUCH_WIDTH);
     *py = (int32_t)(ny * (float)SWITCH_TOUCH_HEIGHT);
 }
@@ -185,9 +204,17 @@ static inline int extra_mouse_menu_touch_active(uint64_t now) {
 /* Fills one HidTouchSample (hid_service.h) with a single contact. */
 static inline void extra_mouse_menu_fill_touch(void *touch_sample_ptr, int win_w, int win_h, uint64_t now) {
     if (!touch_sample_ptr) return;
-    typedef struct { uint64_t sample; uint32_t count, reserved; uint8_t touches[16][40]; } Sample;
-    Sample *s = (Sample*)touch_sample_ptr;
-    if (!extra_mouse_menu_touch_active(now)) { s->count = 0; return; }
+    typedef struct {
+        uint64_t sample;
+        uint32_t count;
+        uint32_t reserved;
+        uint8_t touches[SWITCH_TOUCH_MAX_CONTACTS][SWITCH_TOUCH_CONTACT_STRIDE];
+    } Sample;
+    Sample *s = (Sample *)touch_sample_ptr;
+    if (!extra_mouse_menu_touch_active(now)) {
+        s->count = 0;
+        return;
+    }
     ExtraTouchContact contact;
     memset(&contact, 0, sizeof(contact));
     contact.attributes = 1; /* (connected) */
@@ -222,15 +249,30 @@ static inline void extra_mouse_menu_queue_dir(int dir) {
  * geometry nor the selected index, so a cell->item mapping would be invented. */
 static inline void extra_mouse_menu_on_motion(float dx, float dy) {
     extra_mouse_menu_load_config();
-    if (g_mouse_menu_ignore_motion) { g_mouse_menu_ignore_motion = 0; return; }
+    if (g_mouse_menu_ignore_motion) {
+        g_mouse_menu_ignore_motion = 0;
+        return;
+    }
     if (!g_mouse_menu_enabled || !g_mouse_menu_motion_steps) return;
     float cell = g_mouse_menu_cell_size;
     g_mouse_menu_accum_x += dx;
     g_mouse_menu_accum_y += dy;
-    while (g_mouse_menu_accum_y >= cell) { extra_mouse_menu_queue_dir(EXTRA_MOUSE_MENU_DIR_DOWN); g_mouse_menu_accum_y -= cell; }
-    while (g_mouse_menu_accum_y <= -cell) { extra_mouse_menu_queue_dir(EXTRA_MOUSE_MENU_DIR_UP); g_mouse_menu_accum_y += cell; }
-    while (g_mouse_menu_accum_x >= cell) { extra_mouse_menu_queue_dir(EXTRA_MOUSE_MENU_DIR_RIGHT); g_mouse_menu_accum_x -= cell; }
-    while (g_mouse_menu_accum_x <= -cell) { extra_mouse_menu_queue_dir(EXTRA_MOUSE_MENU_DIR_LEFT); g_mouse_menu_accum_x += cell; }
+    while (g_mouse_menu_accum_y >= cell) {
+        extra_mouse_menu_queue_dir(EXTRA_MOUSE_MENU_DIR_DOWN);
+        g_mouse_menu_accum_y -= cell;
+    }
+    while (g_mouse_menu_accum_y <= -cell) {
+        extra_mouse_menu_queue_dir(EXTRA_MOUSE_MENU_DIR_UP);
+        g_mouse_menu_accum_y += cell;
+    }
+    while (g_mouse_menu_accum_x >= cell) {
+        extra_mouse_menu_queue_dir(EXTRA_MOUSE_MENU_DIR_RIGHT);
+        g_mouse_menu_accum_x -= cell;
+    }
+    while (g_mouse_menu_accum_x <= -cell) {
+        extra_mouse_menu_queue_dir(EXTRA_MOUSE_MENU_DIR_LEFT);
+        g_mouse_menu_accum_x += cell;
+    }
 }
 
 /* in_menu: the cursor is free. Outside it a click is a game button (ZL) and
@@ -262,7 +304,10 @@ static inline void extra_mouse_menu_on_wheel(int y, int in_menu) {
  * before the next. The pad is read once a frame, so a shorter press is lost. */
 static inline void extra_mouse_menu_apply_tap(int slot, uint64_t bit, uint64_t *buttons, uint64_t now) {
     if (g_mouse_menu_btn_until[slot]) {
-        if (now < g_mouse_menu_btn_until[slot]) { *buttons |= bit; return; }
+        if (now < g_mouse_menu_btn_until[slot]) {
+            *buttons |= bit;
+            return;
+        }
         g_mouse_menu_btn_until[slot] = 0;
         g_mouse_menu_btn_gap[slot] = now + AC_MOUSE_MENU_GAP_TICKS;
     }

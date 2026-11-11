@@ -128,7 +128,7 @@ uint64_t stage_hash(const NvnProgram *np, int i) {
 
 void warm_load(void) {
     warm_n = 0;
-    FILE *f = fopen("cache/programs.bin", "rb");
+    FILE *f = fopen("build/game/cache/programs.bin", "rb");
     if (!f) return;
     uint32_t magic = 0;
     if (fread(&magic, 4, 1, f) == 1 && magic == WARM_MAGIC)
@@ -139,7 +139,7 @@ void warm_load(void) {
             warm_n++;
         }
     fclose(f);
-    if (magic != WARM_MAGIC) remove("cache/programs.bin");
+    if (magic != WARM_MAGIC) remove("build/game/cache/programs.bin");
     LOG("[vk] program warm-up: %d recorded variants\n", warm_n);
 }
 
@@ -153,7 +153,7 @@ const WarmRec *warm_entry(int i) {
 }
 
 int warm_old_programs(long bytes) {
-    FILE *f = fopen("cache/programs.bin", "rb");
+    FILE *f = fopen("build/game/cache/programs.bin", "rb");
     if (!f) return 0;
     int n = 0;
     uint32_t magic = 0;
@@ -180,8 +180,8 @@ static void warm_record(const NvnProgram *np, const ShaderKey *vkey, const Shade
     if (warm_n == WARM_MAX) return;
     warm_rec[warm_n++] = r;
     if (!warm_out) {
-        mkdir("cache", 0755);
-        warm_out = fopen("cache/programs.bin", "ab");
+        mkdir("build/game/cache", 0755);
+        warm_out = fopen("build/game/cache/programs.bin", "ab");
         if (warm_out && fseek(warm_out, 0, SEEK_END) == 0 && ftell(warm_out) == 0) { uint32_t magic = WARM_MAGIC; fwrite(&magic, 4, 1, warm_out); }
     }
     if (warm_out) { fwrite(&r, sizeof r, 1, warm_out); fflush(warm_out); }

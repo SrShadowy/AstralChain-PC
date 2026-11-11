@@ -9,52 +9,62 @@ Este documento estabelece as diretrizes práticas de engenharia, organização m
 O projeto prioriza a melhor experiência de execução, estabilidade e desempenho no ecossistema nativo Linux:
 
 ### A. Estrutura do Código
-- **Código Customizado Downstream (`extra/`)**: Novas funcionalidades, trampolines de plataforma (POSIX/SDL3), camada de interface gráfica e scripts de validação residem preferencialmente sob `extra/` para manter a base limpa e desacoplada.
-- **Código Herdado (`astral_chain/`)**: Contém o runtime em C e o motor de recompilação estática herdados do projeto original. Visto que o repositório upstream original de Windows (`Puddz`) está inativo e não traz mais atualizações relevantes, não há necessidade de manter compatibilidade rígida com Windows ou contorcer soluções para preservar paridade com upstream.
+- **Código-Fonte Unificado (`src/`)**: Todo o código-fonte do projeto é organizado por domínio sob `src/`:
+  - `src/hooks/` e `src/additions/`: Trampolines de plataforma (POSIX/SDL3), camada de interface gráfica in-game (`overlay/`), Discord RPC (`rpc/`) e toggles (`toggles/`).
+  - `src/launcher/`: Aplicação nativa em Qt6 / C++20 do Launcher oficial.
+  - `src/runtime/`: Runtime em C do Horizon e motor NVN/Vulkan 1.3.
+  - `src/resources/`: Patches `.pchtxt` (`patches/`) e bancos de variantes de shaders (`data/`).
+  - `src/astral_chain/`: Orquestradores Python de tradução estática, compilação incremental e cache.
+- **Builds (`build/`) e Depuração (`debug/`)**:
+  - `build/game/`, `build/launcher/`, `build/resources/`, `build/objects/`, `build/images/`.
+  - `debug/frames/` (capturas `frame_*.png`, `window.png`, `pass_*.png`) e `debug/traces/` (`trace.c`, `trace.o`, `compiler.log`, `relocation-targets.bin`).
 
-### B. Distribuição de Pastas sob `extra/`
+### B. Distribuição de Pastas sob `src/` e `tools/`
 | Diretório | Responsabilidade |
 |---|---|
-| `extra/platform/` | Trampolines POSIX: memória (`mmap`/`SIGSEGV`), threads/sync, tempo, pacing, crypto e base ELF |
-| `extra/sdl/` | Janela e superfície Vulkan SDL3 + saída de áudio (`SDL_AudioStream`) |
-| `extra/input/` | Mouse/menus, detecção de contexto de entrada e códigos virtuais |
-| `extra/gpu/` | Trampolines Vulkan/Maxwell, write-tracking e shaderc POSIX |
-| `extra/storage/` | Paths POSIX, normalização de saves e enumeração de diretórios |
-| `extra/ui/` | Fonte FreeType, launcher Qt6 e overlay ImGui |
-| `extra/toggles/` | Toggles de runtime (`ac_toggles`) consumidos pela overlay |
-| `extra/ui/launcher/` | Código-fonte C++20 do Launcher oficial nativo Qt6 (`include/`, `src/`, `CMakeLists.txt`) |
-| `extra/tools/` | Scripts de validação estática e testes de automação (`audit.sh`, `qa_runner.sh`) |
-| `extra/hooks.h` | Cabeçalho unificado de re-exportação para integração modular com o código herdado |
+| `src/hooks/platform/` | Trampolines POSIX: tipos Win32 (`win32_types.h`), memória (`mmap`/`SIGSEGV`), threads/sync, tempo, pacing, crypto e base ELF |
+| `src/hooks/sdl/` | Tipos de janela/GDI (`win32_window_types.h`), janela/superfície Vulkan SDL3 (`window_trampoline.h`) e áudio (`audio_trampoline.h`) |
+| `src/hooks/input/` | Mouse/menus, detecção de contexto de entrada e códigos virtuais |
+| `src/hooks/gpu/` | Trampolines Vulkan/Maxwell, FSR 3.1, pool VMA de write-tracking e shaderc POSIX |
+| `src/hooks/storage/` | Paths POSIX (`storage_trampoline.h`), operações de diretório (`dir_trampoline.h`), busca (`find_trampoline.h`) e LayeredFS (`romfs_overlay.h`) |
+| `src/hooks/ui/` | Renderização de fontes FreeType para prompts de botões |
+| `src/hooks/hooks.h` | Cabeçalho unificado de re-exportação para integração modular com `src/runtime/` |
+| `src/additions/overlay/` | Dashboard tático ImGui ("IRIS // Legatus Terminal"), RE Info e HUD de performance |
+| `src/additions/rpc/` | Integração nativa com Discord Rich Presence via IPC socket |
+| `src/additions/toggles/` | Toggles de runtime (`ac_toggles`) consumidos pela overlay e pelo backend Vulkan |
+| `src/launcher/` | Código-fonte C++20 do Launcher oficial nativo Qt6 (`include/`, `src/`, `CMakeLists.txt`) |
+| `tools/qa/` | Scripts de validação estática e testes de automação (`audit.sh`, `qa_runner.sh`) |
 
 ---
 
 ## 2. Separação entre C e C++
 
 - **Núcleo do Runtime e Código Gerado (C)**:
-  - As ~122 unidades de tradução de instruções do jogo, os serviços HLE de baixo nível e o despachante de SVCs permanecem em **C** puro (`-std=gnu17` / C11) para compatibilidade direta com o lifter estático.
+  - As ~122 unidades de tradução de instruções do jogo, os serviços HLE de baixo nível e o despachante de SVCs (`src/runtime/`) permanecem em **C** puro (`-std=gnu17` / C11) para compatibilidade direta com o lifter estático.
   - O código gerado pelo lifter não deve ser editado manualmente; ajustes estruturais devem ser efetuados nas ferramentas geradoras (`lifter.py` / `native_trace.py`).
 - **Camada Downstream e Interface (C++20)**:
-  - Todo o código em `extra/` e o Launcher Qt6 utilizam C++20 moderno com tipagem forte, RAII, ausência de ponteiros crus (`new`/`delete`) e encapsulamento em namespaces (`ac::launcher`).
+  - O código em `src/additions/` e o Launcher Qt6 (`src/launcher/`) utilizam C++20 moderno com tipagem forte, RAII, ausência de ponteiros crus (`new`/`delete`) e encapsulamento em namespaces (`ac::launcher`).
 - **Fronteira de Interoperabilidade (`extern "C"`)**:
-  - Funções em `extra/` invocadas pelo código em C do runtime são declaradas com vinculação `extern "C"`.
+  - Funções em `src/hooks/` e `src/additions/` invocadas pelo código em C do runtime são declaradas com vinculação `extern "C"`.
   - Exceções de C++ nunca devem cruzar a fronteira para o código em C. Erros devem ser tratados localmente ou mapeados para códigos de status.
 
 ---
 
-## 3. Uso Pragmático de Hooks e Marcadores `// [extra]`
+## 3. Uso Pragmático de Hooks, Constantes, Formatação e Marcadores `// [extra]`
 
 A integração entre o código herdado e a camada Linux é feita de maneira pragmática:
 
-### A. Princípio dos Hooks
-- Sempre que uma funcionalidade de plataforma no Linux substituir uma rotina Win32 herdada, a lógica é implementada no módulo adequado sob `extra/` (`platform/`, `sdl/`, `gpu/`, `input/` ou `storage/`) e acionada por uma chamada pontual no código herdado.
-- Evite burocracias artificiais: implemente a solução mais simples e direta que resolva o problema com clareza.
+### A. Princípio dos Hooks, Zero Números Mágicos e Zero Código Comprimido
+- Sempre que uma funcionalidade de plataforma no Linux substituir uma rotina Win32 herdada, a lógica é implementada no módulo adequado sob `src/hooks/` ou `src/additions/` e acionada por uma chamada pontual em `src/runtime/`.
+- **Zero números mágicos**: qualquer constante de tempo, tamanho de buffer, alinhamento, limite de pool ou dimensão de UI deve ser declarada com `#define`, `enum` ou `constexpr` com nome descritivo e unidade explícita.
+- **Zero código comprimido**: nunca comprima múltiplas instruções em uma única linha (ex.: `if (cond) { SetLastError(...); return FALSE; }`) para reduzir artificialmente a contagem de linhas. Cada statement deve estar em sua própria linha com indentação clara. Se um arquivo crescer além do limite ideal, refatore e divida-o em cabeçalhos/arquivos coesos.
 
 ### B. Uso dos Marcadores `// [extra]`
-- O marcador `// [extra]` serve para **demarcar claramente onde o código herdado foi editado**, facilitando revisões e auditorias estáticas (`audit.sh`).
+- O marcador `// [extra]` serve para **demarcar claramente onde `src/runtime/` foi editado**, facilitando revisões e auditorias estáticas (`tools/qa/audit.sh`).
 - **Use estritamente quando necessário**: não exagere na marcação nem polua o código com comentários redundantes linha a linha.
   - Para alterações ou chamadas pontuais (linha única):
     ```c
-    #include "extra/hooks.h" // [extra]
+    #include "hooks/hooks.h" // [extra]
     extra_pad_read_sensors(device, data); // [extra]
     ```
   - Para regiões ou blocos editados de múltiplas linhas: marque apenas a **primeira linha (início)** e a **última linha (fim)** do bloco:
@@ -70,15 +80,15 @@ A integração entre o código herdado e a camada Linux é feita de maneira prag
 
 ## 4. Limites de Tamanho e Responsabilidade das Funções
 
-Diretrizes práticas verificadas automaticamente por scripts de conformidade (`extra/tools/audit.sh`):
+Diretrizes práticas verificadas automaticamente por scripts de conformidade (`./tools/qa/audit.sh`):
 
-| Elemento | Meta Ideal | Limite de Revisão | Ação Obrigatória |
+| Elemento | Meta Ideal | Contexto Coeso Permitido | Ação Obrigatória |
 |---|---|---|---|
-| **Arquivo Fonte (`extra/`)** | ≤ 300 linhas | 300 a 400 linhas | > 400 linhas: dividir por responsabilidade independente |
+| **Arquivo Fonte (`src/hooks`, `src/additions`, `src/launcher`, `tools/qa`)** | ≤ 350 linhas | 350 a 450 linhas | > 450 linhas: obrigatório refatorar e dividir em arquivos coesos |
 | **Funções** | 20 a 40 linhas | > 40 linhas | > 50 linhas: avaliar decomposição lógica |
 | **Parâmetros de Função** | ≤ 5 parâmetros | 6 a 7 parâmetros | > 7 parâmetros: agrupar em struct de contexto |
 
-**Regra de Ouro da Divisão**: Arquivos e funções devem ser divididos por **responsabilidade clara**, nunca de forma fragmentada ou artificial apenas para satisfazer contadores de linha.
+**Regra de Ouro da Divisão**: Nunca comprima linhas para caber em um limite arbitrário. Se o arquivo passar do tamanho ideal, avalie se há subdomínios claros para extrair em novos arquivos (como `win32_types.h`, `win32_window_types.h`, `dir_trampoline.h`); se o contexto for estritamente coeso, é permitido ficar entre 350 e 450 linhas sem comprimir código.
 
 ---
 
@@ -89,28 +99,28 @@ A validação de alterações deve ser ágil e proporcional ao risco da modifica
 1. **Alteração de Documentação**:
    - Verificar precisão das informações técnicas, consistência de links relativos e formatação markdown.
 2. **Alteração de Ferramentas / Launcher Qt6**:
-   - Executar `./extra/tools/audit.sh` (valida marcadores necessários, confere limites de 400 linhas e compila o launcher Qt6 via Ninja).
+   - Executar `./tools/qa/audit.sh` (valida marcadores necessários, confere limites de linhas, verifica ausência de blocos comprimidos e compila o launcher Qt6 via Ninja).
 3. **Alteração de Código do Runtime / Compilação**:
    - Executar o Fast-Relink via Python:
      ```bash
-     python3 -m astral_chain.build.setup_game --rebuild-if-stale
+     PYTHONPATH=src .venv/bin/python -m astral_chain.build.setup_game --rebuild-if-stale
      ```
      Verifica a compilação incremental e linkage do executável ELF em ~8 segundos.
 4. **Alteração Gráfica / Comportamental do Jogo**:
    - Executar o runner de QA determinístico:
      ```bash
      # Smoke test completo com input e validação visual de frame (20s)
-     ./extra/tools/qa_runner.sh 20 550
+     ./tools/qa/qa_runner.sh 20 550
 
      # Verificação em ambiente headless (sem display/GPU ativa)
-     SKIP_RUNTIME=1 ./extra/tools/qa_runner.sh
+     SKIP_RUNTIME=1 ./tools/qa/qa_runner.sh
      ```
 
 ---
 
 ## 6. O Launcher Oficial do Projeto (Qt6 C++20)
 
-O launcher oficial para o projeto é a aplicação nativa em **Qt6 / C++20** localizada em `extra/ui/launcher/`.
+O launcher oficial para o projeto é a aplicação nativa em **Qt6 / C++20** localizada em `src/launcher/`.
 
 > [!IMPORTANT]
 > O launcher herdado em C# (`Launcher.cs` / `Astral Chain Launcher.exe`) pertence ao upstream Windows original e **não é compilado nem utilizado no Linux**. Não gaste tempo tentando portar ou manter o launcher em C#.
@@ -118,8 +128,8 @@ O launcher oficial para o projeto é a aplicação nativa em **Qt6 / C++20** loc
 ### Compilação do Launcher Qt6
 ```bash
 # Configurar e compilar via CMake + Ninja
-cmake -B build-launcher -S extra/ui/launcher -GNinja
-cmake --build build-launcher
+cmake -B build/launcher -S src/launcher -GNinja
+cmake --build build/launcher
 
 # Execução direta via helper
 ./launcher.sh
@@ -144,6 +154,7 @@ O runtime suporta uma série de variáveis de ambiente para controle de performa
 | `AC_GPU_HANG_MS` | `1200` (ms) | Tempo limite antes de acionar o watchdog interno e encerrar o jogo por travamento de GPU |
 | `AC_FULLSCREEN` | `1` / `0` | Inicializa a janela em tela cheia sem bordas (borderless fullscreen) |
 | `AC_OVERLAY` | `1` / `0` (padrão) | Inicia com o menu ImGui in-game aberto (o mesmo da tecla **Insert**; útil para validação headless de renderização em conjunto com `LARECOMP_WINDOW_SHOT=<frame>`) |
+| `AC_PERF_HUD` | `0` (padrão) / `1..3` | Inicia com o **Overlay de Performance IRIS** ativo mesmo com o menu escondido (`1` = Compacto, `2` = Detalhado com gráfico, `3` = Mínimo) |
 | `AC_REINFO` | `1` / `0` (padrão) | Inicia com a janela **RE Info** aberta (a mesma da tecla **F8**): valores ao vivo dos slots de estado do jogo e as tabelas id→nome extraídas do texto. Somente leitura |
 | `AC_HANDHELD` | `1` / `0` | Simula modo portátil do Switch (renderiza 1280x720 recortado para janela 1600x900) |
 | `AC_VERBOSE` | `1` / `0` | Ativa saída verbosa de logs no terminal (padrão enxuto mantido em 0) |
@@ -220,9 +231,10 @@ Configuráveis ao vivo no menu ImGui (**Insert**) e persistidos em `larecomp.ini
   - Tecla **F10** e tecla de **pausa do jogo** (MINUS, `Esc` por padrão): alternam entre o modo de jogo (`CAPTURED`, câmera ativa) e o modo de menu (`RELEASED`, cursor do sistema visível e câmera travada, com acumuladores zerados para não haver chicoteio ao voltar). A tecla de pausa foi escolhida por espelhar exatamente o ciclo abrir/fechar do menu de pausa do jogo.
   - Alt+Tab devolve o cursor e o restaura ao recuperar o foco, preservando a escolha explícita de menu.
   - **Gate de foco**: a injeção de menu (passos D-pad, taps A/B e contato de touch) é aplicada dentro de `if(connected && focused)` em `hid_publish`. `window_trampoline.h` fixa `g_sdl_input_focus = 1` logo após `SDL_RaiseWindow` porque o evento `WINDOW focus` do SDL pode nunca chegar em execução sem interação; sem isso toda a injeção fica silenciosamente desligada.
-  - `./extra/tools/audit.sh` roda `extra/tools/mouse_pointer_test.c` (mapeamento de painel, passos, pulsos, clique/roda e política de modo) e reprova a auditoria se a tradução do ponteiro quebrar.
-  - `AC_PROMPTS=switch`: Força a exibição dos ícones originais de controle do Switch em vez dos ícones de PC gerados via FreeType.
-  - **Insert (menu ImGui in-game)**: abre o overlay de Performance/Graphics/Debug/About (`extra/ui/overlay/`). Com o menu aberto, teclado/mouse/gamepad deixam de chegar ao jogo e o mouse sai do modo relativo; Insert fecha e restaura o modo conforme o foco. Antialiasing, Upscaler, Limite de FPS e flags de debug valem no frame seguinte; VSync recria a swapchain no pré-frame; Async submit é kill switch one-way (religar exige relaunch). Todo item é override em memória sobre o env — nada é persistido no v1.
+  - `./tools/qa/audit.sh` roda `tools/qa/mouse_pointer_test.c` (mapeamento de painel, passos, pulsos, clique/roda e política de modo) e reprova a auditoria se a tradução do ponteiro quebrar.
+  - `AC_PROMPTS=auto|xbox|switch|keyboard`: Define o layout de ícones de botões no HUD e menus (`auto` alterna dinamicamente entre **Controle Xbox** para gamepads padrão/Xbox, **Nintendo Switch** para Pro Controller/Joy-Con e **Teclado & Mouse** ao usar teclado/mouse; também configurável ao vivo no menu IRIS via tecla `Insert`).
+  - `AC_XBOX_CONFIRM_A=1|0`: Quando ativo (`1`, padrão), troca o botão de **Confirmar / Ação / Interagir** de `B` para `A` no controle (mapeando o botão físico inferior `A` para `IB_A` e o direito `B` para `IB_B`, exibindo `(A)` nas ações/confirmações e ajustando o losango de 4 botões sem alterar `X`, `Y`, `LB`, `RB`, `LT`, `RT`, `View` ou `Menu`). Configurável no Launcher Qt6 e ao vivo no menu IRIS (`Insert`).
+  - **Insert ou Segurar `L3 + R3` por 2 segundos no Controle (menu ImGui in-game)**: abre o overlay de Performance/Graphics/Debug/About (`src/additions/overlay/`). Com o menu aberto, teclado/mouse/gamepad deixam de chegar ao jogo, a navegação por controle fica ativa (`D-Pad`/Analógico para mover, `A` para selecionar, `B` para fechar combos, `LB`/`RB` para trocar de aba) e o mouse sai do modo relativo; `Insert` ou segurar `L3 + R3` por 2s fecha e restaura o modo conforme o foco. Antialiasing, Upscaler, Limite de FPS, Prompts de Botões, Confirmar com A e flags de debug valem no frame seguinte; VSync recria a swapchain no pré-frame; Async submit é kill switch one-way (religar exige relaunch).
 
 ---
 

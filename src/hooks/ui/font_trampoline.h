@@ -6,8 +6,8 @@
 #include <wchar.h>
 #include <math.h>
 #include <dlfcn.h>
-#include "extra/platform/platform_posix.h"
-#include "extra/sdl/window_trampoline.h"
+#include "hooks/platform/platform_posix.h"
+#include "hooks/sdl/window_trampoline.h"
 
 typedef struct {
     unsigned int rows, width;
@@ -23,17 +23,35 @@ static int (*s_ft_new_face)(void *, const char *, long, void **);
 static int (*s_ft_set_sizes)(void *, unsigned int, unsigned int);
 static int (*s_ft_load_char)(void *, unsigned long, int);
 
+#define EXTRA_PROMPT_GEN_SHIFT 2
+#define EXTRA_PROMPT_MODE_MASK 3
+
 static inline int extra_prompts_active(void) {
-    const char *e = getenv("AC_PROMPTS");
-    if (e && (!strcmp(e, "switch") || !strcmp(e, "0"))) return 0;
-    if (e && (!strcmp(e, "keyboard") || !strcmp(e, "1"))) return 1;
-    return extra_get_active_device();
+    if (g_extra_prompts_override >= EXTRA_PROMPT_MODE_SWITCH &&
+        g_extra_prompts_override <= EXTRA_PROMPT_MODE_XBOX) {
+        return g_extra_prompts_override;
+    }
+    if (g_extra_prompts_override != EXTRA_PROMPT_MODE_AUTO) {
+        const char *e = getenv("AC_PROMPTS");
+        if (e && (!strcmp(e, "switch") || !strcmp(e, "0"))) {
+            return EXTRA_PROMPT_MODE_SWITCH;
+        }
+        if (e && (!strcmp(e, "keyboard") || !strcmp(e, "1"))) {
+            return EXTRA_PROMPT_MODE_KBM;
+        }
+        if (e && (!strcmp(e, "xbox") || !strcmp(e, "2"))) {
+            return EXTRA_PROMPT_MODE_XBOX;
+        }
+    }
+    if (extra_get_active_device() == EXTRA_DEVICE_GAMEPAD) {
+        return extra_get_gamepad_prompt_mode();
+    }
+    return EXTRA_PROMPT_MODE_KBM;
 }
 
 static inline uint32_t extra_prompt_generation(void) {
-    const char *e = getenv("AC_PROMPTS");
-    if (e && (!strcmp(e, "switch") || !strcmp(e, "0") || !strcmp(e, "keyboard") || !strcmp(e, "1"))) return 1;
-    return extra_get_prompt_generation();
+    uint32_t mode = (uint32_t)(extra_prompts_active() & EXTRA_PROMPT_MODE_MASK);
+    return (extra_get_prompt_generation() << EXTRA_PROMPT_GEN_SHIFT) | mode;
 }
 
 static inline int extra_prompts_enabled(const char *e) {

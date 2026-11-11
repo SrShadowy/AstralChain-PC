@@ -7,8 +7,8 @@
 #include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
-#include "extra/toggles/ac_toggles.h" // [extra]
-#include "extra/gpu/fsr3_extra.h" // [extra]
+#include "additions/toggles/ac_toggles.h" // [extra]
+#include "hooks/gpu/fsr3_extra.h" // [extra]
 
 #include "vk.h"
 #include "../astc.h"

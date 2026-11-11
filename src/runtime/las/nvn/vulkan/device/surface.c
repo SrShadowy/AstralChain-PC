@@ -68,7 +68,7 @@ void vk_init_for_warm(void) {
                                       .hinstance = GetModuleHandleW(NULL), .hwnd = g_dev_state.window};
     VK_CHECK(vkCreateWin32SurfaceKHR(g_vk.inst, &si, NULL, &g_vk.surface));
 #else
-    g_dev_state.window = extra_vk_init_warm(g_vk.inst, &g_vk.surface, dev_create_instance);
+    g_dev_state.window = extra_vk_init_warm(&g_vk.inst, &g_vk.surface, dev_create_instance);
 #endif
     dev_pick_device();
     dev_create_device();

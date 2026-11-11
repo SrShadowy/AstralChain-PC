@@ -24,7 +24,10 @@ public:
     void setProgress(qreal value);
 
     qreal pulse() const { return m_pulse; }
-    void setPulse(qreal value) { m_pulse = qBound(0.0, value, 1.0); update(); }
+    void setPulse(qreal value) {
+        m_pulse = qBound(0.0, value, 1.0);
+        update();
+    }
 
     void setText(const QString& text) { m_button->setText(text); }
     QString text() const { return m_button->text(); }

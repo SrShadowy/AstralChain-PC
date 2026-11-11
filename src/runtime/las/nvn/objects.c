@@ -5,7 +5,7 @@
 
 #include "../kernel.h"
 #include "nvn.h"
-#include "extra/toggles/ac_toggles.h" // [extra]
+#include "additions/toggles/ac_toggles.h" // [extra]
 
 void renderer_sync(void);
 uint64_t renderer_wait_target(uint64_t seq);
@@ -166,11 +166,14 @@ static bool aq_enabled(void) {
     }
     return aq_on;
 }
+static uint64_t aq_last_exec; // [extra]
 static uint64_t aq_push(AsyncJob j) {  // the job's number (done when aq_head reaches it)
     pthread_mutex_lock(&aq_lock);
     while (aq_tail - aq_head == AQ_SIZE || (j.kind == AJ_PRESENT && aq_presents >= 1)) pthread_cond_wait(&aq_less, &aq_lock);
     aq[aq_tail % AQ_SIZE] = j;
     uint64_t id = ++aq_tail;
+    if (j.kind == AJ_FENCE && j.sync) j.sync->async_job = id; // [extra]
+    if (j.kind == AJ_EXEC) aq_last_exec = id; // [extra]
     if (j.kind == AJ_PRESENT) aq_presents++;
     pthread_cond_signal(&aq_more);
     pthread_mutex_unlock(&aq_lock);
@@ -242,10 +245,11 @@ void renderer_wait_seq(uint64_t seq);
 NVN(nvnQueueFenceSync) {
     NvnSync *s = sync_of(A(1));
     s->signaled = 1;
-    if (aq_on > 0) { s->async_job = aq_push((AsyncJob){.kind = AJ_FENCE, .sync = s}); return; }
+    if (aq_on > 0) { aq_push((AsyncJob){.kind = AJ_FENCE, .sync = s}); return; } // [extra]
     s->seq = renderer_fence_seq();
 }
-void nvn_sync_set_seq(uint64_t guest, uint64_t seq) { NvnSync *s = sync_of(guest); s->signaled = 1; s->seq = seq; }
+void nvn_sync_mark_cmd(uint64_t guest) { NvnSync *s = sync_of(guest); s->signaled = 1; s->from_cmd = 1; } // [extra]
+void nvn_sync_set_seq(uint64_t guest, uint64_t seq) { NvnSync *s = sync_of(guest); s->signaled = 1; s->seq = seq; s->from_cmd = 0; } // [extra]
 NVN(nvnQueueWaitSync) { RET(1); }
 
 // ================================================================== sync / event
@@ -269,6 +273,10 @@ NVN(nvnSyncWait) {  // NVN_SYNC_WAIT_RESULT_ALREADY_SIGNALED
         if (!A(1)) { RET(2); return; }
         aq_wait(sy->async_job);
     }
+    if (sy->from_cmd && aq_on > 0 && aq_last_exec && !aq_job_done(aq_last_exec)) { // [extra]
+        if (!A(1)) { RET(2); return; }
+        aq_wait(aq_last_exec);
+    } // [extra]
     uint64_t target = renderer_wait_target(sy->seq);
     if (renderer_seq_done(target)) { RET(0); return; }
     if (!A(1)) { RET(2); return; }
@@ -797,6 +805,8 @@ NVN(nvnQueueAcquireTexture) {
 NVN(nvnQueuePresentTexture) {
     NvnWindow *w = HOST(NvnWindow, A(1));
     int i = (int)A(2);
+    extern void nvn_present_pace(int interval); // [extra]
+    nvn_present_pace(w->interval); // [extra]
     if (i >= 0 && i < w->num) {
         if (aq_on > 0) {
             AsyncJob j = {.kind = AJ_PRESENT, .tex = HOST(NvnTexture, w->textures[i])};
@@ -807,10 +817,6 @@ NVN(nvnQueuePresentTexture) {
             backend_present(HOST(NvnTexture, w->textures[i]));
         }
     }
-    // Astral Chain: a Switch display refreshes at 60 Hz and the window shows a new image at most every
-    // `interval` refreshes; the runtime parks the presenting guest thread until that vsync (nvn_hle.h).
-    extern void nvn_present_pace(int interval);
-    nvn_present_pace(w->interval);
 }
 
 // ================================================================== small state objects

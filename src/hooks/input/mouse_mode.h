@@ -6,7 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "extra/input/mouse_menu.h"
+#include "hooks/input/mouse_menu.h"
 
 #ifdef __cplusplus
 extern "C" {

@@ -239,5 +239,5 @@ static MMRESULT wave_output_close(WaveOutput *output) {
  memset(output,0,sizeof(*output));return MMSYSERR_NOERROR;
 }
 #else // [extra]
-#include "extra/hooks.h" // [extra]
+#include "hooks/hooks.h" // [extra]
 #endif // [extra]

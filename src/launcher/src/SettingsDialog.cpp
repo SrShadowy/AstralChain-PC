@@ -21,8 +21,8 @@ SettingsDialog::SettingsDialog(Config& config, QWidget* parent)
     : QDialog(parent)
     , m_config(config)
 {
-    setWindowTitle("Astral Chain - Configurações");
-    resize(480, 420);
+    setWindowTitle("IRIS // Configurações do Sistema");
+    resize(580, 480);
     setupUi();
     loadFromConfig();
 }
@@ -30,20 +30,23 @@ SettingsDialog::SettingsDialog(Config& config, QWidget* parent)
 void SettingsDialog::setupUi()
 {
     auto* mainLayout = new QVBoxLayout(this);
+    mainLayout->setContentsMargins(16, 16, 16, 16);
+    mainLayout->setSpacing(12);
 
     auto* tabs = new QTabWidget(this);
-    tabs->addTab(createGameTab(), "Jogo");
-    tabs->addTab(createGraphicsTab(), "Gráficos");
-    tabs->addTab(createAudioTab(), "Áudio");
-    tabs->addTab(createAdvancedTab(), "Avançado");
+    tabs->addTab(createGameTab(), "  Jogo & Mouse  ");
+    tabs->addTab(createGraphicsTab(), "  Gráficos & FSR 3.1  ");
+    tabs->addTab(createAudioTab(), "  Áudio  ");
+    tabs->addTab(createAdvancedTab(), "  Avançado  ");
     mainLayout->addWidget(tabs);
 
     auto* buttonLayout = new QHBoxLayout();
-    auto* saveBtn = new QPushButton("Salvar", this);
     auto* cancelBtn = new QPushButton("Cancelar", this);
+    auto* saveBtn = new QPushButton("Salvar Configurações", this);
+    saveBtn->setObjectName("primaryBtn");
     buttonLayout->addStretch();
-    buttonLayout->addWidget(saveBtn);
     buttonLayout->addWidget(cancelBtn);
+    buttonLayout->addWidget(saveBtn);
     mainLayout->addLayout(buttonLayout);
 
     connect(saveBtn, &QPushButton::clicked, this, &SettingsDialog::onSave);
@@ -57,11 +60,13 @@ QWidget* SettingsDialog::createGameTab()
 
     m_parallelCheck = new QCheckBox("Execução Paralela de Threads (Recomendado)", page);
     m_ignoreFocusCheck = new QCheckBox("Continuar Executando ao Perder o Foco da Janela", page);
+    m_xboxConfirmACheck = new QCheckBox("Confirmar / Ação com Botão A no Controle (Inverter B -> A)", page);
 
     auto* form = new QFormLayout();
     m_promptsCombo = new QComboBox(page);
-    m_promptsCombo->addItem("Automático (Gamepad = Switch, Teclado = PC)", "auto");
-    m_promptsCombo->addItem("Nintendo Switch / Controle (Original)", "switch");
+    m_promptsCombo->addItem("Automático (Xbox / Switch / Teclado)", "auto");
+    m_promptsCombo->addItem("Controle Xbox (Padrão PC)", "xbox");
+    m_promptsCombo->addItem("Nintendo Switch (Original)", "switch");
     m_promptsCombo->addItem("Teclado & Mouse (PC)", "keyboard");
     form->addRow("Ícones de Botões (Prompts):", m_promptsCombo);
 
@@ -91,6 +96,7 @@ QWidget* SettingsDialog::createGameTab()
 
     layout->addWidget(m_parallelCheck);
     layout->addWidget(m_ignoreFocusCheck);
+    layout->addWidget(m_xboxConfirmACheck);
     layout->addLayout(form);
     layout->addWidget(m_mouseWidget);
     layout->addStretch();
@@ -129,10 +135,10 @@ QWidget* SettingsDialog::createGraphicsTab()
     });
 
     m_fpsSpin = new QSpinBox(page);
-    m_fpsSpin->setRange(0, 240);
+    m_fpsSpin->setRange(0, GraphicsSettings::kMaxFpsLimit);
     m_fpsSpin->setSpecialValueText("0 (Ilimitado)");
-    m_fpsSpin->setSingleStep(5);
-    m_fpsSpin->setValue(60);
+    m_fpsSpin->setSingleStep(GraphicsSettings::kFpsSpinStep);
+    m_fpsSpin->setValue(GraphicsSettings::kDefaultFpsLimit);
 
     // The game's own rate cap comes from the vendored Dynamic-FPS patch, which is compiled in (a
     // two-instruction difference), so this toggle changes the next build, not the running one.
@@ -142,6 +148,9 @@ QWidget* SettingsDialog::createGraphicsTab()
         "Sem isto o patch Dynamic-60fps fixa o timer do jogo em 60 FPS.\n"
         "Com isto o jogo usa o próprio passo medido, de 15 a 480 FPS.\n"
         "Target FPS continua sendo a taxa de apresentação (AC_FPS).");
+    connect(m_fpsSpin, &QSpinBox::valueChanged, this, [this](int val) {
+        if (val == 0 || val > GraphicsSettings::kDefaultFpsLimit) m_fpsUnlockedCheck->setChecked(true);
+    });
 
     m_scaleCombo = new QComboBox(page);
     m_scaleCombo->addItem("0.50x (FSR Performance)", 0.50);
@@ -160,9 +169,9 @@ QWidget* SettingsDialog::createGraphicsTab()
 
     m_fsrJitterCheck = new QCheckBox("Camera Jitter Sub-Pixel Halton(2,3) (Nitidez Temporal)", page);
     m_fsrSharpnessSpin = new QDoubleSpinBox(page);
-    m_fsrSharpnessSpin->setRange(0.0, 1.0);
-    m_fsrSharpnessSpin->setSingleStep(0.05);
-    m_fsrSharpnessSpin->setDecimals(2);
+    m_fsrSharpnessSpin->setRange(GraphicsSettings::kMinFsrSharpness, GraphicsSettings::kMaxFsrSharpness);
+    m_fsrSharpnessSpin->setSingleStep(GraphicsSettings::kFsrSharpnessStep);
+    m_fsrSharpnessSpin->setDecimals(GraphicsSettings::kFsrSharpnessDecimals);
     m_frameGenCheck = new QCheckBox("AMD FSR 3.1 Frame Generation (Interpolação Óptica 2x FPS)", page);
 
     m_textureQualityCombo = new QComboBox(page);
@@ -203,7 +212,7 @@ QWidget* SettingsDialog::createAudioTab()
     auto* layout = new QFormLayout(page);
 
     m_volumeSlider = new QSlider(Qt::Horizontal, page);
-    m_volumeSlider->setRange(0, 100);
+    m_volumeSlider->setRange(AudioSettings::kMinVolume, AudioSettings::kDefaultVolume);
     m_volumeLabel = new QLabel("100%", page);
 
     auto* volLayout = new QHBoxLayout();
@@ -267,7 +276,7 @@ void SettingsDialog::loadFromConfig()
     }
     if (pIdx >= 0) m_presentModeCombo->setCurrentIndex(pIdx);
     m_fpsSpin->setValue(g.fpsLimit);
-    m_fpsUnlockedCheck->setChecked(g.fpsUnlocked);
+    m_fpsUnlockedCheck->setChecked(g.fpsUnlocked || g.fpsLimit == 0 || g.fpsLimit > GraphicsSettings::kDefaultFpsLimit);
 
     const int upIdx = m_upscalerCombo->findData(g.upscaler);
     if (upIdx >= 0) m_upscalerCombo->setCurrentIndex(upIdx);
@@ -277,10 +286,14 @@ void SettingsDialog::loadFromConfig()
 
     // nearest-preset selection for discrete graphics toggles (scale / bias / LoD)
     auto selectNearest = [](QComboBox* combo, double value) {
-        int best = 0; double bestDelta = 1e18;
+        int best = 0;
+        double bestDelta = 1e18;
         for (int i = 0; i < combo->count(); ++i) {
             const double delta = qAbs(combo->itemData(i).toDouble() - value);
-            if (delta < bestDelta) { bestDelta = delta; best = i; }
+            if (delta < bestDelta) {
+                bestDelta = delta;
+                best = i;
+            }
         }
         combo->setCurrentIndex(best);
     };
@@ -297,6 +310,7 @@ void SettingsDialog::loadFromConfig()
     const auto& gm = m_config.game();
     m_parallelCheck->setChecked(gm.parallelThreads);
     m_ignoreFocusCheck->setChecked(gm.ignoreFocus);
+    m_xboxConfirmACheck->setChecked(gm.xboxConfirmA);
     m_bc7Check->setChecked(gm.bc7Precompute);
     m_forceShadersCheck->setChecked(gm.forceShaders);
     m_verboseLogCheck->setChecked(gm.verboseLog);
@@ -349,6 +363,7 @@ void SettingsDialog::writeToConfig()
     auto& gm = m_config.game();
     gm.parallelThreads = m_parallelCheck->isChecked();
     gm.ignoreFocus = m_ignoreFocusCheck->isChecked();
+    gm.xboxConfirmA = m_xboxConfirmACheck->isChecked();
     gm.buttonPrompts = m_promptsCombo->currentData().toString();
     gm.language = m_languageCombo->currentData().toString();
     gm.voiceLanguage = m_voiceLangCombo->currentData().toString();

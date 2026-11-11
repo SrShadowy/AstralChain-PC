@@ -21,8 +21,9 @@ import time
 
 from . import shader_cache
 
-PROJECT = Path(__file__).resolve().parent.parent.parent
-RUNTIME = PROJECT/'astral_chain'/'runtime'
+SRC = Path(__file__).resolve().parent.parent.parent
+PROJECT = SRC.parent
+RUNTIME = SRC/'runtime'
 BC7ENC = PROJECT/'third_party'/'bc7enc'
 SOURCES = (RUNTIME/'tools'/'bc7_convert.c', RUNTIME/'las'/'nvn'/'tegra.c', RUNTIME/'las'/'nvn'/'formats.c',
            RUNTIME/'las'/'nvn'/'astc.c', BC7ENC/'bc7enc.c')
@@ -228,7 +229,7 @@ def main():
     parser.add_argument('--only', help='(tests) only the textures whose hashes this file lists, one per line')
     parser.add_argument('--out', default=str(PROJECT/'build'/'game'/'cache'/'bc7'))
     args = parser.parse_args()
-    dll = build_tool(PROJECT/'tools'/'zig'/'zig', PROJECT/'build')
+    dll = build_tool(PROJECT/'tools'/'zig'/'zig', PROJECT/'build'/'resources')
     only = {int(x, 16) for x in open(args.only)} if args.only else None
     n, size, secs = build(PROJECT/'game'/'romfs.bin', Path(args.out), dll, args.quality, args.limit, args.keys,
                           lambda s: print(s, flush=True), only)

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // [extra] Astral Chain "IRIS // Legatus" ImGui theme, fixed-slot tabular digits,
 // and in-game Performance Overlay (active when the Insert menu is hidden).
-#include "extra/ui/overlay/ac_hud.h"
+#include "additions/overlay/ac_hud.h"
 
 #include <float.h>
 #include <stdarg.h>
@@ -10,7 +10,7 @@
 #include <string.h>
 
 #include "settings.h"
-#include "extra/toggles/ac_toggles.h"
+#include "additions/toggles/ac_toggles.h"
 
 namespace {
 

@@ -8,7 +8,7 @@
 #if defined(_WIN32) // [extra]
 #include <windows.h>
 #else // [extra]
-#include "extra/hooks.h" // [extra]
+#include "hooks/hooks.h" // [extra]
 #endif // [extra]
 #include <math.h>
 #include <stdbool.h>
@@ -364,7 +364,12 @@ uint32_t texpatch_generation(void) { return 1; }
 void texpatch_apply(int id, uint32_t level, uint8_t *data, uint32_t w, uint32_t h, uint32_t row) {
     if (id != 0 || level != 0 || w != ATLAS_W || h != ATLAS_H) return;
 #ifndef _WIN32 // [extra]
-    if (!extra_prompts_active()) return;
+    int prompt_mode = extra_prompts_active(); // [extra]
+    if (!prompt_mode) return;
+    if (prompt_mode == EXTRA_PROMPT_MODE_XBOX) {
+        extra_xbox_apply_atlas(data, row);
+        return;
+    } // [extra]
 #endif // [extra]
     for (unsigned i = 0; i < sizeof slots / sizeof slots[0]; i++) {
         const Slot *sl = &slots[i];

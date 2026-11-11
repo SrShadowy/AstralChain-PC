@@ -13,10 +13,11 @@ two cap sites, with exactly the unlocked immediate.
 import sys
 from pathlib import Path
 
-PROJECT = Path(__file__).resolve().parent.parent.parent
+SRC = Path(__file__).resolve().parent.parent.parent
+PROJECT = SRC.parent
 BASE = PROJECT / "third_party" / "AstralChain-Dynamic-FPS" / "1.0.1.pchtxt"
-UNLOCKED = PROJECT / "astral_chain" / "patches" / "dynamic-unlocked-1.0.1.pchtxt"
-CUTSCENE = PROJECT / "astral_chain" / "patches" / "cutscene-catchup-1.0.1.pchtxt"
+UNLOCKED = SRC / "resources" / "patches" / "dynamic-unlocked-1.0.1.pchtxt"
+CUTSCENE = SRC / "resources" / "patches" / "cutscene-catchup-1.0.1.pchtxt"
 
 # The two words that hold the cap: `mov w1,#1` in the base, `mov w1,#0` unlocked.
 CAP_SITES = {0x009E8D84, 0x009DB6BC}

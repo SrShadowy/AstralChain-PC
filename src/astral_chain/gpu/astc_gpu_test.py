@@ -10,14 +10,15 @@ from pathlib import Path
 import subprocess
 import sys
 
-PROJECT = Path(__file__).resolve().parent.parent.parent
-RUNTIME = PROJECT/'astral_chain'/'runtime'
+SRC = Path(__file__).resolve().parent.parent.parent
+PROJECT = SRC.parent
+RUNTIME = SRC/'runtime'
 ZIG = PROJECT/'tools'/'zig'/'zig'
 GLSLANG = PROJECT/'tools'/'glslang'/'bin'/'glslang'
 
 
 def main():
-    work = PROJECT/'build'/'astc-test'
+    work = PROJECT/'build'/'resources'/'astc-test'
     work.mkdir(parents=True, exist_ok=True)
     exe = work/'astc_gpu_test'
     subprocess.run([str(ZIG), 'cc', '-target', 'x86_64-linux-gnu', '-O2', '-I', str(RUNTIME), '-I', str(RUNTIME/'las'),

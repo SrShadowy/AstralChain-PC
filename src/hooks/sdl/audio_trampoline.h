@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include "extra/platform/sync_trampoline.h"
+#include "hooks/platform/sync_trampoline.h"
 
 typedef struct AudioHookBuffer {
     uint64_t tag;

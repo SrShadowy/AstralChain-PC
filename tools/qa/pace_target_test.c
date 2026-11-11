@@ -17,7 +17,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
-#include "extra/platform/pace_target.h"
+#include "hooks/platform/pace_target.h"
 
 int g_extra_fps_override = 0;  /* ac_toggles.c */
 

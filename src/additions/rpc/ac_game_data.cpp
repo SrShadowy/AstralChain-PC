@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // [extra] Guest memory reader and game state aggregator for Astral Chain RPC.
-#include "extra/rpc/ac_game_data.h"
+#include "additions/rpc/ac_game_data.h"
 
 #include <chrono>
 #include <cstdio>
 #include <cstring>
 
-#include "extra/ui/overlay/ac_reinfo_tables.h"
+#include "additions/overlay/ac_reinfo_tables.h"
 
 extern "C" unsigned long long ac_reinfo_main_base(void);
 extern "C" unsigned long long ac_reinfo_guest_lo(void);
@@ -201,8 +201,11 @@ ActivityDisplay FormatActivity(const PresenceSnapshot& snap, bool show_file, boo
         return act;
     }
 
-    // Dynamic location for large_image
-    static const struct { unsigned id; const char* key; } k_area_keys[] = {
+    struct AreaKeyEntry {
+        unsigned id;
+        const char* key;
+    };
+    static const AreaKeyEntry k_area_keys[] = {
         {0x5000, "01_hypermegafloat_ark"}, {0x5010, "02_astral_plane"},
         {0x5100, "03_restricted_district"}, {0x5110, "04_aegis_research_institute"},
         {0x5120, "05_zone_09"}, {0x5130, "06_sector_v"},

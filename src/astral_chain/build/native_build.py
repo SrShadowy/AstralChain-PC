@@ -112,15 +112,19 @@ def build(compiler,reference,units,source,folder,cache,workers=4,extra_objects=(
     with ThreadPoolExecutor(max_workers=workers) as executor:
         compiled=list(executor.map(compile_unit,sorted(units.items())))
     src=folder/'trace.c';src.write_text(source,encoding='utf-8')
-    root=Path(__file__).parent.parent.parent
+    src_root=Path(__file__).resolve().parent.parent.parent
+    root=src_root.parent
     vk_headers=root/'third_party/Vulkan-Headers/include'
-    command=[str(compiler),'cc',*FLAGS,'-I',str(root),'-I',str(vk_headers),*runtime_include_flags(Path(__file__).parent.parent/'runtime', reference/'runtime'),str(src),
+    command=[str(compiler),'cc',*FLAGS,'-I',str(src_root),'-I',str(vk_headers),*runtime_include_flags(src_root/'runtime', reference/'runtime'),str(src),
              *(str(obj) for _,obj,_ in compiled),*(str(obj) for obj in extra_objects),
              '-lvulkan','-lSDL3','-lpthread','-lm','-ldl',
              '-Wl,-z,stack-size=67108864',  # 64 MB main-thread stack: direct calls nest page functions along guest calls
              '-o',str(folder/'trace')]
     result=run_compiler(command)
     (folder/'compiler.log').write_text(result.stdout+result.stderr,encoding='utf-8')
+    traces_dir=root/'debug'/'traces';traces_dir.mkdir(parents=True,exist_ok=True)
+    (traces_dir/'trace.c').write_text(source,encoding='utf-8')
+    (traces_dir/'compiler.log').write_text(result.stdout+result.stderr,encoding='utf-8')
     stats={'units':len(compiled),'reused':sum(hit for _,_,hit in compiled),'compiled':sum(not hit for _,_,hit in compiled)}
     (folder/'build.json').write_text(json.dumps(stats,indent=2)+'\n',encoding='utf-8')
     (folder/'unit_objects.json').write_text(json.dumps([str(obj.resolve()) for _,obj,_ in compiled],indent=2)+'\n',encoding='utf-8')

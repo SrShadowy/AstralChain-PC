@@ -1,6 +1,6 @@
 /* [extra] Runtime toggles (extra/toggles/ac_toggles.h): plain globals so the ImGui
  * overlay can override env-derived behaviour without relaunching the game. */
-#include "extra/toggles/ac_toggles.h"
+#include "additions/toggles/ac_toggles.h"
 
 int g_extra_vtx_guard = -1;
 int g_extra_vtx_debug = -1;

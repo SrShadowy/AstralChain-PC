@@ -5,13 +5,15 @@
 #define WINAPI
 #define CALLBACK
 
+#define EXTRA_MAX_EXCEPTION_PARAMS 15
+
 typedef struct _EXCEPTION_RECORD {
     uint32_t ExceptionCode;
     uint32_t ExceptionFlags;
     struct _EXCEPTION_RECORD *ExceptionRecord;
     void *ExceptionAddress;
     uint32_t NumberParameters;
-    uintptr_t ExceptionInformation[15];
+    uintptr_t ExceptionInformation[EXTRA_MAX_EXCEPTION_PARAMS];
 } EXCEPTION_RECORD, *PEXCEPTION_RECORD;
 
 #define CONTEXT_CONTROL 1
@@ -28,7 +30,11 @@ typedef struct _EXCEPTION_POINTERS {
 
 typedef int32_t (CALLBACK *PTOP_LEVEL_EXCEPTION_FILTER)(PEXCEPTION_POINTERS);
 typedef PTOP_LEVEL_EXCEPTION_FILTER LPTOP_LEVEL_EXCEPTION_FILTER;
-static inline LPTOP_LEVEL_EXCEPTION_FILTER SetUnhandledExceptionFilter(LPTOP_LEVEL_EXCEPTION_FILTER f) { (void)f; return NULL; }
+
+static inline LPTOP_LEVEL_EXCEPTION_FILTER SetUnhandledExceptionFilter(LPTOP_LEVEL_EXCEPTION_FILTER f) {
+    (void)f;
+    return NULL;
+}
 
 typedef uint32_t MINIDUMP_TYPE;
 #define MiniDumpWithThreadInfo 0

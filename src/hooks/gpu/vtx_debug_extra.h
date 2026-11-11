@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <math.h>
 #include <stdlib.h>
-#include "extra/toggles/ac_toggles.h"
+#include "additions/toggles/ac_toggles.h"
 
 #define EXTRA_VTX_MAX_COORD       50000.0f
 #define EXTRA_LIGHT_MAX_INTENSITY 1000.0f

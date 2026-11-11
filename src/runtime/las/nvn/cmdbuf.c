@@ -431,9 +431,11 @@ NVN(nvnCommandBufferResolveDepthBuffer) { (void)c; }
 NVN(nvnCommandBufferUpdateUniformBuffer) { record_copy(c, CMD_UPDATE_UNIFORM_BUFFER, 5, (uint32_t)A(4)); }
 
 // ---- synchronization and misc
+void nvn_sync_mark_cmd(uint64_t guest); // [extra]
 NVN(nvnCommandBufferFenceSync) {
     // work executes at submit time, so the sync is satisfied once this list has run
     Snap s = snap(c);
+    if (s.x[1]) nvn_sync_mark_cmd(s.x[1]); // [extra]
     record(c, CMD_FENCE_SYNC, 0, &s);
 }
 PLAIN(nvnCommandBufferWaitSync, CMD_WAIT_SYNC)

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // [extra] Native Linux Discord IPC worker implementation for Astral Chain PC.
-#include "extra/rpc/ac_discord_rpc.h"
+#include "additions/rpc/ac_discord_rpc.h"
 
 #include <atomic>
 #include <chrono>

@@ -4,8 +4,8 @@
 #include <stdlib.h>
 #include <time.h>
 #include <sched.h>
-#include "extra/toggles/ac_toggles.h"
-#include "extra/platform/pace_target.h"
+#include "additions/toggles/ac_toggles.h"
+#include "hooks/platform/pace_target.h"
 
 /* [extra] Display pacing trampoline with arbitrary AC_FPS support (Linux First).
  *
@@ -18,7 +18,8 @@
  * The reference conversion lives in host_runtime.c.in (rt_ticks): it rescales
  * the host QPC counter by EXTRA_RT_TICKS_PER_SECOND. */
 #define EXTRA_RT_TICKS_PER_SECOND 19200000ULL
-#define EXTRA_PACER_SPIN_TICKS    5760ULL /* ~300 us spin window before target tick */
+#define EXTRA_PACER_SPIN_TICKS    2880ULL /* ~150 us spin window before target tick */
+#define EXTRA_PACE_NS_PER_SEC     1000000000ULL
 
 /* Pacing targets and the AC_FPS lookup live in extra/platform/pace_target.h,
  * which the frame-pacing heuristic in the Vulkan layer also uses. */
@@ -34,12 +35,6 @@
  * guard above already returned for interval <= 0 (unthrottled); the ternary is
  * only a defensive clamp so a present never advances the grid by zero. */
 #define EXTRA_MIN_PRESENT_INTERVAL 1ULL
-
-/* If the pacer is late by more than this many refresh periods, it re-anchors on
- * the current tick instead of advancing `last_vsync` step by step. Without it a
- * long stall (level load, driver hitch) is followed by a burst of back-to-back
- * presents that only serves to "pay back" a debt the display never saw. */
-#define EXTRA_PACER_RESYNC_PERIODS 4ULL
 
 /* Number of guest thread slots, derived from guest_threads[] in
  * astral_chain/runtime/guest_threads.h so the two cannot drift apart. Slot
@@ -114,11 +109,11 @@ static inline void extra_nvn_present_pace(int interval) {
     uint64_t step_interval = (uint64_t)(interval > 0 ? interval : EXTRA_MIN_PRESENT_INTERVAL);
     uint64_t due = last_vsync + step_interval;
     if (now - origin > due * period) {
-        /* Already past the target refresh: either re-anchor (very late) or
-         * accept the current step and return without waiting. */
-        last_vsync = now - origin > (due + EXTRA_PACER_RESYNC_PERIODS) * period
-                         ? (now - origin) / period
-                         : due;
+        /* Already past the target refresh: re-anchor the grid at `now` so the
+         * next frame is scheduled a full `period` later instead of rushing a
+         * burst of unthrottled catch-up frames to pay back past debt. */
+        origin = now;
+        last_vsync = 0;
         return;
     }
     uint64_t vsync = (now - origin + period - 1) / period;
@@ -130,30 +125,43 @@ static inline void extra_nvn_present_pace(int interval) {
     klock();
     threads_initialize();
     unsigned others = extra_other_runnable_threads(current_thread);
-    if (!others) {
-        /* Sole guest thread: there is nobody to reschedule to, so the wait has
-         * to happen here. Hybrid sleep: block with nanosleep for coarse duration,
-         * then spin/yield for final sub-millisecond precision. */
+    if (parallel_mode || !others) {
+        /* In parallel_mode every guest thread runs on its own native OS pthread;
+         * in single-thread mode with !others there is nobody to reschedule to.
+         * Release both klock and nvn_srw while sleeping so other threads never
+         * block behind the pacer, then use nanosleep + CPU pause for sub-ms accuracy. */
+        if (parallel_mode && app_window_owner()) app_checkpoint();
         kunlock();
+        unsigned nvn_held = (parallel_mode && nvn_owner == GetCurrentThreadId()) ? nvn_depth : 0;
+        if (nvn_held) {
+            nvn_depth = 0;
+            nvn_owner = 0;
+            ReleaseSRWLockExclusive(&nvn_srw);
+        }
         for (;;) {
             uint64_t cur = rt_ticks();
             if (cur >= target) break;
             uint64_t rem = target - cur;
             if (rem > EXTRA_PACER_SPIN_TICKS) {
-                uint64_t sleep_ns = (rem - EXTRA_PACER_SPIN_TICKS) * 1000000000ULL / EXTRA_RT_TICKS_PER_SECOND;
-                struct timespec ts = {.tv_sec = (time_t)(sleep_ns / 1000000000ULL),
-                                      .tv_nsec = (long)(sleep_ns % 1000000000ULL)};
+                uint64_t sleep_ns = (rem - EXTRA_PACER_SPIN_TICKS) * EXTRA_PACE_NS_PER_SEC / EXTRA_RT_TICKS_PER_SECOND;
+                struct timespec ts = {.tv_sec = (time_t)(sleep_ns / EXTRA_PACE_NS_PER_SEC),
+                                      .tv_nsec = (long)(sleep_ns % EXTRA_PACE_NS_PER_SEC)};
                 nanosleep(&ts, NULL);
             } else {
-                Sleep(0);
+                extra_cpu_pause();
             }
+        }
+        if (nvn_held) {
+            AcquireSRWLockExclusive(&nvn_srw);
+            nvn_owner = GetCurrentThreadId();
+            nvn_depth = nvn_held;
         }
         return;
     }
-    /* Others can run: park this thread on the wake_tick grid instead of
-     * spinning, and let the scheduler pick whoever is runnable. */
+    /* Cooperative single-thread mode with other runnable threads: park this
+     * thread on the wake_tick grid and let the cooperative scheduler switch. */
     guest_threads[current_thread].wake_tick = target;
     guest_threads[current_thread].status = THREAD_SLEEPING;
-    (parallel_mode ? 0 : (thread_reschedule = 1));
+    thread_reschedule = 1;
     kunlock();
 }

@@ -21,7 +21,8 @@
 #if defined(_WIN32) // [extra]
 #include <windows.h>
 #else // [extra]
-#include "extra/hooks.h" // [extra]
+#include "hooks/hooks.h" // [extra]
+#undef printf // [extra]
 #endif // [extra]
 #include "shader.h"
 
@@ -45,6 +46,9 @@ static uint64_t hmix(uint64_t h, const void *p, size_t n) {
 }
 
 static uint8_t *read_file(const char *path, size_t *size) {
+#if !defined(_WIN32) // [extra]
+    char norm[MAX_PATH]; extra_norm_path(norm, path, sizeof norm); path = norm;
+#endif // [extra]
     FILE *f = fopen(path, "rb");
     if (!f) return NULL;
     fseek(f, 0, SEEK_END);
@@ -140,8 +144,8 @@ static uint64_t src_key(const char *src, int stage) {  // (spirv_cache.c src_has
 static void *worker(void *arg) {
     (void)arg;
     for (int i; (i = atomic_fetch_add(&next_job, 1)) < njobs;) {
-        char path[64];
-        snprintf(path, sizeof path, "cache/spirv/%016llx.spv", (unsigned long long)src_key(jobs[i].src, jobs[i].stage));
+        char path[96]; // [extra]
+        snprintf(path, sizeof path, "build/game/cache/spirv/%016llx.spv", (unsigned long long)src_key(jobs[i].src, jobs[i].stage)); // [extra]
         int had = GetFileAttributesA(path) != INVALID_FILE_ATTRIBUTES;
         size_t n = 0;
         uint32_t *spv = vk_glsl_to_spirv(jobs[i].src, jobs[i].stage, jobs[i].stage == 0 ? "vs" : jobs[i].stage == 1 ? "fs" : "cs", &n);
@@ -242,8 +246,8 @@ int main(int argc, char **argv) {
     printf("shaders %d (translated %d), variants %d (without code %d), sources %d; recorded sources %d, of them also"
            " from the generic pass %d\n", ncodes, translated, matched, missing, njobs, recorded, covered);
     fflush(stdout);
-    CreateDirectoryA("cache", NULL);
-    CreateDirectoryA("cache\\spirv", NULL);
+    CreateDirectoryA("build/game/cache", NULL); // [extra]
+    CreateDirectoryA("build/game/cache/spirv", NULL); // [extra]
     int threads = atoi(argv[2]);
     if (threads < 1) threads = 1;
     if (threads > 64) threads = 64;

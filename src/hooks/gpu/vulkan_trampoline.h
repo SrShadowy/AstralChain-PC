@@ -33,14 +33,17 @@ static inline uint32_t extra_vk_collect_instance_extensions(const char **ext, ui
     return n;
 }
 
-static inline void *extra_vk_init_warm(VkInstance inst, VkSurfaceKHR *surface, void (*create_inst_fn)(void)) {
-    void *win = SDL_CreateWindow("AstralChainGpuWarm", 16, 16, SDL_WINDOW_VULKAN | SDL_WINDOW_HIDDEN);
+#define EXTRA_WARM_WIN_SIZE 16
+
+static inline void *extra_vk_init_warm(VkInstance *inst, VkSurfaceKHR *surface, void (*create_inst_fn)(void)) {
+    SDL_Init(SDL_INIT_VIDEO);
+    void *win = SDL_CreateWindow("AstralChainGpuWarm", EXTRA_WARM_WIN_SIZE, EXTRA_WARM_WIN_SIZE, SDL_WINDOW_VULKAN | SDL_WINDOW_HIDDEN);
     if (!win) {
         fprintf(stderr, "no window for the GPU warm-up: %s\n", SDL_GetError());
         exit(1);
     }
     if (create_inst_fn) create_inst_fn();
-    if (!extra_vk_create_surface(inst, win, surface)) {
+    if (!inst || !extra_vk_create_surface(*inst, win, surface)) {
         fprintf(stderr, "surface creation for warm-up failed\n");
         exit(1);
     }

@@ -248,7 +248,9 @@ def emit_dispatch(pages, limit, stop_at=None, chain=False):
         emit_execute(pages,stop_at)])
 
 
-RUNTIME = (Path(__file__).parent.parent / "runtime/host_runtime.c.in").read_text(encoding="utf-8")
+SRC = Path(__file__).resolve().parent.parent.parent
+PROJECT = SRC.parent
+RUNTIME = (SRC / "runtime/host_runtime.c.in").read_text(encoding="utf-8")
 
 
 def apply_pchtxt(image, path):
@@ -356,7 +358,7 @@ def main():
     parser.add_argument('--direct-calls',action='store_true',help='With --lean: BL to a translated page calls its function directly')
     parser.add_argument('--jumps',action='store_true',help='With --lean: branches within a page jump to their case directly')
     parser.add_argument('--patch',type=Path,action='append',default=[],help='pchtxt code patch for main (enabled sections; checked against its build ID)')
-    parser.add_argument('--account-profile',type=Path,default=Path(__file__).resolve().parent.parent.parent/'userdata/account.json',help='Persistent local PC profile JSON, created once if missing')
+    parser.add_argument('--account-profile',type=Path,default=PROJECT/'userdata/account.json',help='Persistent local PC profile JSON, created once if missing')
     parser.add_argument('--language',choices=LANGUAGES,default='en-GB',help='Preferred language; falls back to supported English or first supported locale')
     args = parser.parse_args()
     if args.restrict:
@@ -420,7 +422,9 @@ def main():
     output = args.output.resolve()
     memory = MemoryMap.from_image(image, process['stack_size'])
     targets = [m.base+r[0] for m in image.modules for r in m.nso.relocs if r[1]]
-    (output/'relocation-targets.bin').write_bytes(struct.pack(f'<{len(targets)}Q',*targets))
+    traces_dir = PROJECT/'debug'/'traces'
+    traces_dir.mkdir(parents=True, exist_ok=True)
+    (traces_dir/'relocation-targets.bin').write_bytes(struct.pack(f'<{len(targets)}Q',*targets))
     constants = f'#define STACK_BASE {STACK_BASE}ull\n#define STACK_SIZE {process["stack_size"]}ull\n#define MAIN_PRIORITY {process["priority"]}\n#define MAIN_CORE {process["default_core"]}\n#define STOP_FIRST_SVC {int(args.stop_first_svc)}\n#define SYSTEM_RESOURCE_SIZE {process["system_resource_size"]}ull\n'
     constants += account_runtime_constants(profile)
     constants += save_runtime_constants(save_config)
@@ -443,7 +447,7 @@ if(BCryptGenRandom(NULL,(PUCHAR)entropy,sizeof(entropy),BCRYPT_USE_SYSTEM_PREFER
     if args.nvn_backend == 'vulkan':  # (the launcher's GPU warm-up: compile for this GPU, then exit; exec.c vk_gpu_warm)
         setup += '{const char *gw=getenv("AC_GPU_WARM"); if(gw && *gw){ extern int vk_gpu_warm(const char *folder); return vk_gpu_warm(gw);} }\n'
     for module in image.modules:
-        image_file=cache_image(output.parent/'native-images',module.nso.image)
+        image_file=cache_image(output.parent/'images',module.nso.image)
         setup += f'reserve({module.base}ull,{module.nso.size},{json.dumps(image_file.as_posix())});\n'
     seeds = [entry]+args.seed
     if args.seed_initializers:
@@ -519,18 +523,17 @@ if(!reserve_heap_range()) boundary("host-heap-reservation",c,c->pc);
 guest_execute=execute;
 execute(c); return 0; }}
 '''
-        nvn_objects,nvn_link=build_nvn_objects(args.compiler,reference,output.parent/'native-objects',args.nvn_backend) if args.nvn_backend else ([],[])
+        nvn_objects,nvn_link=build_nvn_objects(args.compiler,reference,output.parent/'objects',args.nvn_backend) if args.nvn_backend else ([],[])
         folder = output/f'round-{iteration:02d}'
         folder.mkdir()
-        root = Path(__file__).parent.parent.parent # [extra]
-        vk_headers = root/'third_party/Vulkan-Headers/include' # [extra]
+        vk_headers = PROJECT/'third_party/Vulkan-Headers/include' # [extra]
         command = [str(args.compiler.resolve()), 'cc', '-target', 'native', '-O1','-mcx16', # [extra]
-                   '-I', str(root), '-I', str(vk_headers), *runtime_include_flags(Path(__file__).parent.parent/'runtime', reference/'runtime'), str(folder/'trace.c'), *(str(o) for o in nvn_objects), *nvn_link, # [extra]
+                   '-I', str(SRC), '-I', str(vk_headers), *runtime_include_flags(SRC/'runtime', reference/'runtime'), str(folder/'trace.c'), *(str(o) for o in nvn_objects), *nvn_link, # [extra]
                    '-lvulkan', '-lSDL3', '-lpthread', '-lm', '-ldl', '-Wl,-z,stack-size=67108864', '-o', str(folder/'trace')]
         compile_started=perf_counter()
         try:
             if units is not None:
-                build_stats=cached_build(args.compiler,reference,units,source,folder,output.parent/'native-objects',workers=8,extra_objects=[*nvn_objects,*nvn_link])
+                build_stats=cached_build(args.compiler,reference,units,source,folder,output.parent/'objects',workers=8,extra_objects=[*nvn_objects,*nvn_link])
                 compile_result=subprocess.CompletedProcess(command,0,(folder/'compiler.log').read_text(encoding='utf-8'),'')
                 print(f'Build cache: {build_stats}',flush=True)
             else:

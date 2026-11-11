@@ -6,7 +6,7 @@
 #include "kernel.h"
 #include "rt.h"
 #include "../../exec_internal.h"
-#include "extra/gpu/heap_mirror_extra.h" // [extra]
+#include "hooks/gpu/heap_mirror_extra.h" // [extra]
 
 // Global memory (shader LDG/STG, maxwell_gmem_base = HEAP_BASE): the guest heap imported as a GPU buffer
 // (VK_EXT_external_memory_host), zero-copy like metal.m's g_guest_buffer, so compute results land in guest
@@ -58,7 +58,7 @@ static bool gmem_import(uint64_t size) {
     gmem_buf = buf;
     gmem_mem = mem;
     gmem_size = size;
-    LOG("[vk] guest heap imported for shader global memory: %llu MB\n", (unsigned long long)(size >> 20));
+    LOG("[vk] guest heap imported for shader global memory: %llu MB\n", (unsigned long long)(size >> EXTRA_MB_SHIFT));
     return true;
 }
 
@@ -84,7 +84,7 @@ static bool gmem_mirror(uint64_t size) {
     VkBuffer buf;
     VmaAllocation mem;
     VkResult r = vmaCreateBuffer(g_vk.vma, &bi, &ai, &buf, &mem, NULL);
-    if (r != VK_SUCCESS) { LOG("[vk] heap mirror: %llu MB buffer failed (%d)\n", (unsigned long long)(size >> 20), r); return false; }
+    if (r != VK_SUCCESS) { LOG("[vk] heap mirror: %llu MB buffer failed (%d)\n", (unsigned long long)(size >> EXTRA_MB_SHIFT), r); return false; }
     if (gmem_buf) {  // the heap grew: the old mirror may still be in use by submitted work
         vk_wait_seq(submit_seq);
         if (gmem_alloc) vmaDestroyBuffer(g_vk.vma, gmem_buf, gmem_alloc);
@@ -94,23 +94,23 @@ static bool gmem_mirror(uint64_t size) {
     gmem_alloc = mem;
     gmem_size = size;
     nvn_heap_mirror_mark_all(size);  // the whole committed heap is copied in by the next sync
-    LOG("[vk] guest heap mirrored in device memory for shader global memory: %llu MB\n", (unsigned long long)(size >> 20));
+    LOG("[vk] guest heap mirrored in device memory for shader global memory: %llu MB\n", (unsigned long long)(size >> EXTRA_MB_SHIFT));
     return true;
 }
 
 void gmem_sync(void) {
     if (!gmem_buf || !gmem_alloc) return;
-    static uint64_t pages[65536];
+    static uint64_t pages[EXTRA_MAX_DIRTY_PAGES];
     VkCommandBuffer cb = VK_NULL_HANDLE;
     for (;;) {
-        int n = nvn_heap_mirror_dirty(gmem_size, pages, 65536);
+        int n = nvn_heap_mirror_dirty(gmem_size, pages, EXTRA_MAX_DIRTY_PAGES);
         for (int i = 0; i < n;) {
             int j = i + 1;
-            while (j < n && pages[j] == pages[j - 1] + 4096 && j - i < 16384) j++;  // runs of up to 64 MB
-            uint64_t addr = pages[i], len = (uint64_t)(j - i) * 4096;
+            while (j < n && pages[j] == pages[j - 1] + EXTRA_PAGE_SIZE_4K && j - i < EXTRA_MAX_RUN_PAGES) j++;  // runs of up to 64 MB
+            uint64_t addr = pages[i], len = (uint64_t)(j - i) * EXTRA_PAGE_SIZE_4K;
             if (nvn_guest_readable(addr, len)) {  // (no-access stack/transfer sources keep their old copy)
                 if (!cb) cb = vk_upload_cmd();
-                VkSpan sp = vk_transient(len, 16);
+                VkSpan sp = vk_transient(len, EXTRA_MIRROR_COPY_ALIGN);
                 memcpy(sp.ptr, (const void *)(uintptr_t)addr, len);
                 VkBufferCopy cp = {sp.off, addr - HEAP_BASE, len};
                 vkCmdCopyBuffer(cb, sp.buf, gmem_buf, 1, &cp);
@@ -118,21 +118,22 @@ void gmem_sync(void) {
             }
             i = j;
         }
-        if (n < 65536) break;
+        if (n < EXTRA_MAX_DIRTY_PAGES) break;
     }
     if (cb) vk_full_barrier(cb);  // mirror copies land before the vertex cache copies from the mirror
 }
 
 // Ranges storing shaders may have written in the pending submission; copied back at its end.
 typedef struct { uint64_t seq, addr, size; VkBuffer buf; VmaAllocation mem; void *ptr; } GmemWb;
-static GmemWb wb_pending[64], wb_flight[256];
+static GmemWb wb_pending[EXTRA_MAX_WB_PENDING], wb_flight[EXTRA_MAX_WB_FLIGHT];
 static int wb_npend, wb_nflight;
+static pthread_mutex_t lazy_lock; // [extra]
 void gmem_wb_note(uint64_t addr, uint64_t size) {
     if (!gmem_alloc || !size || addr < HEAP_BASE || addr - HEAP_BASE + size > gmem_size) return;
     if (extra_wb_should_skip(size)) return; // [extra]
     for (int i = 0; i < wb_npend; i++)
         if (wb_pending[i].addr == addr && wb_pending[i].size == size) return;
-    if (wb_npend == 64) FATAL("heap mirror: more than 64 GPU-written ranges in one submission\n");
+    if (wb_npend == EXTRA_MAX_WB_PENDING) FATAL("heap mirror: more than 64 GPU-written ranges in one submission\n");
     wb_pending[wb_npend++] = (GmemWb){.addr = addr, .size = size};
 }
 void gmem_wb_record(VkCommandBuffer cb, uint64_t seq) {
@@ -140,17 +141,14 @@ void gmem_wb_record(VkCommandBuffer cb, uint64_t seq) {
     vk_full_barrier(cb);
     for (int i = 0; i < wb_npend; i++) {
         GmemWb *w = &wb_pending[i];
-        VkBufferCreateInfo bi = {.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO, .size = w->size, .usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT};
-        VmaAllocationCreateInfo ai = {.usage = VMA_MEMORY_USAGE_AUTO_PREFER_HOST,
-                                      .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT};
-        VmaAllocationInfo info;
-        VK_CHECK(vmaCreateBuffer(g_vk.vma, &bi, &ai, &w->buf, &w->mem, &info));
-        w->ptr = info.pMappedData;
+        extra_wb_pool_alloc(w->size, &w->buf, &w->mem, &w->ptr); // [extra]
         w->seq = seq;
         VkBufferCopy cp = {w->addr - HEAP_BASE, 0, w->size};
         vkCmdCopyBuffer(cb, gmem_buf, w->buf, 1, &cp);
-        if (wb_nflight == 256) FATAL("heap mirror: too many GPU write-backs in flight\n");
+        pthread_mutex_lock(&lazy_lock); // [extra]
+        if (wb_nflight == EXTRA_MAX_WB_FLIGHT) FATAL("heap mirror: too many GPU write-backs in flight\n");
         wb_flight[wb_nflight++] = *w;
+        pthread_mutex_unlock(&lazy_lock); // [extra]
     }
     wb_npend = 0;
     VkMemoryBarrier2 mb = {.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2, .srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
@@ -171,7 +169,7 @@ void gmem_wb_record(VkCommandBuffer cb, uint64_t seq) {
 // resolved; pages of older entries whose bytes the new range covers completely are dropped without a copy. File I/O on
 // guest buffers resolves its range first (nvn_lazy_flush_hook). LARECOMP_VK_LAZY_WB=0: copy at completion.
 typedef struct { uint64_t addr, size, seq, lo, hi; VkBuffer buf; VmaAllocation mem; void *ptr; uint8_t *done; uint32_t left, faults; } Lazy;
-enum { LAZY_MAX = 512, LAZY_HOT_MAX = 1024 };
+enum { LAZY_MAX = EXTRA_LAZY_TAB_MAX, LAZY_HOT_MAX = EXTRA_LAZY_HOT_MAX };
 static Lazy lazy_tab[LAZY_MAX], lazy_free[LAZY_MAX];
 static int lazy_nfree;
 static struct { uint64_t addr, size; } lazy_hot[LAZY_HOT_MAX];  // ranges the CPU reads: eager write-back
@@ -196,58 +194,58 @@ static void lazy_compact(void) {
 }
 static bool lazy_pending(uint64_t p) {
     for (int i = 0; i < lazy_n; i++)
-        if (p >= lazy_tab[i].lo && p < lazy_tab[i].hi && !lazy_tab[i].done[(p - lazy_tab[i].lo) >> 12]) return true;
+        if (p >= lazy_tab[i].lo && p < lazy_tab[i].hi && !lazy_tab[i].done[(p - lazy_tab[i].lo) >> EXTRA_PAGE_SHIFT_4K]) return true;
     return false;
 }
 // Copy page p's pending parts in, oldest entry first, and lift its protection. Caller holds lazy_lock and compacts.
 static void lazy_resolve_page(uint64_t p, bool fault) {
-    if (!nvn_page_protect(p, 4096, 0)) FATAL("lazy write-back: unprotect %llx failed\n", (unsigned long long)p);
+    if (!nvn_page_protect(p, EXTRA_PAGE_SIZE_4K, 0)) FATAL("lazy write-back: unprotect %llx failed\n", (unsigned long long)p);
     for (uint64_t last = 0;;) {
         int best = -1;
         for (int i = 0; i < lazy_n; i++) {
             Lazy *e = &lazy_tab[i];
-            if (p < e->lo || p >= e->hi || e->done[(p - e->lo) >> 12] || e->seq < last) continue;
+            if (p < e->lo || p >= e->hi || e->done[(p - e->lo) >> EXTRA_PAGE_SHIFT_4K] || e->seq < last) continue;
             if (best < 0 || e->seq < lazy_tab[best].seq) best = i;
         }
         if (best < 0) break;
         Lazy *e = &lazy_tab[best];
-        uint64_t a = p > e->addr ? p : e->addr, b = p + 4096 < e->addr + e->size ? p + 4096 : e->addr + e->size;
+        uint64_t a = p > e->addr ? p : e->addr, b = p + EXTRA_PAGE_SIZE_4K < e->addr + e->size ? p + EXTRA_PAGE_SIZE_4K : e->addr + e->size;
         memcpy((void *)(uintptr_t)a, (const uint8_t *)e->ptr + (a - e->addr), b - a);
         nvn_heap_mirror_clean(a, b - a);  // (the mirror holds these bytes already)
         stat_wb_bytes += b - a;
-        e->done[(p - e->lo) >> 12] = 1;
+        e->done[(p - e->lo) >> EXTRA_PAGE_SHIFT_4K] = 1;
         e->left--;
         last = e->seq;
         // Hot: faults resolved at least half of the range's pages (it is read through; copying it at once is cheaper).
-        if (fault && ++e->faults * 2 >= (uint32_t)((e->hi - e->lo) >> 12) && !lazy_is_hot(e->addr, e->size) && lazy_nhot < LAZY_HOT_MAX)
+        if (fault && ++e->faults * 2 >= (uint32_t)((e->hi - e->lo) >> EXTRA_PAGE_SHIFT_4K) && !lazy_is_hot(e->addr, e->size) && lazy_nhot < LAZY_HOT_MAX)
             lazy_hot[lazy_nhot++] = (typeof(lazy_hot[0])){e->addr, e->size};
     }
 }
 // Pending pages of [na, nb): a page whose pending bytes all lie inside [na, nb) is dropped (a newer write-back of
 // [na, nb) replaces them; it stays protected if keep), any other is resolved. Caller holds lazy_lock.
 static void lazy_supersede(uint64_t na, uint64_t nb, bool keep) {
-    for (uint64_t p = na & ~4095ull; p < nb; p += 4096) {
+    for (uint64_t p = na & EXTRA_PAGE_MASK_4K; p < nb; p += EXTRA_PAGE_SIZE_4K) {
         if (!lazy_pending(p)) continue;
         bool covered = true;
         for (int i = 0; i < lazy_n && covered; i++) {
             Lazy *e = &lazy_tab[i];
-            if (p < e->lo || p >= e->hi || e->done[(p - e->lo) >> 12]) continue;
-            uint64_t a = p > e->addr ? p : e->addr, b = p + 4096 < e->addr + e->size ? p + 4096 : e->addr + e->size;
+            if (p < e->lo || p >= e->hi || e->done[(p - e->lo) >> EXTRA_PAGE_SHIFT_4K]) continue;
+            uint64_t a = p > e->addr ? p : e->addr, b = p + EXTRA_PAGE_SIZE_4K < e->addr + e->size ? p + EXTRA_PAGE_SIZE_4K : e->addr + e->size;
             covered = a >= na && b <= nb;
         }
         if (!covered) { lazy_resolve_page(p, false); continue; }
         for (int i = 0; i < lazy_n; i++) {
             Lazy *e = &lazy_tab[i];
-            if (p >= e->lo && p < e->hi && !e->done[(p - e->lo) >> 12]) { e->done[(p - e->lo) >> 12] = 1; e->left--; }
+            if (p >= e->lo && p < e->hi && !e->done[(p - e->lo) >> EXTRA_PAGE_SHIFT_4K]) { e->done[(p - e->lo) >> EXTRA_PAGE_SHIFT_4K] = 1; e->left--; }
         }
-        if (!keep && !nvn_page_protect(p, 4096, 0)) FATAL("lazy write-back: unprotect %llx failed\n", (unsigned long long)p);
+        if (!keep && !nvn_page_protect(p, EXTRA_PAGE_SIZE_4K, 0)) FATAL("lazy write-back: unprotect %llx failed\n", (unsigned long long)p);
     }
     lazy_compact();
 }
 static int lazy_fault(uint64_t addr) {
     extern int nvn_page_state(uint64_t addr);
     pthread_mutex_lock(&lazy_lock);
-    uint64_t p = addr & ~4095ull;
+    uint64_t p = addr & EXTRA_PAGE_MASK_4K;
     int hit = lazy_pending(p);
     if (hit) { stat_wb_faults++; lazy_resolve_page(p, true); lazy_compact(); }
     else if (p >= HEAP_BASE && p - HEAP_BASE < HEAP_MAX) {
@@ -256,9 +254,9 @@ static int lazy_fault(uint64_t addr) {
         // gap: lift the protection rather than stop the game (one run died here at the end of the highway chase).
         int state = nvn_page_state(p);
         if (state == 1) hit = 1;
-        else if (state == 2 && nvn_page_protect(p, 4096, 0)) {
+        else if (state == 2 && nvn_page_protect(p, EXTRA_PAGE_SIZE_4K, 0)) {
             static int nlog;
-            if (nlog++ < 20) LOG("[vk] lazy write-back: unexpected protected page %llx lifted\n", (unsigned long long)p);
+            if (nlog++ < EXTRA_LAZY_UNEXPECTED_LOG_MAX) LOG("[vk] lazy write-back: unexpected protected page %llx lifted\n", (unsigned long long)p);
             hit = 1;
         }
     }
@@ -267,7 +265,7 @@ static int lazy_fault(uint64_t addr) {
 }
 static void lazy_flush(uint64_t addr, uint64_t size) {
     pthread_mutex_lock(&lazy_lock);
-    for (uint64_t p = addr & ~4095ull; p < addr + size; p += 4096)
+    for (uint64_t p = addr & EXTRA_PAGE_MASK_4K; p < addr + size; p += EXTRA_PAGE_SIZE_4K)
         if (lazy_pending(p)) lazy_resolve_page(p, false);
     lazy_compact();
     pthread_mutex_unlock(&lazy_lock);
@@ -291,10 +289,10 @@ void gmem_writeback_apply(uint64_t done) {
     for (int i = 0; i < wb_nflight; i++) {
         GmemWb *w = &wb_flight[i];
         if (w->seq > done) { wb_flight[k++] = *w; continue; }
-        if (!nvn_guest_readable(w->addr, w->size)) { vmaDestroyBuffer(g_vk.vma, w->buf, w->mem); continue; }
+        if (!nvn_guest_readable(w->addr, w->size)) { extra_wb_pool_free(w->size, w->buf, w->mem, w->ptr); continue; } // [extra]
         nvn_heap_mirror_clean(w->addr, w->size);
-        uint64_t lo = w->addr & ~4095ull, hi = (w->addr + w->size + 4095) & ~4095ull;
-        uint32_t pages = (uint32_t)((hi - lo) >> 12);
+        uint64_t lo = w->addr & EXTRA_PAGE_MASK_4K, hi = (w->addr + w->size + EXTRA_PAGE_OFFSET_MASK_4K) & EXTRA_PAGE_MASK_4K;
+        uint32_t pages = (uint32_t)((hi - lo) >> EXTRA_PAGE_SHIFT_4K);
         bool lazy = lazy_on && !lazy_is_hot(w->addr, w->size);
         int same = -1;
         bool overlap = false;
@@ -309,7 +307,7 @@ void gmem_writeback_apply(uint64_t done) {
                 if (!o->done[a]) { a++; continue; }
                 uint32_t b = a;
                 while (b < pages && o->done[b]) b++;
-                if (!nvn_page_protect(lo + ((uint64_t)a << 12), (uint64_t)(b - a) << 12, 1)) FATAL("lazy write-back: protect failed\n");
+                if (!nvn_page_protect(lo + ((uint64_t)a << EXTRA_PAGE_SHIFT_4K), (uint64_t)(b - a) << EXTRA_PAGE_SHIFT_4K, 1)) FATAL("lazy write-back: protect failed\n");
                 a = b;
             }
             memset(o->done, 0, pages);
@@ -331,10 +329,10 @@ void gmem_writeback_apply(uint64_t done) {
         nvn_heap_mirror_clean(w->addr, w->size);  // (after the copy: the mirror holds these bytes already)
         stat_wb_bytes += w->size;
         stat_wb_ranges++;
-        vmaDestroyBuffer(g_vk.vma, w->buf, w->mem);
+        extra_wb_pool_free(w->size, w->buf, w->mem, w->ptr); // [extra]
     }
     wb_nflight = k;
-    for (int i = 0; i < lazy_nfree; i++) vmaDestroyBuffer(g_vk.vma, lazy_free[i].buf, lazy_free[i].mem);
+    for (int i = 0; i < lazy_nfree; i++) extra_wb_pool_free(lazy_free[i].size, lazy_free[i].buf, lazy_free[i].mem, lazy_free[i].ptr); // [extra]
     lazy_nfree = 0;
     pthread_mutex_unlock(&lazy_lock);
 }
@@ -346,19 +344,20 @@ VkDescriptorBufferInfo gmem_info(void) {
     static int import = -1;
     if (import < 0) import = getenv("AC_VK_HEAP_IMPORT") && g_vk.host_import;
     if (off < 0) off = getenv("LARECOMP_VK_NO_GMEM") != NULL;
-    uint64_t want = (kernel_heap_size() + 0xFFFF) & ~0xFFFFull;
+    uint64_t want = (kernel_heap_size() + EXTRA_HEAP_ALIGN_64K) & ~EXTRA_HEAP_ALIGN_64K;
     if (want > HEAP_MAX) want = HEAP_MAX;
     if (!off && want > gmem_size && !(import ? gmem_import(want) : gmem_mirror(want))) {
-        LOG("[vk] guest heap for shader global memory unavailable (%llu MB): reads return zero\n", (unsigned long long)(want >> 20));
+        LOG("[vk] guest heap for shader global memory unavailable (%llu MB): reads return zero\n", (unsigned long long)(want >> EXTRA_MB_SHIFT));
         off = 1;
     }
     if (gmem_buf) return (VkDescriptorBufferInfo){gmem_buf, 0, gmem_size};
-    static uint32_t zero[1024];
-    VkSpan s = vk_transient_copy(zero, sizeof zero, 256);
+    static uint32_t zero[EXTRA_ZERO_FALLBACK_WORDS];
+    VkSpan s = vk_transient_copy(zero, sizeof zero, EXTRA_ZERO_BUFFER_ALIGN);
     return (VkDescriptorBufferInfo){s.buf, s.off, sizeof zero};
 }
 
 void gmem_reset(void) {
+    extra_wb_pool_reset(); // [extra]
     if (gmem_buf) {
         if (gmem_alloc) vmaDestroyBuffer(g_vk.vma, gmem_buf, gmem_alloc);
         else { vkDestroyBuffer(g_vk.dev, gmem_buf, NULL); vkFreeMemory(g_vk.dev, gmem_mem, NULL); }

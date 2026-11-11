@@ -5,7 +5,7 @@
 #include <atomic>
 #include <string>
 
-#include "extra/rpc/ac_game_data.h"
+#include "additions/rpc/ac_game_data.h"
 
 namespace AcDiscordRpc {
 

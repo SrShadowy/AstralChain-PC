@@ -9,9 +9,20 @@
 #include <stdatomic.h>
 #include "shim/shaderc/shaderc.h"
 
-struct shaderc_compiler { int unused; };
-struct shaderc_compile_options { int optimize; };
-struct shaderc_compilation_result { shaderc_compilation_status status; char *bytes; size_t size; char *message; };
+struct shaderc_compiler {
+    int unused;
+};
+
+struct shaderc_compile_options {
+    int optimize;
+};
+
+struct shaderc_compilation_result {
+    shaderc_compilation_status status;
+    char *bytes;
+    size_t size;
+    char *message;
+};
 
 static inline const char *extra_find_glslang(void) {
     const char *path = getenv("AC_GLSLANG");
@@ -27,21 +38,27 @@ shaderc_compiler_t shaderc_compiler_initialize(void) {
     return (shaderc_compiler_t)calloc(1, sizeof(struct shaderc_compiler));
 }
 
-void shaderc_compiler_release(shaderc_compiler_t c) { free(c); }
+void shaderc_compiler_release(shaderc_compiler_t c) {
+    free(c);
+}
 
 shaderc_compile_options_t shaderc_compile_options_initialize(void) {
     return (shaderc_compile_options_t)calloc(1, sizeof(struct shaderc_compile_options));
 }
 
 void shaderc_compile_options_set_target_env(shaderc_compile_options_t o, shaderc_target_env e, unsigned v) {
-    (void)o; (void)e; (void)v;
+    (void)o;
+    (void)e;
+    (void)v;
 }
 
 void shaderc_compile_options_set_optimization_level(shaderc_compile_options_t o, shaderc_optimization_level l) {
     if (o) o->optimize = (l != shaderc_optimization_level_zero);
 }
 
-void shaderc_compile_options_release(shaderc_compile_options_t o) { free(o); }
+void shaderc_compile_options_release(shaderc_compile_options_t o) {
+    free(o);
+}
 
 static shaderc_compilation_result_t shaderc_posix_failure(const char *message) {
     shaderc_compilation_result_t r = (shaderc_compilation_result_t)calloc(1, sizeof *r);

@@ -6,7 +6,7 @@
 #include "../../../../settings.h"
 #include "../../exec_internal.h"
 #include "../../../renderer.h"
-#include "extra/gpu/fsr3_extra.h" // [extra]
+#include "hooks/gpu/fsr3_extra.h" // [extra]
 
 // ================================================================== present helpers (device.c)
 static VkPipelineLayout present_layout;

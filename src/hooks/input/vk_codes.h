@@ -114,7 +114,10 @@ typedef struct tagRAWMOUSE {
     uint16_t usFlags;
     union {
         unsigned long ulButtons;
-        struct { uint16_t usButtonFlags; uint16_t usButtonData; };
+        struct {
+            uint16_t usButtonFlags;
+            uint16_t usButtonData;
+        };
     };
     unsigned long ulRawButtons;
     int32_t lLastX;

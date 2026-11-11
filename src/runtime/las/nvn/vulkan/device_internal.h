@@ -5,7 +5,7 @@
 #define VK_USE_PLATFORM_WIN32_KHR
 #include <vulkan/vulkan.h>
 #else
-#include "extra/hooks.h"
+#include "hooks/hooks.h"
 #endif
 #include <math.h>
 #include <stdatomic.h>

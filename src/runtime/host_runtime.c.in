@@ -3,7 +3,7 @@
 #include <bcrypt.h>
 #include <dbghelp.h>
 #else // [extra]
-#include "extra/hooks.h" // [extra]
+#include "hooks/hooks.h" // [extra]
 #endif // [extra]
 #include <stdio.h>
 #include <stdlib.h>
@@ -83,6 +83,11 @@ static void klock_wait(unsigned self,DWORD ms) {
  SleepConditionVariableSRW(&thread_cv[self],&klock_srw,ms,0);
  klock_owner=GetCurrentThreadId();klock_depth=depth;
 }
+static void klock_wait_ns(unsigned self,uint64_t ns) { // [extra]
+ unsigned depth=klock_depth;klock_owner=0;klock_depth=0;
+ extra_sleep_cv_ns(&thread_cv[self],&klock_srw,ns);
+ klock_owner=GetCurrentThreadId();klock_depth=depth;
+} // [extra]
 static void parallel_wake(unsigned i) {if(parallel_mode && i<33) WakeConditionVariable(&thread_cv[i]);}
 /* Run host code that blocks (sleeps, GPU waits) without holding the lock. */
 static unsigned klock_release_all(void) {

@@ -25,7 +25,7 @@ import sys
 
 PROJECT = Path(__file__).resolve().parents[2]
 ROMFS = PROJECT / 'game' / 'romfs.bin'
-OUT = PROJECT / 'extra' / 'ui' / 'overlay' / 'ac_reinfo_tables.h'
+OUT = PROJECT / 'src' / 'additions' / 'overlay' / 'ac_reinfo_tables.h'
 BIAS = 0x2626
 NONE = 0xFFFFFFFF
 LIMIT = 20000  # longest plausible single string (characters)

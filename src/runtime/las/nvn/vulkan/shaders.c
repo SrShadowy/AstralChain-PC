@@ -6,7 +6,7 @@
 #include <sys/stat.h>
 
 #include "shaders.h"
-#include "extra/gpu/fsr3_shaders.h" // [extra]
+#include "hooks/gpu/fsr3_shaders.h" // [extra]
 
 void vk_shaders_init(void) {  // (compilers are per thread: check shaderc works at all)
     shaderc_compiler_t c = shaderc_compiler_initialize();

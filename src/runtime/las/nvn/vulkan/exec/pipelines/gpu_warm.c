@@ -105,7 +105,7 @@ int vk_gpu_warm(const char *folder) {
              VK_API_VERSION_PATCH(g_vk.props.driverVersion), g_vk.props.driverVersion, g_vk.gpl);
     snprintf(state, sizeof state, "%s%s", getenv("AC_GPU_WARM_STATE") ? getenv("AC_GPU_WARM_STATE") : "", gpu);
     {
-        FILE *f = fopen("cache/gpu_warm.txt", "rb");
+        FILE *f = fopen("build/game/cache/gpu_warm.txt", "rb"); // [extra]
         if (f) { size_t n = fread(old, 1, sizeof old - 1, f); old[n] = 0; fclose(f); }
         if (!strcmp(old, state)) { printf("done skipped (unchanged)\n"); fflush(stdout); return 0; }
     }
@@ -196,7 +196,7 @@ int vk_gpu_warm(const char *folder) {
         SDL_Delay(20);
     }
     vk_pipeline_cache_save();
-    FILE *f = fopen("cache/gpu_warm.txt", "wb");
+    FILE *f = fopen("build/game/cache/gpu_warm.txt", "wb"); // [extra]
     if (f) { fputs(state, f); fclose(f); }
     printf("done %d programs, %d shader libraries, %d pipelines in %.1f s%s\n", nprogs, nstage, queued_pipes, (SDL_GetTicksNS() - t0) / 1e9,
            added ? " (added since the last time)" : "");

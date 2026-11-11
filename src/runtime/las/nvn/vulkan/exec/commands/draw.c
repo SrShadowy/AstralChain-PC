@@ -7,7 +7,7 @@
 #include "../../../../settings.h"
 #include "../../exec_internal.h"
 #include "../../../renderer.h"
-#include "extra/gpu/vtx_debug_extra.h" // [extra]
+#include "hooks/gpu/vtx_debug_extra.h" // [extra]
 
 static uint64_t g_cur_fs_hash;
 
@@ -434,7 +434,7 @@ static void draw_(CmdRec *r, bool indexed) {
     // the background movie's quad drawn with the logo movie's vertices for a frame (squashed between black bars),
     // 1-12 frames in 25 s uncapped; none with copies, at the same frame rate. LARECOMP_VK_COPY_SMALL=<count>: limit.
     static int64_t small_max = -1;
-    if (small_max < 0) { const char *e = getenv("LARECOMP_VK_COPY_SMALL"); small_max = e ? atoll(e) : 16; } // [extra]
+    if (small_max < 0) { const char *e = getenv("LARECOMP_VK_COPY_SMALL"); small_max = e ? atoll(e) : 1024; } // [extra]
     bool small = r->x[2] <= (uint64_t)small_max && (indexed ? r->x[6] : r->x[4]) <= 4;  // (instanced: their per-instance data too) // [extra]
     const void *scan_src = NULL;  // deferred index scan (direct index buffer)
     uint32_t scan_isz = 0, scan_restart = 0;
@@ -514,7 +514,7 @@ static void draw_(CmdRec *r, bool indexed) {
 #define STREAM_NEED() (!stride ? 256 : k.divisor[s] ? ((uint64_t)base_inst + inst + k.divisor[s] - 1) / k.divisor[s] * stride + 256 \
                                      : (uint64_t)max_index * stride + 256)
             // (a small draw reaching far into a large buffer, e.g. 6 indices into a big model: read in place as before)
-            bool direct = !small || STREAM_NEED() > (32u << 10);
+            bool direct = !small || STREAM_NEED() > (256u << 10); // [extra]
             if (direct && v.addr && v.size && guest_direct(v.addr, v.size, &dbuf, &doff)) { // [extra]
                 if (ss_on && (ss.vb_known >> s & 1) && ss.vb[s] == dbuf && ss.vo[s] == doff) continue;
                 ss.vb[s] = dbuf; ss.vo[s] = doff; ss.vb_known |= 1u << s;
@@ -532,7 +532,7 @@ static void draw_(CmdRec *r, bool indexed) {
 #undef STREAM_NEED // [extra]
             if (v.size && need > v.size) need = v.size;
             if (!v.addr) { static const uint8_t zero[256]; sp = vk_transient_copy(zero, 256, 16); }
-            else sp = guest_copy_vtx(v.addr, (v.size && v.size <= 65536) ? v.size : (need ? need : 16)); // [extra]
+            else sp = guest_copy_vtx(v.addr, (v.size && v.size <= 524288) ? v.size : (need ? need : 16)); // [extra]
         }
         VkDeviceSize off = sp.off;
         if (ss_on && (ss.vb_known >> s & 1) && ss.vb[s] == sp.buf && ss.vo[s] == off) continue;

@@ -329,14 +329,25 @@ static void parallel_block_wait(void) {
   uint64_t now=rt_ticks();
   if(!thread_wake_check(self,now) && guest_threads[self].status==THREAD_RUNNABLE) return;
   status=guest_threads[self].status;
+  if(status==THREAD_WAIT_GPU && renderer_wait_seq_timeout) { // [extra]
+   if(app_window_owner()) app_checkpoint();
+   uint64_t seq=guest_threads[self].gpu_seq;
+   unsigned held=klock_release_all();
+   renderer_wait_seq_timeout(seq,app_window_owner() ? EXTRA_GPU_WAIT_WINDOW_NS : EXTRA_GPU_WAIT_WORKER_NS); // [extra]
+   klock_reacquire(held);
+   continue;
+  } // [extra]
   uint64_t deadline=status==THREAD_WAIT_ADDRESS ? guest_threads[self].address_deadline :
                     status==THREAD_WAIT_CONDITION || status==THREAD_WAIT_MUTEX ? guest_threads[self].condition_deadline :
                     status==THREAD_SLEEPING ? guest_threads[self].wake_tick : 0;
-  DWORD ms=20;
-  if(status==THREAD_WAIT_GPU || status==THREAD_WAIT_OBJECTS) ms=1;
-  else if(deadline) {uint64_t left=deadline>now ? (deadline-now)/19200 : 0;ms=left<1 ? 1 : left>20 ? 20 : (DWORD)left;}
-  if(app_window_owner()) {app_checkpoint();if(ms>4) ms=4;}  /* keep the window responsive while blocked */
-  klock_wait(self,ms);
+  uint64_t wait_ns=EXTRA_WAIT_DEFAULT_NS; // [extra]
+  if(status==THREAD_WAIT_GPU || status==THREAD_WAIT_OBJECTS) wait_ns=EXTRA_WAIT_POLL_SLICE_NS;
+  else if(deadline) {
+   uint64_t left_ns=deadline>now ? (deadline-now)*EXTRA_TICK_TO_NS_NUM/EXTRA_TICK_TO_NS_DEN : EXTRA_WAIT_MIN_SLICE_NS;
+   wait_ns=left_ns<EXTRA_WAIT_MIN_SLICE_NS ? EXTRA_WAIT_MIN_SLICE_NS : left_ns>EXTRA_WAIT_DEFAULT_NS ? EXTRA_WAIT_DEFAULT_NS : left_ns;
+  }
+  if(app_window_owner()) {app_checkpoint();if(wait_ns>EXTRA_WAIT_WINDOW_MAX_NS) wait_ns=EXTRA_WAIT_WINDOW_MAX_NS;} // [extra]
+  klock_wait_ns(self,wait_ns); // [extra]
  }
 }
 /* Parallel mode: each started guest thread gets a host thread running the dispatcher on its own context. */

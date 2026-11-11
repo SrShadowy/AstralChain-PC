@@ -29,9 +29,10 @@ import time
 import urllib.request
 import zipfile
 
-PROJECT = Path(__file__).resolve().parent.parent.parent
-if str(PROJECT) not in sys.path:
-    sys.path.insert(0, str(PROJECT))
+SRC = Path(__file__).resolve().parent.parent.parent
+PROJECT = SRC.parent
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
 TOOLS = PROJECT/'tools'
 GAME = PROJECT/'game'
 WORK = GAME/'work'
@@ -56,8 +57,8 @@ LASRECOMP = PROJECT/'third_party'/'LASRecomp'
 # Applied in this order: the Dynamic-FPS timing fixes, then (only with AC_FPS_UNLOCKED=1) the two-word
 # overlay that removes the mod's 60 fps cap, then the port's cutscene step-limit catch-up on top of both.
 FPS_PATCH = PROJECT/'third_party'/'AstralChain-Dynamic-FPS'/'1.0.1.pchtxt'
-UNLOCKED_PATCH = PROJECT/'astral_chain'/'patches'/'dynamic-unlocked-1.0.1.pchtxt'
-CUTSCENE_PATCH = PROJECT/'astral_chain'/'patches'/'cutscene-catchup-1.0.1.pchtxt'
+UNLOCKED_PATCH = SRC/'resources'/'patches'/'dynamic-unlocked-1.0.1.pchtxt'
+CUTSCENE_PATCH = SRC/'resources'/'patches'/'cutscene-catchup-1.0.1.pchtxt'
 
 
 def fps_unlocked():
@@ -154,7 +155,7 @@ def fetch_tools():
         step('Building the RomFS packer')
         from astral_chain.build.native_build import runtime_include_flags
         run([ZIG, 'cc', '-O2', '-target', 'x86_64-linux-gnu', *runtime_include_flags(None, LASRECOMP/'runtime'),
-             PROJECT/'astral_chain'/'runtime'/'tools'/'romfs_tool.c', LASRECOMP/'runtime'/'build'/'romfs_build.c', '-o', ROMFS_TOOL])
+             SRC/'runtime'/'tools'/'romfs_tool.c', LASRECOMP/'runtime'/'build'/'romfs_build.c', '-o', ROMFS_TOOL])
         ROMFS_TOOL.chmod(ROMFS_TOOL.stat().st_mode | 0o755)
 
 
@@ -372,9 +373,11 @@ def fingerprint():
     """Changes to the sources, vendored code or patches make the next launch rebuild."""
     digest = hashlib.sha256()
     digest.update(b'unlocked=1\n' if fps_unlocked() else b'unlocked=0\n')  # (the FPS patch variant)
-    for root in (PROJECT/'astral_chain', PROJECT/'third_party', PROJECT/'extra'):
+    for root in (SRC/'astral_chain', SRC/'runtime', SRC/'hooks', SRC/'additions', SRC/'resources'/'patches', PROJECT/'third_party'):
+        if not root.exists():
+            continue
         for path in sorted(root.rglob('*')):
-            if path.is_file() and '__pycache__' not in path.parts and 'data' not in path.relative_to(root).parts[:1]:
+            if path.is_file() and '__pycache__' not in path.parts:
                 digest.update(str(path.relative_to(PROJECT)).encode())
                 digest.update(path.read_bytes())
     return digest.hexdigest()
@@ -383,25 +386,42 @@ def fingerprint():
 def guest_fingerprint():
     """Hashes guest executable, patches, lifter and translator."""
     digest = hashlib.sha256()
-    for root in (UPDATE_EXEFS, PROJECT/'astral_chain/patches'):
-        if root.exists():
-            for path in sorted(root.rglob('*')):
-                if path.is_file():
-                    digest.update(str(path.relative_to(PROJECT)).encode())
-                    digest.update(path.read_bytes())
-    for f in (PROJECT/'astral_chain/lifter.py', PROJECT/'astral_chain/native_trace.py'):
-        if f.is_file():
-            digest.update(f.read_bytes())
+    if UPDATE_EXEFS.exists():
+        for path in sorted(UPDATE_EXEFS.rglob('*')):
+            if path.is_file():
+                digest.update(str(path.relative_to(PROJECT)).encode())
+                digest.update(path.read_bytes())
     for patch in active_patches():
         if Path(patch).is_file():
             digest.update(Path(patch).read_bytes())
     return digest.hexdigest()
 
 
+def _refresh_trace_host_runtime(trace_c: Path) -> None:
+    """Splice current src/runtime/host_runtime.c.in into trace.c while preserving the generated memory regions table."""
+    text = trace_c.read_text(encoding='utf-8')
+    tpl = (SRC/'runtime'/'host_runtime.c.in').read_text(encoding='utf-8')
+    reg_marker = 'typedef struct { uint64_t base,size; unsigned kind,permission; } Region;\n'
+    static_reg_marker = 'static const Region regions[]={\n'
+    bridge_marker = '\n__thread uint64_t native_executed_steps;'
+    start_marker = '#if defined(_WIN32)'
+    i_start = text.find(start_marker)
+    i_reg = text.find(static_reg_marker, i_start) if i_start >= 0 else -1
+    i_reg_end = text.find('};\n', i_reg) if i_reg >= 0 else -1
+    i_bridge = text.find(bridge_marker, i_reg_end) if i_reg_end >= 0 else -1
+    if i_start >= 0 and i_reg >= 0 and i_reg_end >= 0 and i_bridge >= 0 and '/*MEMORY_TABLE*/' in tpl:
+        mem_table = reg_marker + text[i_reg:i_reg_end + 2]
+        spliced = text[:i_start] + tpl.replace('/*MEMORY_TABLE*/', mem_table) + text[i_bridge:]
+        if spliced != text:
+            trace_c.write_text(spliced, encoding='utf-8')
+
+
 def try_fast_relink():
     """Fast incremental relink of the native binary when guest code hasn't changed."""
     round_dir = GAME_BUILD/'round-00'
-    trace_c = round_dir/'trace.c'
+    traces_dir = PROJECT/'debug'/'traces'
+    traces_dir.mkdir(parents=True, exist_ok=True)
+    trace_c = traces_dir/'trace.c' if (traces_dir/'trace.c').is_file() else round_dir/'trace.c'
     unit_json = round_dir/'unit_objects.json'
     if not trace_c.is_file() or not unit_json.is_file():
         return False
@@ -412,14 +432,14 @@ def try_fast_relink():
     except Exception:
         return False
 
+    _refresh_trace_host_runtime(trace_c)
     from astral_chain.gpu.nvn_build import build_nvn_objects
     from astral_chain.build.native_build import FLAGS, run_compiler, runtime_include_flags
-    nvn_objects, nvn_link = build_nvn_objects(ZIG, LASRECOMP, BUILD/'native-objects', 'vulkan')
-    root = PROJECT
-    vk_headers = root/'third_party/Vulkan-Headers/include'
+    nvn_objects, nvn_link = build_nvn_objects(ZIG, LASRECOMP, BUILD/'objects', 'vulkan')
+    vk_headers = PROJECT/'third_party/Vulkan-Headers/include'
     command = [str(ZIG.resolve()), 'cc', *FLAGS,
-               '-I', str(root), '-I', str(vk_headers),
-               *runtime_include_flags(PROJECT/'astral_chain/runtime', LASRECOMP/'runtime'),
+               '-I', str(SRC), '-I', str(vk_headers),
+               *runtime_include_flags(SRC/'runtime', LASRECOMP/'runtime'),
                str(trace_c),
                *(str(obj) for obj in unit_objs),
                *(str(obj) for obj in nvn_objects),
@@ -428,7 +448,7 @@ def try_fast_relink():
                '-Wl,-z,stack-size=67108864',
                '-o', str(round_dir/'trace')]
     res = run_compiler(command)
-    (round_dir/'compiler.log').write_text(res.stdout + res.stderr, encoding='utf-8')
+    (traces_dir/'compiler.log').write_text(res.stdout + res.stderr, encoding='utf-8')
     if res.returncode == 0:
         if not (GAME_BUILD/'run-env.txt').is_file() and (BUILD/'game-old'/'run-env.txt').is_file(): # [extra]
             shutil.copy2(BUILD/'game-old'/'run-env.txt', GAME_BUILD/'run-env.txt') # [extra]
@@ -448,7 +468,7 @@ def build_game():
     """native_trace wants a new folder: an older build moves to build/game-old, its shader cache is carried over."""
     if build_is_current():
         return
-    if GUEST_FINGERPRINT.is_file() and GUEST_FINGERPRINT.read_text(encoding='ascii').strip() == guest_fingerprint():
+    if GUEST_FINGERPRINT.is_file():
         if try_fast_relink():
             return
     step('Building the game (translating and compiling; the first build takes several minutes)')
@@ -459,6 +479,7 @@ def build_game():
             (old/'cache').rename(GAME_BUILD/'cache')  # (a failed build left the cache in game-old: kept, not deleted)
         shutil.rmtree(old, ignore_errors=True)
         GAME_BUILD.rename(old)
+    env = dict(os.environ, PYTHONPATH=str(SRC))
     command = [sys.executable, '-m', 'astral_chain.translator.native_trace', UPDATE_EXEFS,
                '--reference', LASRECOMP, '--compiler', ZIG, '--output', GAME_BUILD,
                '--instructions', '4000000', '--sample-steps', '0', '--run-timeout', '86400', '--unbounded', '--chain',
@@ -468,7 +489,7 @@ def build_game():
     for patch in active_patches():
         command += ['--patch', patch]
     command.append('--build-only')
-    result = subprocess.run([str(c) for c in command], cwd=PROJECT)
+    result = subprocess.run([str(c) for c in command], cwd=PROJECT, env=env)
     if result.returncode or not (GAME_BUILD/'round-00'/'trace').is_file():
         raise SetupError('The game build failed (see the messages above).')
     FINGERPRINT.write_text(fingerprint() + '\n', encoding='ascii')
@@ -482,7 +503,7 @@ def prepare_shaders():
     from astral_chain.gpu import shader_cache
     step('Preparing shaders')
     print('PROGRESS:95:Preparing Vulkan shaders...', flush=True)
-    shader_cache.prepare(ROMFS_IMAGE, GAME, GAME_BUILD, ZIG, GLSLANG, BUILD)
+    shader_cache.prepare(ROMFS_IMAGE, GAME, GAME_BUILD, ZIG, GLSLANG, BUILD/'resources')
 
 
 def prepare_bc7():
@@ -503,7 +524,7 @@ def prepare_bc7():
               'the GPU instead.')
         return
     stamp.unlink(missing_ok=True)
-    dll = bc7_cache.build_tool(ZIG, BUILD)
+    dll = bc7_cache.build_tool(ZIG, BUILD/'resources')
     count, size, seconds = bc7_cache.build(ROMFS_IMAGE, out, dll, progress=lambda line: print(line, flush=True))
     stamp.write_text(want + '\n', encoding='ascii')
     print(f'  {count} textures, {size / 2**30:.1f} GB in {seconds:.0f} s')

@@ -16,7 +16,8 @@ import subprocess
 from .nvn_build import GLSLANG
 from .shader_build import prepare_translator
 
-PROJECT = Path(__file__).resolve().parent.parent.parent
+SRC = Path(__file__).resolve().parent.parent.parent
+PROJECT = SRC.parent
 STAGES = {'vs': 'vert', 'fs': 'frag', 'cs': 'comp'}
 
 
@@ -24,8 +25,8 @@ def build_replay(reference: Path, compiler: Path, output: Path) -> Path:
     source = prepare_translator(reference, output/'translator')
     exe = output/'shader-replay'
     subprocess.run([str(compiler), 'cc', '-O1', '-I', str(reference/'runtime/nvn/maxwell'),
-                    '-I', str(Path(__file__).parent.parent/'runtime/las'),
-                    str(Path(__file__).parent.parent/'runtime/tools/shader_replay.c'), str(source), '-o', str(exe)], check=True)
+                    '-I', str(SRC/'runtime/las'),
+                    str(SRC/'runtime/tools/shader_replay.c'), str(source), '-o', str(exe)], check=True)
     return exe
 
 

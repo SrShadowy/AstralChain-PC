@@ -24,7 +24,7 @@ fi
 echo "===================================================="
 echo " [ponytail-qa] 1/4: Auditoria de Código & Arquitetura"
 echo "===================================================="
-./extra/tools/audit.sh
+./tools/qa/audit.sh
 
 echo ""
 echo "===================================================="
@@ -35,6 +35,7 @@ PYTHON="python3"
 if [ -f ".venv/bin/python3" ]; then
     PYTHON=".venv/bin/python3"
 fi
+export PYTHONPATH="$ROOT_DIR/src${PYTHONPATH:+:$PYTHONPATH}"
 $PYTHON -m astral_chain.build.setup_game --rebuild-if-stale
 T1=$(date +%s)
 echo "PASSED: Build/Relink verificado em $((T1 - T0))s."
@@ -49,13 +50,13 @@ echo "===================================================="
 echo " [ponytail-qa] 3/4: Teste de Runtime, Input & Performance (${SECONDS_RUN}s)"
 echo "===================================================="
 LOG_FILE="/tmp/ac_qa_run.log"
-rm -f "$LOG_FILE" "./build/game/frames/frame_$(printf '%05d' "$SHOT_FRAME").png" "./frames/frame_$(printf '%05d' "$SHOT_FRAME").png"
+rm -f "$LOG_FILE" "./debug/frames/frame_$(printf '%05d' "$SHOT_FRAME").png"
 
 set +e
 AC_PARALLEL="${AC_PARALLEL:-1}" AC_AUDIO_RESYNC="${AC_AUDIO_RESYNC:-1}" \
-    AC_ASYNC_SUBMIT="${AC_ASYNC_SUBMIT:-1}" LARECOMP_VK_PRESENT="${LARECOMP_VK_PRESENT:-fifo}" \
+    AC_ASYNC_SUBMIT="${AC_ASYNC_SUBMIT:-1}" LARECOMP_VK_PRESENT="${LARECOMP_VK_PRESENT:-mailbox}" \
     AC_INPUT_SCRIPT="$INPUT_SEQ" LARECOMP_SHOT_AT="$SHOT_FRAME" \
-    stdbuf -oL -eL ./astral_chain/tools/run_guarded.sh --run build/game --seconds "$SECONDS_RUN" > "$LOG_FILE" 2>&1
+    stdbuf -oL -eL ./src/astral_chain/tools/run_guarded.sh --run build/game --seconds "$SECONDS_RUN" > "$LOG_FILE" 2>&1
 EXIT_CODE=$?
 set -e
 
@@ -88,10 +89,7 @@ echo ""
 echo "===================================================="
 echo " [ponytail-qa] 4/4: Inspeção Visual de Frame (Frame ${SHOT_FRAME})"
 echo "===================================================="
-FRAME_PATH="./build/game/frames/frame_$(printf '%05d' "$SHOT_FRAME").png"
-if [ ! -f "$FRAME_PATH" ]; then
-    FRAME_PATH="./frames/frame_$(printf '%05d' "$SHOT_FRAME").png"
-fi
+FRAME_PATH="./debug/frames/frame_$(printf '%05d' "$SHOT_FRAME").png"
 if [ -f "$FRAME_PATH" ]; then
     python3 - "$FRAME_PATH" "$SHOT_FRAME" << 'EOF'
 import sys

@@ -17,8 +17,9 @@
 
 #include "imgui.h"
 
-#include "extra/ui/overlay/ac_reinfo.h"
-#include "extra/ui/overlay/ac_reinfo_tables.h"
+#include "additions/overlay/ac_hud.h"
+#include "additions/overlay/ac_reinfo.h"
+#include "additions/overlay/ac_reinfo_tables.h"
 
 extern "C" unsigned long long ac_reinfo_main_base(void);   // (ac_reinfo_probe.c)
 extern "C" unsigned long long ac_reinfo_guest_lo(void);
@@ -111,10 +112,10 @@ void table_section(const char *label, const AcNameEntry *t, int n, unsigned cur,
             const bool hot = has_cur && t[i].id == cur;
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
-            if (hot) ImGui::TextColored(ImVec4(0.24f, 0.82f, 0.72f, 1.0f), "%s", id);
+            if (hot) ImGui::TextColored(AcIrisColors::Cyan, "%s", id);
             else ImGui::TextUnformatted(id);
             ImGui::TableSetColumnIndex(1);
-            if (hot) ImGui::TextColored(ImVec4(0.24f, 0.82f, 0.72f, 1.0f), "%s", nm);
+            if (hot) ImGui::TextColored(AcIrisColors::Cyan, "%s", nm);
             else ImGui::TextUnformatted(nm);
         }
         ImGui::EndTable();
@@ -129,7 +130,10 @@ void name_row(const char *label, bool ok, unsigned id, const AcNameEntry *t, int
     ImGui::TableSetColumnIndex(0);
     ImGui::TextUnformatted(label);
     ImGui::TableSetColumnIndex(1);
-    if (!ok) { ImGui::TextDisabled("(n/d)"); return; }
+    if (!ok) {
+        ImGui::TextDisabled("(n/d)");
+        return;
+    }
     ImGui::Text("0x%04x", id);
     ImGui::TableSetColumnIndex(2);
     name_cell(t, n, id);
@@ -144,7 +148,7 @@ const char *difficulty_name(int raw) {
 }
 
 void section_live(void) {
-    ImGui::SeparatorText("Estado atual (leitura ao vivo)");
+    ac_ui_section_header("ESTADO ATUAL (LEITURA AO VIVO)", "// MEM.LIVE");
     if (!base_addr()) {
         ImGui::TextDisabled("main fora da janela guest (build sem a imagem carregada).");
         return;
@@ -232,7 +236,9 @@ void section_live(void) {
         ImGui::EndTable();
     }
     if (ok_play) {
-        const unsigned long long h = playtime / 3600, m = (playtime / 60) % 60, s = playtime % 60;
+        const unsigned long long h = playtime / 3600;
+        const unsigned long long m = (playtime / 60) % 60;
+        const unsigned long long s = playtime % 60;
         ImGui::Text("Playtime formatado: %03llu:%02llu:%02llu", h, m, s);
     }
     if (ok_diff) {
@@ -242,8 +248,25 @@ void section_live(void) {
     }
 }
 
+struct ReSlotDesc {
+    unsigned off;
+    const char *label;
+    const char *kind;
+};
+
+struct ReGetterDesc {
+    unsigned off;
+    const char *label;
+};
+
+struct ReKeyDesc {
+    unsigned off;
+    const char *fmt;
+    const char *use;
+};
+
 void section_slots(void) {
-    static const struct { unsigned off; const char *label; const char *kind; } slots[] = {
+    static const ReSlotDesc slots[] = {
         {0xdbcf10, "area", "u32"},        {0xdbcf20, "sub-area", "u32"},
         {0xdbc420, "mission", "u32"},     {0xdbc950, "boss id", "u32"},
         {0xdbc928, "boss ativo", "u32"},  {0xdbc930, "fase do boss", "u32"},
@@ -277,7 +300,7 @@ void section_slots(void) {
 }
 
 void section_getters(void) {
-    static const struct { unsigned off; const char *label; } getters[] = {
+    static const ReGetterDesc getters[] = {
         {0x56c240, "area()"},          {0x56c250, "area() >> 8 (mapa)"},
         {0x56c270, "sub_area()"},      {0x4be600, "mission()"},
         {0x5407f0, "boss ativo?"},     {0x3e43a0, "segundos -> h/m/s"},
@@ -303,7 +326,7 @@ void section_getters(void) {
 }
 
 void section_text_keys(void) {
-    static const struct { unsigned off; const char *fmt; const char *use; } keys[] = {
+    static const ReKeyDesc keys[] = {
         {0xb6327d, "MENU_DATA_AREA_NAME_%04x", "area (categoria 5, menu_text)"},
         {0xb76832, "MENU_MISSION_NAME_%04x", "missao (categoria 5, menu_text)"},
         {0xb74339, "EVENT_BOSS_NAME_%04x", "boss (categoria 8, GameWord)"},
@@ -363,21 +386,22 @@ extern "C" void ac_reinfo_frame(void) {
     const bool ok_boss = slot_u32(0xdbc950, &boss);
 
     ImGui::SetNextWindowSize(ImVec2(600, 680), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowPos(ImVec2(520, 40), ImGuiCond_FirstUseEver);
-    if (!ImGui::Begin("RE Info (Astral Chain)", &g_visible, ImGuiWindowFlags_NoCollapse)) {
+    ImGui::SetNextWindowPos(ImVec2(580, 36), ImGuiCond_FirstUseEver);
+    if (!ImGui::Begin("IRIS // RE INFO (ASTRAL CHAIN)###ac_reinfo_win", &g_visible, ImGuiWindowFlags_NoCollapse)) {
         ImGui::End();
         return;
     }
+    ac_ui_draw_window_chrome();
     section_live();
     section_slots();
     section_getters();
     section_text_keys();
     // One persistent filter buffer per table (ImGui edits it across frames).
     static char f_areas[32], f_missions[32], f_bosses[32];
-    ImGui::SeparatorText("Tabelas id -> nome");
-    table_section("Areas (22)", k_ac_areas, AC_COUNT(k_ac_areas), area, ok_area,
+    ac_ui_section_header("TABELAS ID -> NOME", "// DB.TABLES");
+    table_section("Áreas (22)", k_ac_areas, AC_COUNT(k_ac_areas), area, ok_area,
                   f_areas, sizeof f_areas);
-    table_section("Missoes (292)", k_ac_missions, AC_COUNT(k_ac_missions), mission, ok_mis,
+    table_section("Missões (292)", k_ac_missions, AC_COUNT(k_ac_missions), mission, ok_mis,
                   f_missions, sizeof f_missions);
     table_section("Bosses (82)", k_ac_bosses, AC_COUNT(k_ac_bosses), boss, ok_boss,
                   f_bosses, sizeof f_bosses);

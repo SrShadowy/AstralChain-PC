@@ -22,12 +22,25 @@
 
 namespace ac::launcher {
 
+namespace {
+constexpr int kDefaultWinWidth       = 980;
+constexpr int kDefaultWinHeight      = 620;
+constexpr int kMinWinWidth           = 840;
+constexpr int kMinWinHeight          = 520;
+constexpr int kInitialStatusDelayMs  = 200;
+constexpr int kIrisGridStepPx        = 36;
+constexpr int kCornerMarginPx        = 8;
+constexpr int kCornerLengthPx        = 14;
+constexpr int kStatusProcTimeoutMs   = 3000;
+constexpr int kProgressMaxPct        = 100;
+} // namespace
+
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
 {
     setWindowTitle("Astral Chain PC Launcher (Linux)");
-    resize(980, 620);
-    setMinimumSize(840, 520);
+    resize(kDefaultWinWidth, kDefaultWinHeight);
+    setMinimumSize(kMinWinWidth, kMinWinHeight);
 
     setupUi();
     applyTheme();
@@ -36,13 +49,39 @@ MainWindow::MainWindow(QWidget* parent)
     connect(&m_runner, &ProcessRunner::lineReceived, this, &MainWindow::onProcessLine);
     connect(&m_runner, &ProcessRunner::finished, this, &MainWindow::onProcessFinished);
 
-    QTimer::singleShot(200, this, &MainWindow::refreshGameStatus);
+    QTimer::singleShot(kInitialStatusDelayMs, this, &MainWindow::refreshGameStatus);
 }
 
 void MainWindow::paintEvent(QPaintEvent*)
 {
     QPainter p(this);
-    p.fillRect(rect(), QColor("#3b3a4a"));
+    p.setRenderHint(QPainter::Antialiasing);
+
+    QLinearGradient bg(0, 0, width(), height());
+    bg.setColorAt(0.0, QColor(11, 19, 34));
+    bg.setColorAt(0.5, QColor(8, 14, 25));
+    bg.setColorAt(1.0, QColor(6, 10, 18));
+    p.fillRect(rect(), bg);
+
+    // Subtle IRIS holographic grid
+    p.setPen(QPen(QColor(0, 212, 255, 9), 1));
+    for (int x = 0; x < width(); x += kIrisGridStepPx) p.drawLine(x, 0, x, height());
+    for (int y = 0; y < height(); y += kIrisGridStepPx) p.drawLine(0, y, width(), y);
+
+    // Outer IRIS tactical corner brackets
+    p.setPen(QPen(QColor(0, 212, 255, 160), 2));
+    const int m = kCornerMarginPx;
+    const int l = kCornerLengthPx;
+    const int w = width();
+    const int h = height();
+    p.drawLine(m, m, m + l, m);
+    p.drawLine(m, m, m, m + l);
+    p.drawLine(w - m - l, m, w - m, m);
+    p.drawLine(w - m, m, w - m, m + l);
+    p.drawLine(m, h - m - l, m, h - m);
+    p.drawLine(m, h - m, m + l, h - m);
+    p.drawLine(w - m - l, h - m, w - m, h - m);
+    p.drawLine(w - m, h - m - l, w - m, h - m);
 }
 
 void MainWindow::closeEvent(QCloseEvent* event)
@@ -72,7 +111,10 @@ void MainWindow::applyTheme()
 QProcessEnvironment MainWindow::gameProcessEnvironment() const
 {
     QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
-    env.insert("AC_FPS_UNLOCKED", m_config.graphics().fpsUnlocked ? "1" : "0");
+    const auto& g = m_config.graphics();
+    const bool effUnlocked = g.fpsUnlocked || g.fpsLimit == 0 || g.fpsLimit > GraphicsSettings::kDefaultFpsLimit;
+    env.insert("AC_FPS_UNLOCKED", effUnlocked ? "1" : "0");
+    env.insert("PYTHONPATH", "src");
     return env;
 }
 
@@ -82,8 +124,9 @@ void MainWindow::refreshGameStatus()
     // matches the selected variant, or a correct build would be reported stale.
     QProcess proc;
     proc.setProcessEnvironment(gameProcessEnvironment());
-    proc.start("python3", {"-m", "astral_chain.build.setup_game", "--status"});
-    if (proc.waitForFinished(3000)) {
+    const QString py = QFile::exists(".venv/bin/python") ? ".venv/bin/python" : "python3";
+    proc.start(py, {"-m", "astral_chain.build.setup_game", "--status"});
+    if (proc.waitForFinished(kStatusProcTimeoutMs)) {
         const auto doc = QJsonDocument::fromJson(proc.readAllStandardOutput());
         if (doc.isObject()) {
             const auto obj = doc.object();
@@ -91,9 +134,9 @@ void MainWindow::refreshGameStatus()
             m_buildStatus = obj.value("build").toString();
             m_shaderStatus = obj.value("shaders").toString();
 
-            m_statusLabel->setText(QString("Jogo: %1  |  Compilação: %2  |  Shaders: %3")
+            m_statusLabel->setText(QString("SISTEMA // Jogo: %1  │  Binário: %2  │  Shaders: %3")
                 .arg(m_installed ? "Pronto" : "Não extraído").arg(m_buildStatus).arg(m_shaderStatus));
-            m_statusDot->setStyleSheet(m_installed ? "font-size: 11px; color: #66bb6a;" : "font-size: 11px; color: #ff7043;");
+            m_statusDot->setStyleSheet(m_installed ? "font-size: 12px; color: #26eb8c;" : "font-size: 12px; color: #ff2e57;");
 
             if (!m_runner.isRunning()) {
                 m_playBtn->setEnabled(m_installed);
@@ -103,8 +146,8 @@ void MainWindow::refreshGameStatus()
             return;
         }
     }
-    m_statusLabel->setText("Status: Pronto (configure na primeira execução)");
-    m_statusDot->setStyleSheet("font-size: 11px; color: #ffa726;");
+    m_statusLabel->setText("SISTEMA // Pronto (configure na primeira execução)");
+    m_statusDot->setStyleSheet("font-size: 12px; color: #ffb826;");
 }
 
 void MainWindow::setRunningUi(bool running, qint64 pid)
@@ -113,12 +156,12 @@ void MainWindow::setRunningUi(bool running, qint64 pid)
         m_playBtn->setText("⏹  PARAR");
         m_playBtn->setDangerMode(true);
         m_playBtn->setEnabled(true);
-        m_statusDot->setStyleSheet("font-size: 11px; color: #66bb6a;");
+        m_statusDot->setStyleSheet("font-size: 12px; color: #26eb8c;");
     } else {
         m_playBtn->setText("▶  JOGAR");
         m_playBtn->setDangerMode(false);
         m_playBtn->setEnabled(m_installed);
-        m_statusDot->setStyleSheet("font-size: 11px; color: #42a5f5;");
+        m_statusDot->setStyleSheet("font-size: 12px; color: #00d4ff;");
     }
     m_logWidget->setRunningState(running, pid);
 }
@@ -127,7 +170,7 @@ void MainWindow::runCommand(const QString& program, const QStringList& args, con
 {
     m_isGameRunning = isGame;
     m_statusLabel->setText(statusText);
-    m_statusDot->setStyleSheet("font-size: 11px; color: #42a5f5;");
+    m_statusDot->setStyleSheet("font-size: 12px; color: #00d4ff;");
     m_progressBar->setVisible(true);
     m_progressBar->setValue(0);
 
@@ -193,8 +236,17 @@ void MainWindow::onCompileShaders()
     runCommand(py, args, "Compilando shaders...", false);
 }
 
-void MainWindow::onOpenSettings() { SettingsDialog dlg(m_config, this); dlg.exec(); }
-void MainWindow::onOpenControls() { ControlsDialog dlg(m_config, this); dlg.exec(); }
+void MainWindow::onOpenSettings()
+{
+    SettingsDialog dlg(m_config, this);
+    dlg.exec();
+}
+
+void MainWindow::onOpenControls()
+{
+    ControlsDialog dlg(m_config, this);
+    dlg.exec();
+}
 
 void MainWindow::onProcessStarted(qint64 pid)
 {

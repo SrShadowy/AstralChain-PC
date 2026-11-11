@@ -41,6 +41,7 @@ private:
     // Game
     QCheckBox* m_parallelCheck{nullptr};
     QCheckBox* m_ignoreFocusCheck{nullptr};
+    QCheckBox* m_xboxConfirmACheck{nullptr};
     QComboBox* m_promptsCombo{nullptr};
     QComboBox* m_languageCombo{nullptr};
     QComboBox* m_voiceLangCombo{nullptr};

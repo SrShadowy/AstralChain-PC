@@ -118,11 +118,12 @@ Todas as frentes de trabalho são classificadas em quatro categorias explícitas
 - **Dependências**: Variáveis de diagnóstico (`LARECOMP_VK_PROF`) e ferramentas de profiling (`perf`).
 - **Tarefas**:
   - [x] Eliminar gargalo de cópia de vértices através do cache isolado `vcopy` em `exec.c`.
-  - [x] Implementar telemetria de percentis P50, P95 e P99 de apresentação de quadros no backend Vulkan.
+  - [x] Implementar telemetria de percentis P50, P95, P99 e 1% Low de apresentação de quadros em nanosegundos (`SDL_GetTicksNS`) no backend Vulkan.
   - [x] Suportar perfilamento amostral de CPU via `AC_PROFILE=1`.
+  - [x] Eliminar picos de latência no agendador paralelo (`THREAD_WAIT_GPU` via `vkWaitSemaphores` direto e `klock_wait_ns` em nanosegundos), corrida *catch-up* no pacer (`pace_trampoline.h`) e churn de alocação VMA via pool de reciclagem (`heap_mirror_extra.h`).
   - [ ] Investigar pausas pontuais na compressão de texturas BC7 sob demanda em GPU (*Planejado*).
   - [x] Implementar upscaling espacial (AMD FSR 1.0) e temporal (AMD FSR 3.1 TAAU + Camera Jitter Halton(2,3) + RCAS + Frame Generation 2x) para máxima nitidez e fluidez.
-- **Critérios Objetivos de Aceitação**: Taxa estável de 60 FPS (ou 120 FPS efetivos com FSR 3.1 Frame Generation) com frame time consistente e sem hitches perceptíveis.
+- **Critérios Objetivos de Aceitação**: Taxa estável de 60 FPS (ou 120+ FPS efetivos com `AC_FPS_UNLOCKED=1` / FSR 3.1 Frame Generation) com frame time linear, 1% Low próximo à média e sem hitches perceptíveis.
 - **Riscos / Pontos Não Resolvidos**: Otimizações agressivas em estruturas centrais do runtime podem causar regressões sutis em cutscenes.
 
 ---

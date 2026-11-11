@@ -49,8 +49,8 @@ ControlsDialog::ControlsDialog(Config& config, QWidget* parent)
     : QDialog(parent)
     , m_config(config)
 {
-    setWindowTitle("Astral Chain - Configuração de Controles");
-    resize(480, 520);
+    setWindowTitle("IRIS // Mapeamento de Controles");
+    resize(540, 540);
     setupUi();
     loadBindings();
 }
@@ -58,26 +58,31 @@ ControlsDialog::ControlsDialog(Config& config, QWidget* parent)
 void ControlsDialog::setupUi()
 {
     auto* layout = new QVBoxLayout(this);
+    layout->setContentsMargins(16, 16, 16, 16);
+    layout->setSpacing(10);
 
-    auto* header = new QLabel("Dê um duplo clique na célula em 'Tecla / Mouse' para editar a tecla:", this);
+    auto* header = new QLabel("Dê um duplo clique na célula em 'Tecla / Mouse' para editar o atalho:", this);
+    header->setStyleSheet("color: #59e8ff; font-weight: 600;");
     layout->addWidget(header);
 
     m_table = new QTableWidget(kDefaultActions.size(), 2, this);
-    m_table->setHorizontalHeaderLabels({"Ação", "Tecla / Mouse"});
+    m_table->setHorizontalHeaderLabels({"Ação no Jogo", "Tecla / Mouse"});
     m_table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
     m_table->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
     m_table->setSelectionBehavior(QAbstractItemView::SelectRows);
+    m_table->verticalHeader()->setVisible(false);
     layout->addWidget(m_table);
 
     auto* btnLayout = new QHBoxLayout();
     m_resetButton = new QPushButton("Restaurar Padrões", this);
-    m_saveButton = new QPushButton("Salvar", this);
     m_cancelButton = new QPushButton("Cancelar", this);
+    m_saveButton = new QPushButton("Salvar Controles", this);
+    m_saveButton->setObjectName("primaryBtn");
 
     btnLayout->addWidget(m_resetButton);
     btnLayout->addStretch();
-    btnLayout->addWidget(m_saveButton);
     btnLayout->addWidget(m_cancelButton);
+    btnLayout->addWidget(m_saveButton);
 
     layout->addLayout(btnLayout);
 

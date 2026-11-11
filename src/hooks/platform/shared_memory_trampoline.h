@@ -1,11 +1,11 @@
 #pragma once
 #define _GNU_SOURCE
+#include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
 #include <sys/mman.h>
 #include <sys/syscall.h>
 #include <unistd.h>
-#include <stdlib.h>
-#include <stdint.h>
-#include <string.h>
 
 #include "sync_trampoline.h"
 
@@ -43,10 +43,17 @@
 #define PAGE_READWRITE 0x04
 #endif
 
+#define EXTRA_SHM_DEFAULT_PAGE_SIZE 4096
+#define EXTRA_SHM_HIGH_DWORD_SHIFT 32
+
 static inline HANDLE CreateFileMappingW(HANDLE hFile, void *sec, uint32_t prot, uint32_t high, uint32_t low, const wchar_t *name) {
-    (void)sec; (void)prot; (void)name;
-    size_t sz = ((size_t)high << 32) | (size_t)low;
-    if (!sz) sz = 4096;
+    (void)sec;
+    (void)prot;
+    (void)name;
+    size_t sz = ((size_t)high << EXTRA_SHM_HIGH_DWORD_SHIFT) | (size_t)low;
+    if (!sz) {
+        sz = EXTRA_SHM_DEFAULT_PAGE_SIZE;
+    }
     int fd = -1;
     if (hFile != (HANDLE)(intptr_t)-1 && hFile && hFile->type == EXTRA_HANDLE_FILE) {
         fd = dup(hFile->file.fd);
@@ -61,7 +68,9 @@ static inline HANDLE CreateFileMappingW(HANDLE hFile, void *sec, uint32_t prot, 
             }
         }
     }
-    if (fd < 0) return NULL;
+    if (fd < 0) {
+        return NULL;
+    }
     ExtraHandle *h = (ExtraHandle *)calloc(1, sizeof(ExtraHandle));
     if (!h) {
         close(fd);
@@ -76,7 +85,9 @@ static inline HANDLE CreateFileMappingW(HANDLE hFile, void *sec, uint32_t prot, 
 
 static inline void *MapViewOfFile(HANDLE h, uint32_t access, uint32_t hi, uint32_t lo, size_t sz) {
     (void)hi;
-    if (!h || h->type != EXTRA_HANDLE_MAPPING) return NULL;
+    if (!h || h->type != EXTRA_HANDLE_MAPPING) {
+        return NULL;
+    }
     size_t map_sz = sz ? sz : h->mapping.size;
     off_t offset = (off_t)lo;
     int prot = (access == FILE_MAP_READ) ? PROT_READ : (PROT_READ | PROT_WRITE);
@@ -90,20 +101,30 @@ static inline int UnmapViewOfFile(const void *p) {
 }
 
 static inline void *extra_posix_virtual_alloc2(HANDLE h, void *b, size_t s, uint32_t t, uint32_t p, void *x, uint32_t c) {
-    (void)h; (void)t; (void)p; (void)x; (void)c;
+    (void)h;
+    (void)t;
+    (void)p;
+    (void)x;
+    (void)c;
     void *ptr = mmap(b, s, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE | MAP_FIXED, -1, 0);
     return (ptr == MAP_FAILED) ? NULL : ptr;
 }
 
 static inline void *extra_posix_map_view_of_file3(HANDLE h, HANDLE p, void *b, uint64_t o, size_t s, uint32_t t, uint32_t pr, void *x, uint32_t c) {
-    (void)p; (void)t; (void)x; (void)c;
-    if (!h || h->type != EXTRA_HANDLE_MAPPING) return NULL;
+    (void)p;
+    (void)t;
+    (void)x;
+    (void)c;
+    if (!h || h->type != EXTRA_HANDLE_MAPPING) {
+        return NULL;
+    }
     int prot = (pr == PAGE_READONLY) ? PROT_READ : (PROT_READ | PROT_WRITE);
     void *mapped = mmap(b, s, prot, MAP_SHARED | MAP_FIXED, h->mapping.fd, (off_t)o);
     return (mapped == MAP_FAILED) ? NULL : mapped;
 }
 
 static inline int extra_posix_unmap_view_of_file2(HANDLE hp, void *base, uint32_t flags) {
-    (void)hp; (void)flags;
-    return mmap(base, 4096, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE | MAP_FIXED, -1, 0) != MAP_FAILED;
+    (void)hp;
+    (void)flags;
+    return mmap(base, EXTRA_SHM_DEFAULT_PAGE_SIZE, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE | MAP_FIXED, -1, 0) != MAP_FAILED;
 }

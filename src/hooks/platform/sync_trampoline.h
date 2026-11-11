@@ -32,6 +32,17 @@
  * below a 60 Hz frame (16.6 ms). */
 #define EXTRA_WAIT_POLL_US 500
 
+/* Parallel guest-thread wait slices and Horizon 19.2 MHz tick-to-ns ratio
+ * (1000000000 / 19200000 = 625 / 12) used by parallel_block_wait(). */
+#define EXTRA_GPU_WAIT_WINDOW_NS  2000000ull
+#define EXTRA_GPU_WAIT_WORKER_NS  10000000ull
+#define EXTRA_WAIT_DEFAULT_NS     20000000ull
+#define EXTRA_WAIT_POLL_SLICE_NS  250000ull
+#define EXTRA_WAIT_MIN_SLICE_NS   50000ull
+#define EXTRA_WAIT_WINDOW_MAX_NS  4000000ull
+#define EXTRA_TICK_TO_NS_NUM      625ull
+#define EXTRA_TICK_TO_NS_DEN      12ull
+
 /* Stack size per host thread in parallel mode (guest threads share the heap
  * and are not stack-hungry, but generated code recurses deeply). */
 #define EXTRA_PARALLEL_STACK_SIZE (16u << 20)
@@ -145,14 +156,18 @@ static inline int extra_close_handle(HANDLE h) {
  * CLOCK_REALTIME is required: pthread_cond_timedwait() uses it unless the
  * condition variable was created with an explicit clock attribute. Callers
  * validate the timeout first, so INFINITE never reaches this helper. */
-static inline void extra_deadline_after_ms(uint32_t timeout_ms, struct timespec *ts) {
+static inline void extra_deadline_after_ns(uint64_t timeout_ns, struct timespec *ts) {
     clock_gettime(CLOCK_REALTIME, ts);
-    ts->tv_sec += (time_t)(timeout_ms / EXTRA_MS_PER_SEC);
-    ts->tv_nsec += (long)(timeout_ms % EXTRA_MS_PER_SEC) * EXTRA_NS_PER_MS;
+    ts->tv_sec += (time_t)(timeout_ns / EXTRA_NS_PER_SEC);
+    ts->tv_nsec += (long)(timeout_ns % EXTRA_NS_PER_SEC);
     if (ts->tv_nsec >= EXTRA_NS_PER_SEC) {
         ts->tv_sec += 1;
         ts->tv_nsec -= EXTRA_NS_PER_SEC;
     }
+}
+
+static inline void extra_deadline_after_ms(uint32_t timeout_ms, struct timespec *ts) {
+    extra_deadline_after_ns((uint64_t)timeout_ms * EXTRA_NS_PER_MS, ts);
 }
 
 /* Milliseconds on CLOCK_MONOTONIC, used only to enforce timeouts in polling
@@ -225,6 +240,14 @@ static inline int extra_sleep_cv(CONDITION_VARIABLE *cv, SRWLOCK *lock, uint32_t
     return pthread_cond_timedwait(cv, lock, &ts) == 0;
 }
 
+static inline int extra_sleep_cv_ns(CONDITION_VARIABLE *cv, SRWLOCK *lock, uint64_t timeout_ns) {
+    struct timespec ts;
+    extra_deadline_after_ns(timeout_ns, &ts);
+    return pthread_cond_timedwait(cv, lock, &ts) == 0;
+}
+
+__attribute__((weak)) void renderer_wait_seq_timeout(uint64_t seq, uint64_t timeout_ns);
+
 /* QueryPerformanceCounter / QueryPerformanceFrequency, in nanoseconds. */
 static inline uint64_t extra_qpc(void) {
     struct timespec ts;
@@ -263,7 +286,10 @@ static inline void extra_parallel_start(unsigned i, void *(*main_fn)(void *)) {
     pthread_detach(th);
 }
 
-static inline int extra_switch_to_thread(void) { sched_yield(); return 1; }
+static inline int extra_switch_to_thread(void) {
+    sched_yield();
+    return 1;
+}
 #define SwitchToThread() extra_switch_to_thread()
 #define ExitThread(code) do { (void)(code); pthread_exit(NULL); } while(0)
 

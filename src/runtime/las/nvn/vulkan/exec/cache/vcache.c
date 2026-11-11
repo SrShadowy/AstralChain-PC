@@ -314,17 +314,15 @@ bool guest_direct(uint64_t addr, uint64_t size, VkBuffer *buf, VkDeviceSize *off
     }
     if (copy || addr < HEAP_BASE) return false;
 #ifndef _WIN32 // [extra]
-    // If page write tracking is unavailable, CPU-written buffers are not mirrored, // [extra]
-    // so small dynamic buffers must be copied from host RAM.
-    // When pt_init() is active (userfaultfd / soft-dirty), gmem_sync mirrors dirty pages,
-    // enabling direct zero-copy VRAM binding across all sizes.
-    if (!pt_init()) {
-        static uint64_t min_direct = 0;
-        if (!min_direct) {
-            const char *m = getenv("LARECOMP_VK_DIRECT_MIN_SIZE");
-            min_direct = m ? (uint64_t)strtoull(m, NULL, 0) : (512ull * 1024);
-        }
-        if (size < min_direct) return false;
+    // Small dynamic buffers (UI, HUD, IRIS visor quads, text) are rewritten by the CPU before // [extra]
+    // the GPU reads gmem_buf/vcache, so buffers below min_direct are snapshotted per submission.
+    static uint64_t min_direct = 0;
+    if (!min_direct) {
+        const char *m = getenv("LARECOMP_VK_DIRECT_MIN_SIZE");
+        min_direct = m ? (uint64_t)strtoull(m, NULL, 0) : (512ull * 1024);
+    }
+    if (size < min_direct) {
+        return false;
     } // [extra]
 #endif // [extra]
     if (!gmem_ensure_size(addr, size)) return false;

@@ -10,7 +10,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
-#include "extra/toggles/ac_toggles.h"
+#include "additions/toggles/ac_toggles.h"
 
 /* Pacing targets, in frames per second. */
 #define EXTRA_DEFAULT_TARGET_FPS 60

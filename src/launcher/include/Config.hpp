@@ -8,25 +8,42 @@
 namespace ac::launcher {
 
 struct GraphicsSettings {
-    int width{1920};
-    int height{1080};
+    static constexpr int kDefaultWidth = 1920;
+    static constexpr int kDefaultHeight = 1080;
+    static constexpr int kDefaultFpsLimit = 60;
+    static constexpr int kMaxFpsLimit = 240;
+    static constexpr int kFpsSpinStep = 5;
+    static constexpr double kDefaultRenderScale = 1.0;
+    static constexpr double kDefaultFsrSharpness = 0.80;
+    static constexpr double kMinFsrSharpness = 0.0;
+    static constexpr double kMaxFsrSharpness = 1.0;
+    static constexpr double kFsrSharpnessStep = 0.05;
+    static constexpr int kFsrSharpnessDecimals = 2;
+    static constexpr double kDefaultLodBias = 0.0;
+    static constexpr double kDefaultLodMin = 0.0;
+
+    int width{kDefaultWidth};
+    int height{kDefaultHeight};
     bool fullscreen{false};
     bool vsync{true};
     QString presentMode{"fifo"};
-    int fpsLimit{60};
+    int fpsLimit{kDefaultFpsLimit};
     bool fpsUnlocked{false};  // AC_FPS_UNLOCKED: build with the Dynamic-Unlocked FPS patch variant
-    double renderScale{1.0};
+    double renderScale{kDefaultRenderScale};
     QString upscaler{"fsr3"};
     bool frameGen{false};
     bool fsrJitter{true};
-    double fsrSharpness{0.80};
-    double lodBias{0.0};   // texture quality: global LOD bias (0 = native, + = lighter)
-    double lodMin{0.0};    // LoD floor: min-LOD (0 = off)
-    bool noShadow{false};  // disable shadow-map sampling
+    double fsrSharpness{kDefaultFsrSharpness};
+    double lodBias{kDefaultLodBias};   // texture quality: global LOD bias (0 = native, + = lighter)
+    double lodMin{kDefaultLodMin};     // LoD floor: min-LOD (0 = off)
+    bool noShadow{false};              // disable shadow-map sampling
 };
 
 struct AudioSettings {
-    int masterVolume{100};
+    static constexpr int kMinVolume = 0;
+    static constexpr int kDefaultVolume = 100;
+
+    int masterVolume{kDefaultVolume};
     bool muteOnUnfocus{false};
 };
 
@@ -56,6 +73,7 @@ struct GameSettings {
     bool verboseLog{false};
     bool cutscene30Fps{false};
     bool asyncSubmit{true};
+    bool xboxConfirmA{true};
     QString buttonPrompts{"auto"};
     QString language{"auto"};
     QString voiceLanguage{"auto"};

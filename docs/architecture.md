@@ -14,7 +14,7 @@ Diferente de emuladores convencionais ou interpretadores JIT, o projeto não tra
 2. **Compilação Nativa Linux**: O código C gerado é compilado junto com a camada de runtime diretamente para um binário ELF nativo x86_64 utilizando o compilador Clang do Zig.
 3. **Execução Direta no Host**: As instruções rodam nativamente na CPU à velocidade máxima, sem overhead de emulação.
 4. **Camada Gráfica Vulkan 1.3**: As chamadas gráficas da API NVN do Switch são traduzidas diretamente para Vulkan 1.3 via LASRecomp. O projeto não utiliza nem planeja suporte a DirectX 12.
-5. **Organização Pragmática**: O código customizado reside principalmente em `extra/` (`core/`, `ui/launcher/`, `tools/`), integrando-se ao runtime através de trampolines modulares e hooks pontuais quando estritamente necessário.
+5. **Organização Pragmática**: O código-fonte vive sob `src/` (`src/runtime/`, `src/hooks/`, `src/additions/`, `src/launcher/`, `src/resources/`, `src/astral_chain/`), os artefatos de compilação e caches sob `build/` (`build/game/`, `build/launcher/`, `build/resources/`, `build/objects/`, `build/images/`), e os artefatos de depuração sob `debug/` (`debug/frames/`, `debug/traces/`).
 
 ```
 [Nintendo Switch Dump]
@@ -23,9 +23,9 @@ Diferente de emuladores convencionais ou interpretadores JIT, o projeto não tra
                                                               │
 [Compilador Zig Clang] <──────────────────────────────────────┘
   ├── ~122 Units em C (Lógica do Jogo)
-  ├── Runtime Horizon & HLE Services (C)
-  ├── NVN on Vulkan Layer (C / Vulkan 1.3)
-  └── Platform Trampolines (extra/{platform,sdl,gpu,input,storage}/ - C++20 / SDL3 / POSIX)
+  ├── Runtime Horizon & HLE Services (src/runtime/ - C)
+  ├── NVN on Vulkan Layer (src/runtime/las/ - C / Vulkan 1.3)
+  └── Hooks & Additions (src/hooks/, src/additions/ - C++20 / SDL3 / POSIX)
        │
        ▼
 [Binário Nativo ELF x86_64: build/game/round-00/trace]
@@ -37,18 +37,18 @@ Diferente de emuladores convencionais ou interpretadores JIT, o projeto não tra
 
 O ciclo de preparação do jogo é orquestrado por scripts Python e utilitários auxiliares:
 
-### A. Extração de Ativos (`astral_chain/build/setup_game.py`)
+### A. Extração de Ativos (`src/astral_chain/build/setup_game.py`)
 - O usuário fornece seu arquivo de chaves (`prod.keys`), o dump base do jogo (NSP ou XCI, title ID `01007300020FA000`) e a atualização v1.0.1 (NSP, title ID `01007300020FA800`).
 - A ferramenta `nstool` descompacta as NCAs.
 - O utilitário nativo compilado `romfs_tool.c` mescla a árvore da atualização sobre a base e empacota o sistema de arquivos virtual em um único arquivo de imagem contígua: `game/romfs.bin`.
 
-### B. Aplicação de Patches Pchtxt
+### B. Aplicação de Patches Pchtxt (`src/resources/patches/`)
 Antes da etapa de tradução, modificações binárias pontuais são aplicadas ao executável `main` descompactado:
 - **Dynamic-FPS (`1.0.1.pchtxt`)**: Desvincula a taxa de atualização da física interna, permitindo taxa de quadros alvo de 60 FPS com passo de tempo medido pelo frame real.
 - **Dynamic-Unlocked (`dynamic-unlocked-1.0.1.pchtxt`)**: opcional (`AC_FPS_UNLOCKED=1`), aplicado depois do Dynamic-FPS. Duas palavras removem o cap de 60 FPS do mod, deixando o passo medido valer de 15 a 480 FPS. Detalhes em [`docs/fps-cap-144.md`](fps-cap-144.md).
 - **Cutscene-Catchup (`cutscene-catchup-1.0.1.pchtxt`)**: Permite que cutscenes compensem atrasos pontuais com passos de tempo maiores para preservar sincronização labial e sonora.
 
-### C. Tradução Estática ARM64 → C (`astral_chain/translator/native_trace.py`)
+### C. Tradução Estática ARM64 → C (`src/astral_chain/translator/native_trace.py`)
 - Utiliza o motor estático `lifter.py` do LASRecomp.
 - Todo o código executável dos segmentos `.text` é convertido página por página (4 KB por página de memória guest).
 - Cada página torna-se uma função em C no formato `void page_XXXX(Cpu *c)`.
@@ -57,12 +57,12 @@ Antes da etapa de tradução, modificações binárias pontuais são aplicadas a
   - `--direct-calls`: Chamadas de ramificação com link (`BL`) invocam diretamente a página de destino em C em vez de passar por um despachante indireto.
   - `--jumps`: Saltos condicionais e incondicionais internos à mesma página são convertidos em instruções `goto` do C.
 
-### D. Compilação Nativa (`astral_chain/build/native_build.py`)
-- As unidades geradas (~122 arquivos C de código de jogo), os arquivos de serviços do runtime (`runtime/host_runtime.c.in`) e a camada NVN Vulkan (`runtime/las/`) são compilados com:
+### D. Compilação Nativa (`src/astral_chain/build/native_build.py`)
+- As unidades geradas (~122 arquivos C de código de jogo), os arquivos de serviços do runtime (`src/runtime/host_runtime.c.in` -> `debug/traces/trace.c`) e a camada NVN Vulkan (`src/runtime/las/`) são compilados com:
   ```bash
   zig clang -O2 -march=x86-64-v3 -target x86_64-linux-gnu ...
   ```
-- Os arquivos-objeto compilados são cacheados sob `build/native-objects/` utilizando hashes SHA-256 de conteúdo, permitindo o Fast-Relink (recompilação apenas do runtime em ~8s sem reconstruir as unidades do guest).
+- Os arquivos-objeto compilados são cacheados sob `build/objects/` utilizando hashes SHA-256 de conteúdo, permitindo o Fast-Relink (recompilação apenas do runtime em ~8s sem reconstruir as unidades do guest).
 
 ---
 
@@ -71,10 +71,10 @@ Antes da etapa de tradução, modificações binárias pontuais são aplicadas a
 O runtime emula em nível de host (HLE — High-Level Emulation) as chamadas de sistema (SVCs) do microkernel Horizon e os serviços do sistema operacional da Nintendo:
 
 - **SVCs (Supervisor Calls)**: Interceptam manipulação de memória, semáforos, portas IPC e criação de threads hóspedes.
-- **Threads Hóspedes (`runtime/kernel/guest_threads.h`)**: Threads do guest rodam em paralelo em threads nativas do sistema operacional host sob a flag `AC_PARALLEL=1`, coordenada por estruturas de sincronização POSIX em Linux (`extra/platform/sync_trampoline.h`).
-- **Sistema de Arquivos e Saves (`runtime/storage/save_store.h`, `runtime/storage/save_fs.h`)**:
+- **Threads Hóspedes (`src/runtime/kernel/guest_threads.h`)**: Threads do guest rodam em paralelo em threads nativas do sistema operacional host sob a flag `AC_PARALLEL=1`, coordenada por estruturas de sincronização POSIX em Linux (`src/hooks/platform/sync_trampoline.h`).
+- **Sistema de Arquivos e Saves (`src/runtime/storage/save_store.h`, `src/runtime/storage/save_fs.h`)**:
   - `romfs_storage.h` mapeia o arquivo `game/romfs.bin` em memória somente leitura.
-  - As operações de salvamento de estado do jogo são mapeadas para o diretório nativo `userdata/saves/<title>/<profile>/` via `extra/storage/storage_trampoline.h`.
+  - As operações de salvamento de estado do jogo são mapeadas para o diretório nativo `userdata/saves/<title>/<profile>/` via `src/hooks/storage/storage_trampoline.h`.
 - **Serviços de Sistema**:
   - `time_service.h`: Fornece timestamps baseados em relógios monotônicos do sistema (`CLOCK_MONOTONIC`).
   - `account_service.h`: Gerencia perfis e credenciais fictícias de usuário local.
@@ -88,13 +88,13 @@ O Nintendo Switch utiliza a API proprietária NVN para comunicação com a GPU M
 
 ### A. Interceptação e Despacho
 - A inicialização do subsistema gráfico intercepta a função de carregamento `nvnBootstrapLoader`.
-- As chamadas NVN de manipulação de buffers de comando, render targets, barreiras e submissão são convertidas em equivalentes Vulkan pela camada LASRecomp (`runtime/las/nvn/vulkan/`).
+- As chamadas NVN de manipulação de buffers de comando, render targets, barreiras e submissão são convertidas em equivalentes Vulkan pela camada LASRecomp (`src/runtime/las/nvn/vulkan/`).
 
 ### B. Tradução e Cache de Shaders
 - Os binários compilados de shader da arquitetura Maxwell são traduzidos para GLSL compatível.
 - A biblioteca `glslang` embutida compila o GLSL intermediário para bytecode SPIR-V.
-- O cache de shaders SPIR-V é gravado em `build/game/cache/` e reutilizado entre execuções.
-- As variantes de pipelines conhecidas são distribuídas em `data/pipeline_variants.bin` e `data/shader_variants.bin`, evitando engasgos por compilação durante o gameplay.
+- O cache de shaders SPIR-V é gravado em `build/resources/spirv/` e reutilizado entre execuções.
+- As variantes de pipelines conhecidas são distribuídas em `src/resources/data/pipeline_variants.bin` e `src/resources/data/shader_variants.bin`, evitando engasgos por compilação durante o gameplay.
 - **Warm-up Antecipado (`AC_GPU_WARM=1`)**: Antes de iniciar a sessão principal, o launcher aciona uma rotina que pré-carrega todos os pipelines conhecidos na GPU.
 - **Shader Libraries (`VK_EXT_graphics_pipeline_library`)**: Em GPUs com suporte a essa extensão, os estágios de shader são compilados separadamente em background, reduzindo o stutter ao compilar pipelines novos.
 

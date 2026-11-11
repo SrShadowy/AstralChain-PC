@@ -134,24 +134,31 @@ void CustomButton::updateButtonPosition()
 void CustomButton::updateButtonStyle()
 {
     const int fontSize = m_isPrimary ? 11 : 10;
-    const char* bg = m_isDanger ? "#c62828" : "#3168b8";
-    const char* fg = m_isDanger ? "#ffebee" : "#d7e6df";
-    const char* pBg = m_isDanger ? "#ef9a9a" : "#b9d0c6";
-    const char* pFg = m_isDanger ? "#b71c1c" : "#3168b8";
-    const char* dBg = m_isDanger ? "rgba(198, 40, 40, 0.35)" : "rgba(49, 104, 184, 0.35)";
-    const char* dFg = m_isDanger ? "rgba(255, 235, 238, 0.4)" : "rgba(215, 230, 223, 0.4)";
+    const char* bg    = m_isDanger ? "#a31934" : (m_isPrimary ? "#194a8c" : "#12233c");
+    const char* fg    = m_isDanger ? "#ffeef2" : (m_isPrimary ? "#eef9ff" : "#d8eaf4");
+    const char* bar   = m_isDanger ? "#ff2e57" : (m_isPrimary ? "#00d4ff" : "#2b62b0");
+    const char* hBg   = m_isDanger ? "#ff2e57" : (m_isPrimary ? "#00d4ff" : "#dff2fc");
+    const char* hFg   = m_isDanger ? "#ffffff" : "#08101c";
+    const char* pBg   = m_isDanger ? "#ff6b88" : "#59e8ff";
+    const char* dBg   = m_isDanger ? "rgba(163, 25, 52, 0.30)" : "rgba(18, 35, 60, 0.40)";
+    const char* dFg   = "rgba(125, 153, 181, 0.38)";
 
     m_button->setStyleSheet(QString(R"(
         QPushButton {
-            background-color: %1; color: %2; border: none; border-radius: 2px;
+            background-color: %1; color: %2;
+            border: 1px solid rgba(0, 212, 255, 0.24);
+            border-left: 3px solid %3;
+            border-radius: 2px;
             padding-left: 14px; padding-right: 14px; text-align: left;
-            font-family: "Fira Sans Condensed ExtraBold", "Fira Sans Condensed", "Bahnschrift", "Segoe UI", sans-serif;
-            font-weight: 800; font-size: %3pt;
+            font-family: "Fira Sans Condensed ExtraBold", "Fira Sans", "Segoe UI", sans-serif;
+            font-weight: 800; font-size: %4pt;
         }
-        QPushButton[hovered="true"], QPushButton:hover { background-color: %2; color: %1; }
-        QPushButton:pressed { background-color: %4; color: %5; }
-        QPushButton:disabled { background-color: %6; color: %7; }
-    )").arg(bg, fg).arg(fontSize).arg(pBg, pFg, dBg).arg(dFg));
+        QPushButton[hovered="true"], QPushButton:hover {
+            background-color: %5; color: %6; border-color: #59e8ff;
+        }
+        QPushButton:pressed { background-color: %7; color: %6; }
+        QPushButton:disabled { background-color: %8; color: %9; border-color: rgba(125, 153, 181, 0.12); }
+    )").arg(bg, fg, bar).arg(fontSize).arg(hBg, hFg, pBg, dBg, dFg));
 }
 
 void CustomButton::animate(bool hovered)
@@ -198,7 +205,10 @@ bool CustomButton::eventFilter(QObject* watched, QEvent* event)
 void CustomButton::enterEvent(QEnterEvent* event)
 {
     QWidget::enterEvent(event);
-    if (isEnabled()) { m_leaveTimer->stop(); animate(true); }
+    if (isEnabled()) {
+        m_leaveTimer->stop();
+        animate(true);
+    }
 }
 
 void CustomButton::leaveEvent(QEvent* event)

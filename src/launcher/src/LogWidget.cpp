@@ -256,15 +256,15 @@ void LogWidget::onOpenFolderClicked()
 void LogWidget::setRunningState(bool running, qint64 pid)
 {
     if (running) {
-        m_statusBadge->setText(QString("● Executando (PID %1)").arg(pid));
+        m_statusBadge->setText(QString("● ATIVO (PID %1)").arg(pid));
         m_statusBadge->setStyleSheet(
-            "color: #66bb6a; font-weight: bold; font-size: 11px; padding: 2px 10px; "
-            "background: rgba(76, 175, 80, 0.15); border-radius: 10px; border: 1px solid rgba(76, 175, 80, 0.35);");
+            "color: #26eb8c; font-weight: 700; font-size: 11px; padding: 2px 10px; "
+            "background: rgba(38, 235, 140, 0.12); border-radius: 2px; border: 1px solid rgba(38, 235, 140, 0.45);");
     } else {
-        m_statusBadge->setText("○ Inativo");
+        m_statusBadge->setText("○ STANDBY");
         m_statusBadge->setStyleSheet(
-            "color: #90a4ae; font-size: 11px; padding: 2px 10px; "
-            "background: rgba(144, 164, 174, 0.1); border-radius: 10px; border: 1px solid rgba(144, 164, 174, 0.25);");
+            "color: #7d99b5; font-weight: 600; font-size: 11px; padding: 2px 10px; "
+            "background: rgba(16, 28, 48, 0.85); border-radius: 2px; border: 1px solid rgba(0, 212, 255, 0.25);");
     }
 }
 

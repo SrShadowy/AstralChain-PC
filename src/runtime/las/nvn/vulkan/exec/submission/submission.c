@@ -12,16 +12,42 @@
 #include "../../exec_internal.h"
 #include "../../../renderer.h"
 #include "submission_internal.h"
-#include "extra/platform/pace_target.h" // [extra]
+#include "hooks/platform/pace_target.h" // [extra]
 
 // ================================================================== submissions
 // A submission = optional upload command buffer + the main one, signalling the timeline with its number.
-#define SUBS 8
+#define SUBS                        8
+#define VK_MAX_SUB_DESC_POOLS       16
+#define VK_WAIT_TAB_CAPACITY        12
+#define VK_WAIT_SEQ_TIMEOUT_NS      (10ull * 1000000000ull)
+#define VK_HANG_WATCH_POLL_MS       50
+#define VK_HANG_DEFAULT_MS          1200
+#define VK_HANG_EXIT_CODE           86
+#define VK_NS_PER_MS_ULL            1000000ull
+#define VK_NS_PER_MS_F              1e6
+#define NVN_GPU_TICK_NUM            384
+#define NVN_GPU_TICK_DEN            625
+#define VK_PACE_HITCH_THRESHOLD_NS  100000000ull
+#define NVN_COUNTER_ENTRY_STRIDE    16
+#define VK_QUERY_STRIDE_U64         8
+#define VK_DL_RING_SIZE             64
+#define VK_DL_RING_MASK             (VK_DL_RING_SIZE - 1)
+#define VK_DL_MSG_LEN               128
+#define VK_GP_LABEL_LEN             112
+#define VK_DESC_POOL_MAX_SETS       8192
+#define VK_DESC_POOL_UBO_COUNT      32768
+#define VK_DESC_POOL_SSBO_COUNT     4096
+#define VK_DESC_POOL_CIS_COUNT      32768
+#define VK_DESC_POOL_SAMPLED_COUNT  1024
+#define VK_DESC_POOL_SAMPLER_COUNT  1024
+#define VK_DESC_POOL_STORAGE_COUNT  4096
+#define VK_DESC_POOL_SIZE_TYPES     6
+
 typedef struct {
     VkCommandBuffer main, upload;
     bool main_begun, upload_begun, ts;  // ts: GPU timestamps written (profiling)
     uint64_t seq;
-    VkDescriptorPool pools[16];
+    VkDescriptorPool pools[VK_MAX_SUB_DESC_POOLS];
     int npools, cur_pool;
 } Sub;
 static Sub subs[SUBS];
@@ -37,14 +63,14 @@ uint64_t vk_completed_seq(void) {
 }
 
 __thread const char *wait_why; // [extra]
-WaitRecord wait_tab[12];
+WaitRecord wait_tab[VK_WAIT_TAB_CAPACITY];
 pthread_mutex_t wait_tab_lock = PTHREAD_MUTEX_INITIALIZER;
 
 static void wait_account(uint64_t ns) {
     const char *why = wait_why ? wait_why : "other";
     wait_why = NULL;
     pthread_mutex_lock(&wait_tab_lock);
-    for (int i = 0; i < 12; i++)
+    for (int i = 0; i < VK_WAIT_TAB_CAPACITY; i++)
         if (!wait_tab[i].why || wait_tab[i].why == why) { wait_tab[i].why = why; wait_tab[i].ns += ns; wait_tab[i].n++; break; }
     pthread_mutex_unlock(&wait_tab_lock);
 }
@@ -56,7 +82,7 @@ void vk_wait_seq(uint64_t seq) {
     VkSemaphoreWaitInfo wi = {.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO, .semaphoreCount = 1, .pSemaphores = &g_vk.timeline,
                               .pValues = &seq};
     uint64_t t0 = SDL_GetTicksNS();
-    VkResult r = vkWaitSemaphores(g_vk.dev, &wi, 10ull * 1000000000ull);
+    VkResult r = vkWaitSemaphores(g_vk.dev, &wi, VK_WAIT_SEQ_TIMEOUT_NS);
     stat_wait_ns += SDL_GetTicksNS() - t0;
     cum_wait += SDL_GetTicksNS() - t0;
     wait_account(SDL_GetTicksNS() - t0);
@@ -79,14 +105,14 @@ static void *hang_watch(void *arg) {
     int64_t ms = (int64_t)(intptr_t)arg;
     uint64_t last = 0, since = SDL_GetTicksNS();
     for (;;) {
-        SDL_Delay(50);
+        SDL_Delay(VK_HANG_WATCH_POLL_MS);
         uint64_t done = vk_completed_seq(), now = SDL_GetTicksNS();
         if (done >= atomic_load(&hang_submitted) || done != last) { last = done; since = now; continue; }
-        if (now - since < (uint64_t)ms * 1000000ull) continue;
+        if (now - since < (uint64_t)ms * VK_NS_PER_MS_ULL) continue;
         LOG("[vk] SAFETY STOP: GPU made no progress for %lld ms (submission %llu pending, %llu done); exiting before a "
             "driver reset\n", (long long)ms, (unsigned long long)atomic_load(&hang_submitted), (unsigned long long)done);
         fflush(NULL);
-        _exit(86);
+        _exit(VK_HANG_EXIT_CODE);
     }
     return NULL;
 }
@@ -96,7 +122,7 @@ static void hang_watch_submitted(uint64_t seq) {
     atomic_store(&hang_submitted, seq);
     if (started) return;
     started = 1;
-    int64_t ms = getenv("AC_GPU_HANG_MS") ? atoll(getenv("AC_GPU_HANG_MS")) : 1200;
+    int64_t ms = getenv("AC_GPU_HANG_MS") ? atoll(getenv("AC_GPU_HANG_MS")) : VK_HANG_DEFAULT_MS;
     LOG("[vk] GPU hang stop after %lld ms%s\n", (long long)ms, ms > 0 ? "" : " (off)");
     pthread_t t;
     if (ms > 0 && pthread_create(&t, NULL, hang_watch, (void *)(intptr_t)ms) == 0) pthread_detach(t);
@@ -108,7 +134,7 @@ typedef struct { VkQueryPool pool; uint32_t n; uint64_t seq; uint64_t *out[CQ_MA
 static CounterQ cq[SUBS];
 static pthread_mutex_t cq_lock = PTHREAD_MUTEX_INITIALIZER;
 static int64_t cq_offset;  // host ns - GPU ns (the smallest seen)
-static uint64_t ns_to_gpu_ticks(uint64_t ns) { return (uint64_t)((unsigned __int128)ns * 384 / 625); }
+static uint64_t ns_to_gpu_ticks(uint64_t ns) { return (uint64_t)((unsigned __int128)ns * NVN_GPU_TICK_NUM / NVN_GPU_TICK_DEN); }
 static bool cq_calibrated;
 static int counter_mode = -1;  // 0 cpu, 1 frozen, 2 gpu
 uint64_t stat_counters_gpu;
@@ -136,11 +162,11 @@ void vk_pace_frame(void) {
     uint64_t p = now - last, wt = w - last_wait;
     bool first = !last;
     last = now, last_wait = w;
-    if (first || p > 100000000ull) return;  // (loading, a hitch: not a pace)
-    double busy = (p > wt ? p - wt : 0) / 1e6;
+    if (first || p > VK_PACE_HITCH_THRESHOLD_NS) return;  // (loading, a hitch: not a pace)
+    double busy = (p > wt ? p - wt : 0) / VK_NS_PER_MS_F;
     static int log = -1;  // LARECOMP_LOG_PACE=1: each frame's period, vsync wait and busy time
     if (log < 0) log = getenv("LARECOMP_LOG_PACE") != NULL;
-    if (log) LOG("[pace] period %.2f blocked %.2f busy %.2f ms\n", p / 1e6, wt / 1e6, busy);
+    if (log) LOG("[pace] period %.2f blocked %.2f busy %.2f ms\n", p / VK_NS_PER_MS_F, wt / VK_NS_PER_MS_F, busy);
     int over, event = extra_pace_update(&pace, busy, on, &over); // [extra]
     stat_pace_over += over;
     pace_slow = pace.slow != 0; // [extra]
@@ -154,7 +180,7 @@ void vk_pace_frame(void) {
 }
 
 static uint64_t pace_end_counter(const uint64_t *start_entry, const uint64_t *entry, uint64_t value) {
-    if (!pace_slow || !start_entry || (const uint8_t *)entry - (const uint8_t *)start_entry != 16) return value;
+    if (!pace_slow || !start_entry || (const uint8_t *)entry - (const uint8_t *)start_entry != NVN_COUNTER_ENTRY_STRIDE) return value;
     uint64_t min = start_entry[1] + ns_to_gpu_ticks(extra_pace_slow_ns()); // [extra]
     return value < min ? min : value;
 }
@@ -326,10 +352,10 @@ bool g_gpuprof_frame;
 enum { GP_MAX = 4096 };
 static VkQueryPool gp_qp;
 static int gp_n;
-static char gp_label[GP_MAX][112];
+static char gp_label[GP_MAX][VK_GP_LABEL_LEN];
 static uint32_t gp_draws[GP_MAX];
 
-static char dl_ring[64][128];
+static char dl_ring[VK_DL_RING_SIZE][VK_DL_MSG_LEN];
 static unsigned dl_n;
 int dl_on = -1; // [extra]
 void dl_note(const char *fmt, ...) { // [extra]
@@ -337,14 +363,14 @@ void dl_note(const char *fmt, ...) { // [extra]
     if (!dl_on) return;
     va_list ap;
     va_start(ap, fmt);
-    vsnprintf(dl_ring[dl_n++ & 63], sizeof dl_ring[0], fmt, ap);
+    vsnprintf(dl_ring[dl_n++ & VK_DL_RING_MASK], sizeof dl_ring[0], fmt, ap);
     va_end(ap);
 }
 void vk_dl_note_upload(void *img, uint32_t w, uint32_t h, uint32_t lv) { dl_note("  upload %p %ux%u lv%u", img, w, h, lv); }
 void vk_devlost_dump(void) {
     if (!dl_on) return;
     LOG("[vk] last GPU operations before the device loss (oldest first):\n");
-    for (unsigned i = dl_n > 64 ? dl_n - 64 : 0; i < dl_n; i++) LOG("[vk]   %s\n", dl_ring[i & 63]);
+    for (unsigned i = dl_n > VK_DL_RING_SIZE ? dl_n - VK_DL_RING_SIZE : 0; i < dl_n; i++) LOG("[vk]   %s\n", dl_ring[i & VK_DL_RING_MASK]);
 }
 void gp_mark(VkCommandBuffer cb, const char *fmt, ...) { // [extra]
     if (!g_gpuprof_frame || gp_n >= GP_MAX - 1) return;
@@ -375,8 +401,8 @@ void vk_gpuprof_report(void) {
     if (!gp_n) return;
     renderer_flush();
     static uint64_t t[GP_MAX];
-    if (vkGetQueryPoolResults(g_vk.dev, gp_qp, 0, (uint32_t)gp_n, sizeof t, t, 8, VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT) == VK_SUCCESS) {
-        double per = g_vk.props.limits.timestampPeriod / 1e6, total = (t[gp_n - 1] - t[0]) * per;
+    if (vkGetQueryPoolResults(g_vk.dev, gp_qp, 0, (uint32_t)gp_n, sizeof t, t, VK_QUERY_STRIDE_U64, VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT) == VK_SUCCESS) {
+        double per = g_vk.props.limits.timestampPeriod / VK_NS_PER_MS_F, total = (t[gp_n - 1] - t[0]) * per;
         LOG("[gpuprof] %d marks, %.2f ms first to last (rows: the work after each mark, until the next)\n", gp_n, total);
         for (int i = 0; i + 1 < gp_n; i++) {
             double ms = (t[i + 1] - t[i]) * per;
@@ -481,17 +507,31 @@ void renderer_wait_seq(uint64_t seq) {
     vk_wait_seq(seq > s ? s : seq);
 }
 
+void renderer_wait_seq_timeout(uint64_t seq, uint64_t timeout_ns) { // [extra]
+    if (!seq) return;
+    pthread_mutex_lock(&seq_lock);
+    uint64_t s = submit_seq;
+    pthread_mutex_unlock(&seq_lock);
+    uint64_t target = seq > s ? s : seq;
+    if (!target) return;
+    VkSemaphoreWaitInfo wi = {.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
+                              .semaphoreCount = 1, .pSemaphores = &g_vk.timeline, .pValues = &target};
+    vkWaitSemaphores(g_vk.dev, &wi, timeout_ns);
+} // [extra]
+
 VkDescriptorSet vk_alloc_set(VkDescriptorSetLayout layout) {
     Sub *s = sub();
     for (;;) {
         if (s->cur_pool == s->npools) {
-            if (s->npools == 16) FATAL("descriptor pools exhausted\n");
-            VkDescriptorPoolSize sizes[] = {{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 32768}, {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 4096},
-                                            {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 32768},
-                                            {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1024}, {VK_DESCRIPTOR_TYPE_SAMPLER, 1024},
-                                            {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 4096}};  // (Astral Chain: SUST)
-            VkDescriptorPoolCreateInfo ci = {.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO, .maxSets = 8192,
-                                             .poolSizeCount = 6, .pPoolSizes = sizes};
+            if (s->npools == VK_MAX_SUB_DESC_POOLS) FATAL("descriptor pools exhausted\n");
+            VkDescriptorPoolSize sizes[] = {{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_DESC_POOL_UBO_COUNT},
+                                            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_DESC_POOL_SSBO_COUNT},
+                                            {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_DESC_POOL_CIS_COUNT},
+                                            {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, VK_DESC_POOL_SAMPLED_COUNT},
+                                            {VK_DESCRIPTOR_TYPE_SAMPLER, VK_DESC_POOL_SAMPLER_COUNT},
+                                            {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_DESC_POOL_STORAGE_COUNT}};  // (Astral Chain: SUST)
+            VkDescriptorPoolCreateInfo ci = {.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO, .maxSets = VK_DESC_POOL_MAX_SETS,
+                                             .poolSizeCount = VK_DESC_POOL_SIZE_TYPES, .pPoolSizes = sizes};
             VK_CHECK(vkCreateDescriptorPool(g_vk.dev, &ci, NULL, &s->pools[s->npools++]));
         }
         VkDescriptorSetAllocateInfo ai = {.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
@@ -548,7 +588,7 @@ void handle_report_counter(uint32_t type, uint64_t *out) {
         if (delay < 0) delay = getenv("LARECOMP_TEST_COUNTER_DELAY_MS") ? atof(getenv("LARECOMP_TEST_COUNTER_DELAY_MS")) : 0;
         if (delay > 0 && vk_frame_counter() != delayed_frame) {
             delayed_frame = vk_frame_counter();
-            SDL_DelayPrecise((Uint64)(delay * 1e6));
+            SDL_DelayPrecise((Uint64)(delay * VK_NS_PER_MS_F));
         }
     }
     if (mode == 2 && type == 0) {  // (type 0: timestamp)
@@ -569,3 +609,4 @@ void submission_init(void) {
         if (vkCreateQueryPool(g_vk.dev, &qi, NULL, &prof_qp) != VK_SUCCESS) prof_qp = VK_NULL_HANDLE;
     }
 }
+// [extra]

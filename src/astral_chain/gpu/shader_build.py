@@ -193,9 +193,10 @@ def main() -> None:
     args = parser.parse_args()
     reference, output = args.reference.resolve(), args.output.resolve()
     source = prepare_translator(reference, output)
+    src_root = Path(__file__).resolve().parent.parent.parent
     subprocess.run([str(args.compiler.resolve()), 'cc', '-O1', '-I',
-                    str(reference/'runtime/nvn/maxwell'), '-I', str(Path(__file__).parent.parent/'runtime/las'),
-                    str(Path(__file__).parent.parent/'runtime/tools/shader_probe.c'), str(source),
+                    str(reference/'runtime/nvn/maxwell'), '-I', str(src_root/'runtime/las'),
+                    str(src_root/'runtime/tools/shader_probe.c'), str(source),
                     '-o', str(output/'shader-probe')], check=True)
 
 

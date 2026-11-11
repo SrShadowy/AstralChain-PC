@@ -266,7 +266,7 @@ static void cache_open(void) {
     tried = 1;
     const char *e = getenv("LARECOMP_BC7_CACHE");
     if (e && !atoi(e)) return;
-    FILE *f = fopen("cache/bc7/index.bin", "rb");
+    FILE *f = fopen("build/game/cache/bc7/index.bin", "rb"); // [extra]
     if (!f) return;
     uint32_t head[3];
     if (fread(head, 4, 3, f) == 3 && head[0] == BC7_CACHE_MAGIC && head[1] == BC7_CACHE_VERSION && head[2]) {
@@ -274,7 +274,7 @@ static void cache_open(void) {
         if (cache_index && fread(cache_index, sizeof *cache_index, head[2], f) == head[2]) cache_count = head[2];
     }
     fclose(f);
-    if (cache_count) cache_data = fopen("cache/bc7/data.bin", "rb");
+    if (cache_count) cache_data = fopen("build/game/cache/bc7/data.bin", "rb"); // [extra]
     if (!cache_data) cache_count = 0;
     LOG("[vk] BC7: %u precomputed textures%s\n", cache_count, cache_count ? "" : " (none: converted on the GPU)");
 }

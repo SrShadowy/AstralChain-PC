@@ -29,8 +29,8 @@ NONE = 0xFFFFFFFF
 # ---- Tegra Deswizzle Library --------------------------------------------
 def ensure_libtegra():
     if not LIBTEGRA_PATH.exists():
-        tegra_c = PROJECT / "astral_chain" / "runtime" / "las" / "nvn" / "tegra.c"
-        formats_c = PROJECT / "astral_chain" / "runtime" / "las" / "nvn" / "formats.c"
+        tegra_c = PROJECT / "src" / "runtime" / "las" / "nvn" / "tegra.c"
+        formats_c = PROJECT / "src" / "runtime" / "las" / "nvn" / "formats.c"
         cmd = ["cc", "-O2", "-shared", "-fPIC", str(tegra_c), str(formats_c), "-o", str(LIBTEGRA_PATH)]
         subprocess.run(cmd, check=True)
     lib = ctypes.CDLL(str(LIBTEGRA_PATH))

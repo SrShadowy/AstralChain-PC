@@ -28,8 +28,8 @@ static uint64_t src_hash(const char *src, int stage) {
 }
 
 static uint32_t *cache_load(uint64_t h, size_t *nwords) {
-    char path[64];
-    snprintf(path, sizeof path, "cache/spirv/%016llx.spv", (unsigned long long)h);
+    char path[96]; // [extra]
+    snprintf(path, sizeof path, "build/game/cache/spirv/%016llx.spv", (unsigned long long)h); // [extra]
     FILE *f = fopen(path, "rb");
     if (!f) return NULL;
     fseek(f, 0, SEEK_END);
@@ -45,9 +45,9 @@ static uint32_t *cache_load(uint64_t h, size_t *nwords) {
 
 static void cache_store(uint64_t h, const uint32_t *spv, size_t nwords) {
     static int made;
-    if (!made) { made = 1; mkdir("cache", 0755); mkdir("cache/spirv", 0755); }
-    char path[64], tmp[80];
-    snprintf(path, sizeof path, "cache/spirv/%016llx.spv", (unsigned long long)h);
+    if (!made) { made = 1; mkdir("build", 0755); mkdir("build/game", 0755); mkdir("build/game/cache", 0755); mkdir("build/game/cache/spirv", 0755); } // [extra]
+    char path[96], tmp[112]; // [extra]
+    snprintf(path, sizeof path, "build/game/cache/spirv/%016llx.spv", (unsigned long long)h); // [extra]
     snprintf(tmp, sizeof tmp, "%s.%llx", path, (unsigned long long)(uintptr_t)&made ^ (unsigned long long)(uintptr_t)spv);
     FILE *f = fopen(tmp, "wb");
     if (!f) return;

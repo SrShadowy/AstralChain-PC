@@ -447,7 +447,7 @@ void *nvn_host_window(void) {
 /* Display pacing: 60 Hz vsync grid in rt_ticks (19.2 MHz). Each present waits for
  * the first vsync at least `interval` refreshes after the previous present.
  * AC_PRESENT_INTERVAL overrides the game's interval (experiments, e.g. 1). */
-#include "extra/platform/pace_trampoline.h" // [extra]
+#include "hooks/platform/pace_trampoline.h" // [extra]
 void nvn_present_pace(int interval) { // [extra]
     extra_nvn_present_pace(interval); // [extra]
 } // [extra]

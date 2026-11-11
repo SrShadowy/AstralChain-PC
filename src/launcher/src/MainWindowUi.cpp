@@ -15,26 +15,31 @@ void MainWindow::setupUi()
     setCentralWidget(central);
 
     auto* rootLayout = new QHBoxLayout(central);
-    rootLayout->setContentsMargins(24, 24, 24, 24);
-    rootLayout->setSpacing(20);
+    rootLayout->setContentsMargins(22, 22, 22, 22);
+    rootLayout->setSpacing(18);
 
     m_sidePanel = new QWidget(this);
     m_sidePanel->setObjectName("sidePanel");
     m_sidePanel->setFixedWidth(320);
     auto* leftLayout = new QVBoxLayout(m_sidePanel);
     leftLayout->setSpacing(0);
-    leftLayout->setContentsMargins(16, 20, 16, 18);
+    leftLayout->setContentsMargins(16, 18, 16, 16);
+
+    auto* kicker = new QLabel("NEURON // LEGATUS SYSTEM", m_sidePanel);
+    kicker->setObjectName("kickerLabel");
+    leftLayout->addWidget(kicker);
+    leftLayout->addSpacing(2);
 
     auto* title = new QLabel("ASTRAL CHAIN", m_sidePanel);
     title->setObjectName("titleLabel");
     title->setAlignment(Qt::AlignLeft);
     leftLayout->addWidget(title);
 
-    auto* subtitle = new QLabel("Native PC Port  ·  Qt6 / SDL3 / Vulkan", m_sidePanel);
+    auto* subtitle = new QLabel("LINUX NATIVE  ·  VULKAN 1.3  ·  FSR 3.1", m_sidePanel);
     subtitle->setObjectName("subtitleLabel");
     leftLayout->addWidget(subtitle);
 
-    leftLayout->addSpacing(18);
+    leftLayout->addSpacing(14);
 
     m_playBtn = new CustomButton("▶  JOGAR", m_sidePanel, true /* isPrimary */);
     m_playBtn->setFixedHeight(52);
@@ -54,6 +59,11 @@ void MainWindow::setupUi()
     }
 
     leftLayout->addStretch();
+
+    auto* footer = new QLabel("Atalhos In-Game:  [Insert] Terminal IRIS  ·  [F8] RE Info", m_sidePanel);
+    footer->setObjectName("sideFooterLabel");
+    leftLayout->addWidget(footer);
+
     rootLayout->addWidget(m_sidePanel);
 
     auto* rightBox = new QWidget(this);
@@ -61,29 +71,37 @@ void MainWindow::setupUi()
     rightLayout->setContentsMargins(0, 0, 0, 0);
     rightLayout->setSpacing(10);
 
+    auto* statusCard = new QWidget(rightBox);
+    statusCard->setObjectName("statusCard");
+    auto* statusCardLayout = new QVBoxLayout(statusCard);
+    statusCardLayout->setContentsMargins(12, 9, 12, 9);
+    statusCardLayout->setSpacing(6);
+
     auto* statusRow = new QHBoxLayout();
     statusRow->setSpacing(8);
 
-    m_statusDot = new QLabel("●", rightBox);
+    m_statusDot = new QLabel("●", statusCard);
     m_statusDot->setObjectName("statusDot");
-    m_statusDot->setFixedSize(18, 18);
+    m_statusDot->setFixedSize(16, 16);
     m_statusDot->setAlignment(Qt::AlignCenter);
     statusRow->addWidget(m_statusDot);
 
-    m_statusLabel = new QLabel("Verificando instalação do jogo...", rightBox);
+    m_statusLabel = new QLabel("Verificando instalação do jogo...", statusCard);
     m_statusLabel->setObjectName("statusLabel");
     statusRow->addWidget(m_statusLabel);
     statusRow->addStretch();
 
-    rightLayout->addLayout(statusRow);
+    statusCardLayout->addLayout(statusRow);
 
-    m_progressBar = new QProgressBar(rightBox);
+    m_progressBar = new QProgressBar(statusCard);
     m_progressBar->setObjectName("mainProgress");
-    m_progressBar->setRange(0, 0);
+    m_progressBar->setRange(0, 100);
     m_progressBar->setVisible(false);
     m_progressBar->setFixedHeight(5);
     m_progressBar->setTextVisible(false);
-    rightLayout->addWidget(m_progressBar);
+    statusCardLayout->addWidget(m_progressBar);
+
+    rightLayout->addWidget(statusCard);
 
     m_logWidget = new LogWidget(rightBox);
     rightLayout->addWidget(m_logWidget);

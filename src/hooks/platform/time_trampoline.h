@@ -3,6 +3,12 @@
 #include <time.h>
 #include <string.h>
 
+#define EXTRA_TZ_NAME_LEN        32
+#define EXTRA_EINVAL_ERRNO       22
+#define EXTRA_TIME_ZONE_INVALID  0xFFFFFFFFu
+#define EXTRA_SECONDS_PER_MINUTE 60
+#define EXTRA_TM_YEAR_BASE       1900
+
 typedef int64_t __time64_t;
 
 typedef struct _SYSTEMTIME {
@@ -18,27 +24,27 @@ typedef struct _SYSTEMTIME {
 
 typedef struct _TIME_ZONE_INFORMATION {
     int32_t Bias;
-    wchar_t StandardName[32];
+    wchar_t StandardName[EXTRA_TZ_NAME_LEN];
     SYSTEMTIME StandardDate;
     int32_t StandardBias;
-    wchar_t DaylightName[32];
+    wchar_t DaylightName[EXTRA_TZ_NAME_LEN];
     SYSTEMTIME DaylightDate;
     int32_t DaylightBias;
 } TIME_ZONE_INFORMATION;
 
 static inline int _localtime64_s(struct tm *result, const __time64_t *timer) {
-    if (!result || !timer) return 22;
+    if (!result || !timer) return EXTRA_EINVAL_ERRNO;
     time_t t = (time_t)*timer;
-    return localtime_r(&t, result) ? 0 : 22;
+    return localtime_r(&t, result) ? 0 : EXTRA_EINVAL_ERRNO;
 }
 
 static inline uint32_t GetTimeZoneInformation(TIME_ZONE_INFORMATION *tzi) {
-    if (!tzi) return 0xFFFFFFFFu;
+    if (!tzi) return EXTRA_TIME_ZONE_INVALID;
     memset(tzi, 0, sizeof(*tzi));
     time_t t = time(NULL);
     struct tm local;
     localtime_r(&t, &local);
-    tzi->Bias = (int32_t)(-local.tm_gmtoff / 60);
+    tzi->Bias = (int32_t)(-local.tm_gmtoff / EXTRA_SECONDS_PER_MINUTE);
     tzi->StandardBias = 0;
     tzi->DaylightBias = 0;
     return 1;
@@ -49,7 +55,7 @@ static inline void GetLocalTime(SYSTEMTIME *st) {
     time_t t = time(NULL);
     struct tm local;
     localtime_r(&t, &local);
-    st->wYear = (uint16_t)(local.tm_year + 1900);
+    st->wYear = (uint16_t)(local.tm_year + EXTRA_TM_YEAR_BASE);
     st->wMonth = (uint16_t)(local.tm_mon + 1);
     st->wDayOfWeek = (uint16_t)local.tm_wday;
     st->wDay = (uint16_t)local.tm_mday;
@@ -63,10 +69,18 @@ static inline void GetLocalTime(SYSTEMTIME *st) {
 #include <errno.h>
 
 #define EXTRA_TIME_NS_PER_SEC 1000000000ULL
-#define EXTRA_SPIN_WINDOW_NS  250000ULL /* 250 us spin window before target deadline */
+#define EXTRA_SPIN_WINDOW_NS  150000ULL /* 150 us spin window before target deadline */
+
+static inline void extra_cpu_pause(void) {
+#if defined(__x86_64__) || defined(_M_X64)
+    __builtin_ia32_pause();
+#else
+    sched_yield();
+#endif
+}
 
 /* Hybrid precise sleep until monotonic nanosecond target t.
- * Blocks via clock_nanosleep when > 250 us remains, then yields for final precision. */
+ * Blocks via clock_nanosleep when > 150 us remains, then pauses CPU for final precision. */
 static inline void extra_plat_sleep_until_ns(uint64_t t) {
     struct timespec now_ts;
     clock_gettime(CLOCK_MONOTONIC, &now_ts);
@@ -86,7 +100,7 @@ static inline void extra_plat_sleep_until_ns(uint64_t t) {
         clock_gettime(CLOCK_MONOTONIC, &now_ts);
         now = (uint64_t)now_ts.tv_sec * EXTRA_TIME_NS_PER_SEC + (uint64_t)now_ts.tv_nsec;
         if (now >= t) break;
-        sched_yield();
+        extra_cpu_pause();
     }
 }
 
@@ -124,6 +138,6 @@ static inline void extra_svc_sleep_thread(int64_t ns) {
             (now.tv_sec == target_ts.tv_sec && now.tv_nsec >= target_ts.tv_nsec)) {
             break;
         }
-        sched_yield();
+        extra_cpu_pause();
     }
 }

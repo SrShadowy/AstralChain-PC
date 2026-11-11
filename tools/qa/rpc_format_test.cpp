@@ -4,7 +4,7 @@
 #include <cstdio>
 #include <string>
 
-#include "extra/rpc/ac_game_data.h"
+#include "additions/rpc/ac_game_data.h"
 
 extern "C" unsigned long long ac_reinfo_main_base(void) { return 0x7000010000ull; }
 extern "C" unsigned long long ac_reinfo_guest_lo(void) { return 0x7000000000ull; }

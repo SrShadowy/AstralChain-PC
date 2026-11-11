@@ -3,7 +3,7 @@
 #ifndef _WIN32
 #include <stdint.h>
 #include <stdlib.h>
-#include "extra/input/mouse_mode.h"
+#include "hooks/input/mouse_mode.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -59,7 +59,10 @@ static inline void extra_menu_detect_touch(uint64_t now) {
 static inline void extra_menu_detect_on_key(int is_pause, int is_play, int down, void *sdl_win, uint64_t now) {
     extra_menu_detect_load_config();
     if (is_pause) {
-        if (!down) { g_menu_pause_held = 0; return; }
+        if (!down) {
+            g_menu_pause_held = 0;
+            return;
+        }
         if (g_menu_pause_held) return; /* (leading edge only) */
         g_menu_pause_held = 1;
         extra_mouse_mode_toggle(sdl_win);
@@ -77,7 +80,10 @@ static inline void extra_menu_detect_on_key(int is_pause, int is_play, int down,
 static inline void extra_menu_detect_tick(uint64_t now, void *sdl_win) {
     extra_menu_detect_load_config();
     if (!g_menu_timeout_enabled || extra_mouse_mode_is_captured()) return;
-    if (!g_menu_detect_last_activity) { g_menu_detect_last_activity = now; return; }
+    if (!g_menu_detect_last_activity) {
+        g_menu_detect_last_activity = now;
+        return;
+    }
     if (now > g_menu_detect_last_activity &&
         now - g_menu_detect_last_activity >= AC_MENU_DETECT_INACTIVITY_TICKS) {
         g_menu_detect_last_activity = 0;

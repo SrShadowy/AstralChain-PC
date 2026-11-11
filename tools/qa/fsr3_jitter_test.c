@@ -4,7 +4,7 @@
 #include <assert.h>
 #include <math.h>
 #include <stdio.h>
-#include "extra/gpu/fsr3_extra.h"
+#include "hooks/gpu/fsr3_extra.h"
 
 static int near_eq(float a, float b, float eps) {
     return fabsf(a - b) <= eps;

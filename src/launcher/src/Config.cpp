@@ -16,25 +16,25 @@ void Config::load()
     QSettings s(m_iniPath, QSettings::IniFormat);
 
     s.beginGroup("Graphics");
-    m_graphics.width = s.value("width", 1920).toInt();
-    m_graphics.height = s.value("height", 1080).toInt();
+    m_graphics.width = s.value("width", GraphicsSettings::kDefaultWidth).toInt();
+    m_graphics.height = s.value("height", GraphicsSettings::kDefaultHeight).toInt();
     m_graphics.fullscreen = s.value("fullscreen", false).toBool();
     m_graphics.vsync = s.value("vsync", true).toBool();
     m_graphics.presentMode = s.value("present_mode", "mailbox").toString();
-    m_graphics.fpsLimit = s.value("fps_limit", 60).toInt();
+    m_graphics.fpsLimit = s.value("fps_limit", GraphicsSettings::kDefaultFpsLimit).toInt();
     m_graphics.fpsUnlocked = s.value("fps_unlocked", false).toBool();
-    m_graphics.renderScale = s.value("render_scale", 1.0).toDouble();
+    m_graphics.renderScale = s.value("render_scale", GraphicsSettings::kDefaultRenderScale).toDouble();
     m_graphics.upscaler = s.value("upscaler", "fsr3").toString();
     m_graphics.frameGen = s.value("frame_gen", false).toBool();
     m_graphics.fsrJitter = s.value("fsr_jitter", true).toBool();
-    m_graphics.fsrSharpness = s.value("fsr_sharpness", 0.80).toDouble();
-    m_graphics.lodBias = s.value("lod_bias", 0.0).toDouble();
-    m_graphics.lodMin = s.value("lod_min", 0.0).toDouble();
+    m_graphics.fsrSharpness = s.value("fsr_sharpness", GraphicsSettings::kDefaultFsrSharpness).toDouble();
+    m_graphics.lodBias = s.value("lod_bias", GraphicsSettings::kDefaultLodBias).toDouble();
+    m_graphics.lodMin = s.value("lod_min", GraphicsSettings::kDefaultLodMin).toDouble();
     m_graphics.noShadow = s.value("no_shadow", false).toBool();
     s.endGroup();
 
     s.beginGroup("Audio");
-    m_audio.masterVolume = s.value("master_volume", 100).toInt();
+    m_audio.masterVolume = s.value("master_volume", AudioSettings::kDefaultVolume).toInt();
     m_audio.muteOnUnfocus = s.value("mute_on_unfocus", false).toBool();
     s.endGroup();
 
@@ -56,6 +56,7 @@ void Config::load()
     m_game.verboseLog = s.value("verbose_log", false).toBool();
     m_game.cutscene30Fps = s.value("cutscene_30fps", false).toBool();
     m_game.asyncSubmit = s.value("async_submit", true).toBool();
+    m_game.xboxConfirmA = s.value("xbox_confirm_a", true).toBool();
     m_game.buttonPrompts = s.value("button_prompts", "auto").toString();
     m_game.language = s.value("language", "auto").toString();
     m_game.voiceLanguage = s.value("voice_language", "auto").toString();
@@ -119,6 +120,7 @@ void Config::save()
     s.setValue("verbose_log", m_game.verboseLog);
     s.setValue("cutscene_30fps", m_game.cutscene30Fps);
     s.setValue("async_submit", m_game.asyncSubmit);
+    s.setValue("xbox_confirm_a", m_game.xboxConfirmA);
     s.setValue("button_prompts", m_game.buttonPrompts);
     s.setValue("language", m_game.language);
     s.setValue("voice_language", m_game.voiceLanguage);
@@ -146,23 +148,38 @@ void Config::setBinding(const QString& action, const QString& key)
     m_bindings[action] = key;
 }
 
+namespace {
+constexpr int kVkMouseLeft   = 0x01;
+constexpr int kVkMouseRight  = 0x02;
+constexpr int kVkMouseMiddle = 0x04;
+constexpr int kVkTab         = 0x09;
+constexpr int kVkReturn      = 0x0D;
+constexpr int kVkShift       = 0x10;
+constexpr int kVkEscape      = 0x1B;
+constexpr int kVkSpace       = 0x20;
+constexpr int kVkLeft        = 0x25;
+constexpr int kVkUp          = 0x26;
+constexpr int kVkRight       = 0x27;
+constexpr int kVkDown        = 0x28;
+} // namespace
+
 static int keyToVk(const QString& key) {
     if (key.length() == 1) {
         char ch = key.at(0).toUpper().toLatin1();
         if ((ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9')) return (int)ch;
     }
-    if (key == "Space") return 0x20;
-    if (key == "LeftShift" || key == "Shift") return 0x10;
-    if (key == "Tab") return 0x09;
-    if (key == "Escape" || key == "Esc") return 0x1B;
-    if (key == "Return" || key == "Enter") return 0x0D;
-    if (key == "Mouse_Left") return 0x01;
-    if (key == "Mouse_Right") return 0x02;
-    if (key == "Mouse_Middle") return 0x04;
-    if (key == "Up") return 0x26;
-    if (key == "Down") return 0x28;
-    if (key == "Left") return 0x25;
-    if (key == "Right") return 0x27;
+    if (key == "Space") return kVkSpace;
+    if (key == "LeftShift" || key == "Shift") return kVkShift;
+    if (key == "Tab") return kVkTab;
+    if (key == "Escape" || key == "Esc") return kVkEscape;
+    if (key == "Return" || key == "Enter") return kVkReturn;
+    if (key == "Mouse_Left") return kVkMouseLeft;
+    if (key == "Mouse_Right") return kVkMouseRight;
+    if (key == "Mouse_Middle") return kVkMouseMiddle;
+    if (key == "Up") return kVkUp;
+    if (key == "Down") return kVkDown;
+    if (key == "Left") return kVkLeft;
+    if (key == "Right") return kVkRight;
     return 0;
 }
 
@@ -201,10 +218,10 @@ QString Config::buildLaunchEnv() const
     }
     if (m_graphics.fullscreen) env << "AC_FULLSCREEN=1";
     if (!m_graphics.upscaler.isEmpty()) env << QString("AC_UPSCALER=%1").arg(m_graphics.upscaler);
-    if (m_graphics.renderScale > 0.0) env << QString("AC_RENDER_SCALE=%1").arg(m_graphics.renderScale, 0, 'f', 2);
+    if (m_graphics.renderScale > 0.0) env << QString("AC_RENDER_SCALE=%1").arg(m_graphics.renderScale, 0, 'f', GraphicsSettings::kFsrSharpnessDecimals);
     if (m_graphics.frameGen) env << "AC_FRAMEGEN=1";
     env << QString("AC_FSR_JITTER=%1").arg(m_graphics.fsrJitter ? 1 : 0);
-    env << QString("AC_FSR_SHARPNESS=%1").arg(m_graphics.fsrSharpness, 0, 'f', 2);
+    env << QString("AC_FSR_SHARPNESS=%1").arg(m_graphics.fsrSharpness, 0, 'f', GraphicsSettings::kFsrSharpnessDecimals);
     if (m_graphics.lodBias > 0.0) env << QString("LARECOMP_LOD_BIAS=%1").arg(m_graphics.lodBias);
     if (m_graphics.lodMin > 0.0) env << QString("LARECOMP_LOD_MIN=%1").arg(m_graphics.lodMin);
     if (m_graphics.noShadow) env << "LARECOMP_NO_SHADOW=1";
@@ -213,7 +230,9 @@ QString Config::buildLaunchEnv() const
     if (m_game.asyncSubmit) env << "AC_ASYNC_SUBMIT=1";
     if (m_game.buttonPrompts == "switch") env << "AC_PROMPTS=switch";
     else if (m_game.buttonPrompts == "keyboard") env << "AC_PROMPTS=keyboard";
+    else if (m_game.buttonPrompts == "xbox") env << "AC_PROMPTS=xbox";
     else env << "AC_PROMPTS=auto";
+    env << QString("AC_XBOX_CONFIRM_A=%1").arg(m_game.xboxConfirmA ? 1 : 0);
     if (!m_game.language.isEmpty()) {
         env << QString("AC_LANGUAGE=%1").arg(m_game.language);
         env << QString("LARECOMP_LANG=%1").arg(m_game.language);
@@ -239,10 +258,9 @@ QString Config::buildLaunchEnv() const
     env << QString("AC_FPS=%1").arg(m_graphics.fpsLimit);
     // The FPS patch variant is a build input (setup_game.py active_patches); play.sh lifts this
     // out of --env before the build so toggling it rebuilds instead of silently keeping the old cap.
-    env << QString("AC_FPS_UNLOCKED=%1").arg(m_graphics.fpsUnlocked ? 1 : 0);
-    if (m_graphics.fpsLimit == 0) {
-        env << "AC_PRESENT_INTERVAL=0";
-    }
+    const bool effUnlocked = m_graphics.fpsUnlocked || m_graphics.fpsLimit == 0 || m_graphics.fpsLimit > GraphicsSettings::kDefaultFpsLimit;
+    env << QString("AC_FPS_UNLOCKED=%1").arg(effUnlocked ? 1 : 0);
+    env << QString("AC_PRESENT_INTERVAL=%1").arg(m_graphics.fpsLimit == 0 ? 0 : 1);
     env << QString("AC_WIDTH=%1").arg(m_graphics.width);
     env << QString("AC_HEIGHT=%1").arg(m_graphics.height);
     if (!m_bindings.empty()) {

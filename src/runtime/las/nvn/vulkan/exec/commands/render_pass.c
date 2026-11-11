@@ -41,10 +41,10 @@ void vk_end_pass_at(int line) {
         char path[256];
         static uint64_t debug_pass_frame = ~0ull;
         static int multi = -1;
-        if (multi < 0) multi = getenv("LARECOMP_DEBUG_FRAMES") != NULL;
+        if (multi < 0) { multi = getenv("LARECOMP_DEBUG_FRAMES") != NULL; mkdir("debug", 0755); mkdir("debug/frames", 0755); } // [extra]
         if (multi && renderer_present_count() != debug_pass_frame) { debug_pass_frame = renderer_present_count(); debug_pass_no = 0; }
-        if (multi) snprintf(path, sizeof path, "build/pass_%llu_%03d.png", (unsigned long long)debug_pass_frame, debug_pass_no++);
-        else snprintf(path, sizeof path, "build/pass_%03d.png", debug_pass_no++);
+        if (multi) snprintf(path, sizeof path, "debug/frames/pass_%llu_%03d.png", (unsigned long long)debug_pass_frame, debug_pass_no++); // [extra]
+        else snprintf(path, sizeof path, "debug/frames/pass_%03d.png", debug_pass_no++); // [extra]
         renderer_save_texture_tex(st.rt.color[0]->backend, path);
     }
 }

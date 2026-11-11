@@ -5,7 +5,7 @@
 #if defined(_WIN32) // [extra]
 #include <windows.h>
 #else // [extra]
-#include "extra/hooks.h" // [extra]
+#include "hooks/hooks.h" // [extra]
 #endif // [extra]
 #include <stdint.h>
 #include <stdio.h>

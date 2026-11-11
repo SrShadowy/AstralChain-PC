@@ -18,8 +18,9 @@ import subprocess
 from astral_chain.build.native_build import FLAGS, digest_file, run_compiler, runtime_include_flags
 from .shader_build import prepare_translator
 
-LAS = Path(__file__).parent.parent/'runtime/las'
-PROJECT = Path(__file__).resolve().parent.parent.parent
+SRC = Path(__file__).resolve().parent.parent.parent
+LAS = SRC/'runtime/las'
+PROJECT = SRC.parent
 VULKAN_HEADERS = PROJECT/'third_party/Vulkan-Headers/include'
 VMA = PROJECT/'third_party/VulkanMemoryAllocator/include'
 IMGUI = PROJECT/'third_party/imgui'  # [extra] Dear ImGui 1.92.9b (MIT, see LICENSE.txt there)
@@ -66,14 +67,14 @@ def nvn_sources(backend):
     if backend not in BACKENDS:
         raise ValueError(f'unknown NVN backend {backend!r}')
     sources = [LAS/name for name in OBJECT_LAYER+BACKENDS[backend]]
-    # [extra] Runtime toggles overlay (extra/toggles/ac_toggles.c) rides in every
-    overlay = PROJECT/'extra'/'ui'/'overlay'
-    rpc = PROJECT/'extra'/'rpc'
-    sources.append(PROJECT/'extra'/'toggles'/'ac_toggles.c')
+    # [extra] Runtime toggles overlay (src/additions/toggles/ac_toggles.c) rides in every
+    overlay = SRC/'additions'/'overlay'
+    rpc = SRC/'additions'/'rpc'
+    sources.append(SRC/'additions'/'toggles'/'ac_toggles.c')
     if backend == 'vulkan':
         sources += sorted(IMGUI.glob('*.cpp'))
         sources += [IMGUI/'backends'/'imgui_impl_sdl3.cpp', IMGUI/'backends'/'imgui_impl_vulkan.cpp',
-                    overlay/'ac_overlay.cpp', overlay/'ac_vk_glue.cpp', overlay/'ac_menu.cpp',
+                    overlay/'ac_overlay.cpp', overlay/'ac_vk_glue.cpp', overlay/'ac_hud.cpp', overlay/'ac_menu.cpp',
                     overlay/'ac_reinfo.cpp', overlay/'ac_reinfo_probe.c',
                     rpc/'ac_game_data.cpp', rpc/'ac_discord_rpc.cpp', overlay/'ac_overlay_rpc.cpp']
     return sources
@@ -83,11 +84,10 @@ def build_nvn_objects(compiler, reference, cache, backend='null'):
     """Return (objects, link_arguments) for the chosen backend."""
     compiler=Path(compiler).resolve();reference=Path(reference).resolve()
     inputs=sorted(p for p in LAS.rglob('*') if p.is_file() and p.suffix in ('.c','.h','.cpp','.inc'))
-    extra_dir=PROJECT/'extra'
-    extra_files=sorted(p for p in extra_dir.rglob('*') if p.is_file() and p.suffix in ('.h','.c','.cpp')) if extra_dir.is_dir() else []
+    extra_files=sorted(p for d in (SRC/'hooks', SRC/'additions') if d.is_dir() for p in d.rglob('*') if p.is_file() and p.suffix in ('.h','.c','.cpp'))
     provenance={'compiler_sha256':digest_file(compiler),'flags':FLAGS,'backend':backend,
                 'inputs':{p.relative_to(LAS).as_posix():digest_file(p) for p in inputs},
-                'extra':{p.relative_to(extra_dir).as_posix():digest_file(p) for p in extra_files},
+                'extra':{p.relative_to(SRC).as_posix():digest_file(p) for p in extra_files},
                 'cpu_h':digest_file(reference/'runtime/cpu/cpu.h')}
     if backend=='vulkan':
         provenance['vma_sha256']=digest_file(VMA/'vk_mem_alloc.h')
@@ -105,7 +105,7 @@ def build_nvn_objects(compiler, reference, cache, backend='null'):
             name = source.name
         elif source.is_relative_to(LAS):
             name = source.relative_to(LAS).as_posix().replace('/','_')
-        else:  # [extra] extra/ and third_party/imgui sources: unique flat name with origin tag
+        else:  # [extra] hooks/additions and third_party/imgui sources: unique flat name with origin tag
             tag = 'imgui' if source.is_relative_to(IMGUI) else 'extra'
             name = f'{tag}_{source.name}'.replace('/','_')
         return folder/(name+'.o')
@@ -117,7 +117,7 @@ def build_nvn_objects(compiler, reference, cache, backend='null'):
             raise ValueError('Cached NVN object integrity mismatch')
         return objects,link
     folder.mkdir(parents=True,exist_ok=True)
-    common=['-I',str(PROJECT),'-I',str(LAS),*runtime_include_flags(None, reference/'runtime'),'-I',str(IMGUI),'-I',str(IMGUI/'backends')]  # [extra] imgui
+    common=['-I',str(SRC),'-I',str(LAS),*runtime_include_flags(None, reference/'runtime'),'-I',str(IMGUI),'-I',str(IMGUI/'backends')]  # [extra] imgui
     if backend=='vulkan':
         prepare_translator(reference,folder/'translator')
         common+=['-I',str(LAS/'shim'),'-I',str(VULKAN_HEADERS),'-I',str(VMA),

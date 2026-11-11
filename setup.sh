@@ -32,4 +32,5 @@ else
     PY_EXEC=".venv/bin/python"
 fi
 
+export PYTHONPATH="$PROJECT_ROOT/src${PYTHONPATH:+:$PYTHONPATH}"
 "$PY_EXEC" -m astral_chain.build.setup_game "$@"

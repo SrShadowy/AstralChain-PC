@@ -32,7 +32,7 @@ void SetupDialog::setupUi()
     layout->setContentsMargins(18, 18, 18, 18);
 
     auto* header = new QLabel("Selecione os arquivos necessários para a recompilação nativa:", this);
-    header->setStyleSheet("font-size: 13px; font-weight: bold; color: #eceff1;");
+    header->setStyleSheet("font-size: 13px; font-weight: 700; color: #59e8ff;");
     layout->addWidget(header);
 
     auto* grid = new QGridLayout();
@@ -84,7 +84,7 @@ void SetupDialog::setupUi()
     layout->addLayout(grid);
 
     auto* note = new QLabel("Nota: O update v1.0.1 e as chaves originais do console são obrigatórios.", this);
-    note->setStyleSheet("color: #90a4ae; font-size: 11px;");
+    note->setStyleSheet("color: #7d99b5; font-size: 11px;");
     layout->addWidget(note);
 
     layout->addStretch();
@@ -98,11 +98,7 @@ void SetupDialog::setupUi()
     btnLayout->addWidget(m_cancelBtn);
 
     m_startBtn = new QPushButton("Iniciar Instalação", this);
-    m_startBtn->setStyleSheet(
-        "QPushButton { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #1565c0, stop:1 #00acc1); "
-        "color: white; font-weight: bold; padding: 8px 22px; border-radius: 8px; border: none; font-size: 13px; }"
-        "QPushButton:hover { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #1976d2, stop:1 #00bcd4); }"
-        "QPushButton:disabled { background: rgba(55, 71, 79, 0.6); color: rgba(120, 144, 156, 0.5); }");
+    m_startBtn->setObjectName("primaryBtn");
     m_startBtn->setEnabled(false);
     connect(m_startBtn, &QPushButton::clicked, this, &SetupDialog::onStart);
     btnLayout->addWidget(m_startBtn);
