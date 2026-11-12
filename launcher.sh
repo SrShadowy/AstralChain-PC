@@ -6,12 +6,9 @@ cd "$SCRIPT_DIR"
 if [ -x "$SCRIPT_DIR/usr/bin/astral_chain_launcher" ]; then
     export AC_APP_DIR="${AC_APP_DIR:-$SCRIPT_DIR}"
     export AC_DATA_DIR="${AC_DATA_DIR:-$SCRIPT_DIR}"
-    export LD_LIBRARY_PATH="$SCRIPT_DIR/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-    export QT_PLUGIN_PATH="$SCRIPT_DIR/usr/plugins"
-    export QT_QPA_PLATFORM_PLUGIN_PATH="$SCRIPT_DIR/usr/plugins/platforms"
-    if [ -d "$SCRIPT_DIR/usr/lib/python3.10" ]; then
-        export PYTHONHOME="$SCRIPT_DIR/usr"
-    fi
+    export AC_PORTABLE_BUILD="${AC_PORTABLE_BUILD:-1}"
+    export AC_SDL3_INCLUDE_DIR="$SCRIPT_DIR/usr/include"
+    export AC_SDL3_LIB_DIR="$SCRIPT_DIR/usr/lib"
     if [ -x "$SCRIPT_DIR/usr/bin/python3" ]; then
         export AC_PYTHON="$SCRIPT_DIR/usr/bin/python3"
     fi

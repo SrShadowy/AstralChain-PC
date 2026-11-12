@@ -1,8 +1,8 @@
 """Bounded raw RomFS identity/header validation; does not decrypt archives."""
 from pathlib import Path
-import hashlib
 import os
 import struct
+from astral_chain.build.native_build import sha256_stream
 from astral_chain.shared.containers import FormatError
 
 
@@ -34,7 +34,7 @@ def inspect_romfs(path):
         if len(root) != 24 or struct.unpack_from('<I',root,20)[0] != 0:
             raise FormatError('Invalid RomFS root entry')
         source.seek(0)
-        digest = hashlib.file_digest(source,'sha256').hexdigest()
+        digest = sha256_stream(source)
         after = os.fstat(source.fileno())
         if (before.st_size,before.st_mtime_ns) != (after.st_size,after.st_mtime_ns):
             raise FormatError('RomFS changed during identity check')

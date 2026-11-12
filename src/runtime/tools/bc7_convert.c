@@ -11,7 +11,11 @@
 #include "las/nvn/vulkan/bc7_cache.h"
 #include "bc7enc.h"
 
+#ifdef _WIN32 // [extra]
 #define EXPORT __declspec(dllexport)
+#else // [extra]
+#define EXPORT __attribute__((visibility("default")))
+#endif // [extra]
 
 EXPORT void bc7c_init(void) { bc7enc_compress_block_init(); }
 

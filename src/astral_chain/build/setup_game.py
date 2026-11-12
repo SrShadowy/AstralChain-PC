@@ -21,6 +21,7 @@ import hashlib
 import json
 import os
 import shutil
+import ssl
 import subprocess
 import sys
 import tarfile
@@ -111,7 +112,23 @@ def sha256(path):
 
 
 # ---------------------------------------------------------------------------------------------------- 1. tools
+def _ssl_context():
+    candidates = (
+        os.environ.get('SSL_CERT_FILE', '').strip(),
+        '/etc/ssl/certs/ca-certificates.crt',
+        '/etc/pki/tls/certs/ca-bundle.crt',
+        '/etc/ssl/ca-bundle.pem',
+        '/etc/ssl/cert.pem',
+        str(PROJECT / 'usr' / 'share' / 'ssl' / 'cert.pem'),
+    )
+    for cafile in candidates:
+        if cafile and Path(cafile).is_file():
+            return ssl.create_default_context(cafile=cafile)
+    return ssl.create_default_context()
+
+
 def fetch_tools():
+    ssl_ctx = _ssl_context()
     for name, (url, digest, prefix) in DOWNLOADS.items():
         target = TOOLS/name
         if target.is_dir():
@@ -120,7 +137,7 @@ def fetch_tools():
         TOOLS.mkdir(exist_ok=True)
         archive_ext = '.tar.xz' if url.endswith('.tar.xz') else '.zip'
         archive = TOOLS/f'{name}{archive_ext}'
-        with urllib.request.urlopen(url, timeout=120) as response, open(archive, 'wb') as out:
+        with urllib.request.urlopen(url, timeout=120, context=ssl_ctx) as response, open(archive, 'wb') as out:
             shutil.copyfileobj(response, out)
         if sha256(archive) != digest:
             archive.unlink()

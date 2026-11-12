@@ -29,7 +29,8 @@ from .block_codegen import emit_blocks
 from .lift_extensions import lift
 from astral_chain.build.native_build import (
     split_dispatch, build as cached_build, run_compiler, runtime_include_flags,
-    data_root, target_flags, sdl3_include_flags, host_link_flags,
+    data_root, target_flags, sdl3_include_flags, sdl3_runtime_env, host_link_flags,
+    sha256_stream,
 )
 from astral_chain.gpu.nvn_build import build_nvn_objects, GLSLANG
 
@@ -312,7 +313,7 @@ def cache_image(cache, data):
         if path.stat().st_size!=len(data):
             raise FormatError('Cached module image size mismatch')
         with path.open('rb') as stream:
-            if hashlib.file_digest(stream,'sha256').hexdigest()!=digest:
+            if sha256_stream(stream)!=digest:
                 raise FormatError('Cached module image content mismatch')
     else:
         with path.open('xb') as stream:
@@ -570,7 +571,7 @@ execute(c); return 0; }}
         checkpoint('running',translation)
         run_started=perf_counter()
         try:
-            run_env=os.environ.copy()
+            run_env=sdl3_runtime_env(PROJECT)
             run_env.pop('AC_EXPERIMENTAL_DRAW_PACKAGE',None)
             if args.experimental_vulkan_package:
                 run_env['AC_EXPERIMENTAL_DRAW_PACKAGE']=str(args.experimental_vulkan_package.resolve())

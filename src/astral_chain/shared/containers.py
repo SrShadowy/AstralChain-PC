@@ -67,7 +67,7 @@ def children(node: Node) -> list[Node]:
         # Do not follow directory links/junctions back into ancestors.
         return [open_path(p) for p in sorted(node.source.iterdir(),
                 key=lambda p: (not p.is_dir(), p.name.casefold()))
-                if not p.is_symlink() and not p.is_junction()]
+                if not p.is_symlink() and not getattr(p, 'is_junction', lambda: False)()]
     if node.kind == "XCI":
         offset = struct.unpack("<Q", node.read(0x130, 8))[0]
         if offset < 0x140 or offset + 16 > node.size:

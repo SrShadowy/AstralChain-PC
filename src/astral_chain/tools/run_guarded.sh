@@ -5,10 +5,6 @@ APP_ROOT="${AC_APP_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)}"
 DATA_ROOT="${AC_DATA_DIR:-$APP_ROOT}"
 cd "$DATA_ROOT"
 
-if [ -d "$APP_ROOT/usr/lib" ]; then
-    export LD_LIBRARY_PATH="$APP_ROOT/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-fi
-
 RUN_DIR="build/game"
 SECONDS_LIMIT=604800
 EXTRA_ENV=""
@@ -86,16 +82,22 @@ if [ ! -x "$EXE" ]; then
     exit 1
 fi
 
+# AC_DATA_DIR triggers upstream flat Windows bundle overrides (\images\, \save, \romfs.bin) in trace.
+EXE_ENV_ARGS=(env -u AC_DATA_DIR)
+if [ -d "$APP_ROOT/usr/runtime-lib" ]; then
+    EXE_ENV_ARGS+=("LD_LIBRARY_PATH=$APP_ROOT/usr/runtime-lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}")
+fi
+
 if [ -n "$WRAPPER" ]; then
     if [ "$SECONDS_LIMIT" -ge 86400 ]; then
-        exec $WRAPPER "$EXE" "$RELOCATIONS"
+        exec $WRAPPER "${EXE_ENV_ARGS[@]}" "$EXE" "$RELOCATIONS"
     else
-        exec timeout --foreground --kill-after=2s "$SECONDS_LIMIT" $WRAPPER "$EXE" "$RELOCATIONS"
+        exec timeout --foreground --kill-after=2s "$SECONDS_LIMIT" $WRAPPER "${EXE_ENV_ARGS[@]}" "$EXE" "$RELOCATIONS"
     fi
 else
     if [ "$SECONDS_LIMIT" -ge 86400 ]; then
-        exec "$EXE" "$RELOCATIONS"
+        exec "${EXE_ENV_ARGS[@]}" "$EXE" "$RELOCATIONS"
     else
-        exec timeout --foreground --kill-after=2s "$SECONDS_LIMIT" "$EXE" "$RELOCATIONS"
+        exec timeout --foreground --kill-after=2s "$SECONDS_LIMIT" "${EXE_ENV_ARGS[@]}" "$EXE" "$RELOCATIONS"
     fi
 fi

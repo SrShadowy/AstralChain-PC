@@ -82,9 +82,21 @@ def run_compiler(command,timeout=300):
         return subprocess.CompletedProcess(command,process.returncode,stdout,stderr)
 
 
+SHA256_CHUNK_BYTES = 1 << 20
+
+
+def sha256_stream(stream):
+    if hasattr(hashlib, 'file_digest'):
+        return hashlib.file_digest(stream, 'sha256').hexdigest()
+    digest = hashlib.sha256()
+    for chunk in iter(lambda: stream.read(SHA256_CHUNK_BYTES), b''):
+        digest.update(chunk)
+    return digest.hexdigest()
+
+
 def digest_file(path):
     with path.open('rb') as stream:
-        return hashlib.file_digest(stream,'sha256').hexdigest()
+        return sha256_stream(stream)
 
 
 # Module subfolders of each runtime tree (see docs/architecture.md section 7).
@@ -116,16 +128,22 @@ def sdl3_include_flags(app_root):
 
 def host_link_flags(app_root):
     flags = []
-    lib_search = ('/usr/lib/x86_64-linux-gnu', '/usr/lib64', '/usr/lib')
-    has_vk_dev = any((Path(d) / 'libvulkan.so').exists() for d in lib_search)
-    if has_vk_dev:
-        flags.append('-lvulkan')
+    link_lib = Path(app_root) / 'usr' / 'link-lib'
+    if (link_lib / 'libvulkan.so').exists():
+        flags += ['-L', str(link_lib), '-lvulkan']
     else:
-        vk_dir = next((d for d in lib_search if (Path(d) / 'libvulkan.so.1').exists()), None)
+        lib_search = ('/usr/lib/x86_64-linux-gnu', '/usr/lib64', '/usr/lib')
+        vk_dir = next((d for d in lib_search if (Path(d) / 'libvulkan.so').exists()), None)
         if vk_dir:
-            flags += ['-L', vk_dir, '-l:libvulkan.so.1']
+            flags += ['-L', vk_dir, '-lvulkan']
         else:
-            flags.append('-lvulkan')
+            vk1_dir = next((d for d in lib_search if (Path(d) / 'libvulkan.so.1').exists()), None)
+            if vk1_dir:
+                flags += ['-L', vk1_dir, '-l:libvulkan.so.1']
+            else:
+                flags.append('-lvulkan')
+        if is_portable_build():
+            flags.append('-Wl,--allow-shlib-undefined')
 
     env_lib = os.environ.get('AC_SDL3_LIB_DIR', '').strip()
     candidates = [Path(env_lib)] if env_lib else []
@@ -145,6 +163,15 @@ def host_link_flags(app_root):
 
     flags += ['-lpthread', '-lm', '-ldl']
     return flags
+
+
+def sdl3_runtime_env(app_root, base_env=None):
+    env = dict(os.environ if base_env is None else base_env)
+    runtime_lib = Path(app_root) / 'usr' / 'runtime-lib'
+    if runtime_lib.is_dir():
+        cur = env.get('LD_LIBRARY_PATH', '').strip()
+        env['LD_LIBRARY_PATH'] = f'{runtime_lib}:{cur}' if cur else str(runtime_lib)
+    return env
 
 
 def build(compiler,reference,units,source,folder,cache,workers=4,extra_objects=()):

@@ -38,6 +38,7 @@ chmod 0755 "$STAGE/tools/romfs-build"
 
 echo "== 3. Copying clean source, scripts, and licenses (no configs/dumps/saves) =="
 cp -a "$SRC_ROOT/src" "$STAGE/src"
+rm -rf "$STAGE/src/launcher"
 find "$STAGE/src" -type d -name "__pycache__" -prune -exec rm -rf {} +
 find "$STAGE/src" -type f -name "*.py[cod]" -delete
 
@@ -60,6 +61,25 @@ chmod 0755 "$STAGE/src/astral_chain/tools/run_guarded.sh"
 echo "== 4. Bundling portable SDL3, Python 3.10 + deps, and Qt6 runtime =="
 cp -a /opt/sdl3/include/SDL3 "$STAGE/usr/include/SDL3"
 cp -a /opt/sdl3/lib/libSDL3.so* "$STAGE/usr/lib/"
+mkdir -p "$STAGE/usr/runtime-lib"
+for sdl_so in "$STAGE/usr/lib"/libSDL3.so*; do
+    [ -e "$sdl_so" ] || continue
+    ln -sf "../lib/$(basename "$sdl_so")" "$STAGE/usr/runtime-lib/$(basename "$sdl_so")"
+done
+if [ -f /usr/lib/x86_64-linux-gnu/libvulkan.so.1 ]; then
+    mkdir -p "$STAGE/usr/link-lib"
+    cp -L /usr/lib/x86_64-linux-gnu/libvulkan.so.1 "$STAGE/usr/link-lib/libvulkan.so.1"
+    ln -sf libvulkan.so.1 "$STAGE/usr/link-lib/libvulkan.so"
+fi
+if [ -f /etc/ssl/certs/ca-certificates.crt ]; then
+    mkdir -p "$STAGE/usr/share/ssl"
+    cp -L /etc/ssl/certs/ca-certificates.crt "$STAGE/usr/share/ssl/cert.pem"
+fi
+cat > "$STAGE/usr/bin/qt.conf" <<'EOF'
+[Paths]
+Prefix = ..
+Plugins = plugins
+EOF
 
 cp -a /usr/bin/python3.10 "$STAGE/usr/bin/python3"
 chmod 0755 "$STAGE/usr/bin/python3"

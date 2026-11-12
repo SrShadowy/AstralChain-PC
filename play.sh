@@ -45,9 +45,6 @@ if [ "${#ENV_ITEMS[@]}" -gt 0 ]; then
     done
 fi
 
-if [ -d "$APP_ROOT/usr/lib" ]; then
-    export LD_LIBRARY_PATH="$APP_ROOT/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-fi
 export PYTHONPATH="$APP_ROOT/src${PYTHONPATH:+:$PYTHONPATH}"
 "$PY_EXEC" -m astral_chain.build.setup_game --rebuild-if-stale
 

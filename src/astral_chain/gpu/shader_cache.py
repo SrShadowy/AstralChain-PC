@@ -22,7 +22,9 @@ import subprocess
 import sys
 
 from .shader_build import prepare_translator
-from astral_chain.build.native_build import data_root, host_link_flags, runtime_include_flags, sdl3_include_flags, target_flags
+from astral_chain.build.native_build import (
+    data_root, host_link_flags, runtime_include_flags, sdl3_include_flags, sdl3_runtime_env, target_flags,
+)
 
 SRC = Path(__file__).resolve().parent.parent.parent
 PROJECT = SRC.parent
@@ -173,7 +175,8 @@ def precompile(tool: Path, shaders: Path, game_build: Path, glslang: Path) -> No
     done = stamp.read_text(encoding='ascii') if stamp.is_file() else ''
     if done == state:
         return
-    env = dict(os.environ, AC_GLSLANG=str(glslang))
+    env = sdl3_runtime_env(PROJECT)
+    env['AC_GLSLANG'] = str(glslang)
     # Only programs.bin grew since (the game appends what it meets in play): only its new records are done
     done, now = done.split(' '), state.split(' ')
     if len(records) == 2 and len(done) == len(now) == 3 and done[:2] == now[:2] and done[2].isdigit() \
@@ -314,8 +317,13 @@ def warm_gpu(game_build: Path, shaders: Path, glslang: Path) -> None:
     exe = game_build/'round-00'/'trace'
     if not exe.is_file():
         return
-    env = dict(os.environ, AC_GPU_WARM=str(shaders.resolve()), AC_GPU_WARM_STATE=_warm_state(game_build),
-               AC_GLSLANG=str(glslang))
+    env = sdl3_runtime_env(PROJECT)
+    env.pop('AC_DATA_DIR', None)
+    env.update(
+        AC_GPU_WARM=str(shaders.resolve()),
+        AC_GPU_WARM_STATE=_warm_state(game_build),
+        AC_GLSLANG=str(glslang),
+    )
     old = _warmed_record_sizes(game_build)
     if old:
         env.update(AC_GPU_WARM_PREV=_warm_state(game_build, record_sizes=old), AC_GPU_WARM_FROM=f'{old[0]} {old[1]}')
