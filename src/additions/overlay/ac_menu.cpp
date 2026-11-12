@@ -121,21 +121,29 @@ static void tab_graphics(void) {
         printf("[overlay] upscaler -> %s\n", up == 2 ? "fsr3.1" : (up == 1 ? "fsr1" : "bilinear"));
     }
 
-    static const float s_scales[] = {0.50f, 0.58f, 0.67f, 0.75f, 1.00f, 1.25f, 1.50f, 2.00f};
+    static const float s_scales[] = {0.50f, 0.58f, 0.67f, 0.75f, 1.00f, 1.25f, 1.50f, 1.75f, 2.00f};
     float cur_sc = g_extra_render_scale > 0.0f ? g_extra_render_scale : (g_settings.render_scale > 0.0f ? g_settings.render_scale : 1.0f);
     int sc_idx = 4;
-    for (int i = 0; i < 8; i++) if (cur_sc >= s_scales[i] - 0.03f && cur_sc <= s_scales[i] + 0.03f) sc_idx = i;
-    if (ImGui::Combo("Escala / Qualidade FSR", &sc_idx,
-                     "0.50x (Performance)\00.58x (Balanced)\00.67x (Quality)\00.75x (Ultra Quality)\0"
-                     "1.00x (Nativo AA)\01.25x (SSAA)\01.50x (SSAA)\02.00x (SSAA)\0")) {
-        g_extra_render_scale = g_settings.render_scale = s_scales[sc_idx];
-        settings_save();
-        printf("[overlay] render scale -> %.2fx\n", s_scales[sc_idx]);
+    for (int i = 0; i < 9; i++) {
+        if (cur_sc >= s_scales[i] - 0.03f && cur_sc <= s_scales[i] + 0.03f) {
+            sc_idx = i;
+        }
     }
-    int out_w = 1600, out_h = 900;
-    ac_vk_extent(&out_w, &out_h);
-    ImGui::TextDisabled("Resolução interna ativa: %dx%d -> %dx%d",
-                        (int)(out_w * s_scales[sc_idx]), (int)(out_h * s_scales[sc_idx]), out_w, out_h);
+    const char *fsr_scale_items =
+        (up == 2) ? "0.50x (FSR 3.1 Performance)\00.58x (FSR 3.1 Balanced)\00.67x (FSR 3.1 Quality)\00.75x (FSR 3.1 Ultra Quality)\0"
+                    "1.00x (FSR 3.1 Native AA)\01.25x (FSR 3.1 Supersampling)\01.50x (FSR 3.1 Supersampling)\0"
+                    "1.75x (FSR 3.1 Supersampling)\02.00x (FSR 3.1 Supersampling 4K)\0"
+      : (up == 1) ? "0.50x (FSR 1.0 Performance)\00.58x (FSR 1.0 Balanced)\00.67x (FSR 1.0 Quality)\00.75x (FSR 1.0 Ultra Quality)\0"
+                    "1.00x (FSR 1.0 Nativo EASU+RCAS)\01.25x (FSR 1.0 Supersampling)\01.50x (FSR 1.0 Supersampling)\0"
+                    "1.75x (FSR 1.0 Supersampling)\02.00x (FSR 1.0 Supersampling 4K)\0"
+                  : "0.50x (Performance)\00.58x (Balanced)\00.67x (Quality)\00.75x (Ultra Quality)\0"
+                    "1.00x (Nativo 1:1)\01.25x (SSAA Qualidade)\01.50x (SSAA Ultra)\01.75x (SSAA Extremo)\02.00x (SSAA 4K)\0";
+    if (ImGui::Combo("Escala / Supersampling FSR", &sc_idx, fsr_scale_items)) {
+        cur_sc = s_scales[sc_idx];
+        g_extra_render_scale = g_settings.render_scale = cur_sc;
+        settings_save();
+        printf("[overlay] render scale -> %.2fx\n", cur_sc);
+    }
 
     bool fg = (g_extra_framegen >= 0 ? g_extra_framegen : g_settings.framegen) != 0;
     if (ImGui::Checkbox("FSR 3.1 Frame Generation (Interpolação 2x FPS)", &fg)) {
@@ -150,17 +158,44 @@ static void tab_graphics(void) {
         printf("[overlay] fsr3 jitter -> %s\n", jit ? "on" : "off");
     }
     float shp = g_extra_fsr_sharpness >= 0.0f ? g_extra_fsr_sharpness : g_settings.fsr_sharpness;
-    if (ImGui::SliderFloat("Nitidez FSR 3.1 (RCAS)", &shp, 0.0f, 1.0f, "%.2f", ImGuiSliderFlags_AlwaysClamp)) {
+    if (ImGui::SliderFloat("Nitidez FSR 1.0 / 3.1 (RCAS)", &shp, 0.0f, 1.0f, "%.2f", ImGuiSliderFlags_AlwaysClamp)) {
         g_extra_fsr_sharpness = g_settings.fsr_sharpness = shp;
         settings_save();
     }
 
     ac_ui_section_header("QUALIDADE DE RENDERIZAÇÃO & FILTROS", "// SYS.GFX");
     int aa = g_settings.antialias;
-    if (ImGui::Combo("Antialiasing", &aa, "Desativado\0SMAA 1x\0")) {
+    if (ImGui::Combo("Antialiasing", &aa, "Desativado\0SMAA Ultra (Color Edge)\0")) {
         g_settings.antialias = aa;
+        settings_save();
         printf("[overlay] antialias -> %s\n", aa == AA_SMAA ? "smaa" : "off");
     }
+    static const float s_ssaa[] = {1.00f, 1.25f, 1.50f, 1.75f, 2.00f};
+    int ss_idx = 0;
+    for (int i = 0; i < 5; i++) {
+        if (cur_sc >= s_ssaa[i] - 0.05f) {
+            ss_idx = i;
+        }
+    }
+    const char *ss_items =
+        (up == 2) ? "Desativado (1.00x FSR 3.1 Native AA)\01.25x FSR 3.1 Supersampling (Qualidade)\0"
+                    "1.50x FSR 3.1 Supersampling (Ultra)\01.75x FSR 3.1 Supersampling (Extremo)\02.00x FSR 3.1 Supersampling (4K)\0"
+      : (up == 1) ? "Desativado (1.00x FSR 1.0 Nativo)\01.25x FSR 1.0 Supersampling (Qualidade)\0"
+                    "1.50x FSR 1.0 Supersampling (Ultra)\01.75x FSR 1.0 Supersampling (Extremo)\02.00x FSR 1.0 Supersampling (4K)\0"
+                  : "Desativado (1.00x Nativo)\01.25x SSAA (Qualidade)\01.50x SSAA (Ultra)\0"
+                    "1.75x SSAA (Extremo)\02.00x SSAA (4K Downsampling)\0";
+    if (ImGui::Combo("Supersampling (SSAA)", &ss_idx, ss_items)) {
+        cur_sc = s_ssaa[ss_idx];
+        g_extra_render_scale = g_settings.render_scale = cur_sc;
+        settings_save();
+        printf("[overlay] ssaa scale -> %.2fx\n", cur_sc);
+    }
+    int out_w = 1600, out_h = 900;
+    ac_vk_extent(&out_w, &out_h);
+    double ss_mult = cur_sc > 1.0f ? (double)cur_sc : 1.0;
+    const char *up_tag = (up == 2) ? "FSR 3.1 SSAA" : (up == 1 ? "FSR 1.0 SSAA" : "SSAA");
+    ImGui::TextDisabled("Pipeline ativo: 1600x900 -> %dx%d (%s %.2fx) -> %dx%d | Anisotrópico 16x",
+                        (int)(out_w * ss_mult), (int)(out_h * ss_mult), up_tag, cur_sc, out_w, out_h);
     float bias = eff_lod_bias();
     if (ImGui::SliderFloat("Texturas (Bias LOD)", &bias, 0.0f, 3.0f, "%.1f", ImGuiSliderFlags_AlwaysClamp)) {
         g_extra_lod_bias = bias;

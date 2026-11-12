@@ -219,7 +219,7 @@ def emit(table, name, title):
     curr = '    '
     for key in sorted(table):
         item = f'{{0x{key}, {c_literal(table[key])}}}, '
-        if len(curr) + len(item) > 100:
+        if len(curr) + len(item) > 116:
             lines.append(curr.rstrip())
             curr = '    ' + item
         else:
@@ -231,11 +231,11 @@ def emit(table, name, title):
 
 
 def emit_scenes(scenes):
-    lines = ['static const AcSceneEntry k_ac_scenes[] = {  // 54 scenes (canonical area & case name)']
+    lines = [f'static const AcSceneEntry k_ac_scenes[] = {{  // {len(scenes)} stage scenes']
     curr = '    '
     for sid, aid, name in scenes:
         item = f'{{0x{sid:04x}, 0x{aid:04x}, {c_literal(name)}}}, '
-        if len(curr) + len(item) > 100:
+        if len(curr) + len(item) > 116:
             lines.append(curr.rstrip())
             curr = '    ' + item
         else:
@@ -246,6 +246,106 @@ def emit_scenes(scenes):
     return lines
 
 
+def emit_scenario_steps(steps):
+    lines = [f'static const AcScenarioStep k_ac_scenario_steps[] = {{  // {len(steps)} File_Scenario steps']
+    curr = '    '
+    for h, fnum, pid, aid in steps:
+        item = f'{{0x{h:08x}u, {fnum}, 0x{pid:04x}, 0x{aid:04x}}}, '
+        if len(curr) + len(item) > 118:
+            lines.append(curr.rstrip())
+            curr = '    ' + item
+        else:
+            curr += item
+    if curr.strip():
+        lines.append(curr.rstrip())
+    lines.append('};')
+    return lines
+
+
+def read_dat_member(dat, target):
+    cnt, off_tbl, _ext, name_tbl, sz_tbl = struct.unpack_from('<4x5I', dat, 0)
+    stride = struct.unpack_from('<I', dat, name_tbl)[0]
+    for i in range(cnt):
+        end = dat.find(b'\0', name_tbl + 4 + i * stride)
+        name = dat[name_tbl + 4 + i * stride:end].decode('ascii', 'replace')
+        if name == target:
+            foff = struct.unpack_from('<I', dat, off_tbl + i * 4)[0]
+            fsz = struct.unpack_from('<I', dat, sz_tbl + i * 4)[0]
+            return dat[foff:foff + fsz].decode('shift_jis', 'replace')
+    raise SystemExit(f'{target} not found in core.dat')
+
+
+def scene_to_area(sid, fnum):
+    if (sid & 0xF000) == 0x6000:
+        return 0x5010
+    hi = (sid >> 8) & 0xFF
+    table = {
+        0x11: 0x5210 if fnum == 7 else (0x5120 if fnum == 8 else 0x5220),
+        0x12: 0x51C0, 0x13: 0x5130, 0x14: 0x51A0, 0x15: 0x5230, 0x16: 0x5110,
+        0x18: 0x5120, 0x19: 0x5150, 0x1A: 0x5180, 0x1B: 0x51D0, 0x1C: 0x5200,
+    }
+    return table.get(hi, 0)
+
+
+def extract_scenario_steps():
+    import zlib
+    off, sz = romfs_lookup(ROMFS, '/core/core.pkz')
+    core_dat = next(zstd_decompress(b) for n, b in read_pkz(ROMFS, off, sz) if n == 'core.dat')
+    sc_csv = read_dat_member(core_dat, 'ScenarioCounter.csv')
+    pas_csv = read_dat_member(core_dat, 'PlannerAutoSaveList.csv')
+    pas_map = {}
+    scenes = {}
+    for line in pas_csv.splitlines():
+        p = [x.strip() for x in line.split(',')]
+        if len(p) >= 7 and p[0].startswith('file'):
+            sid = int(p[5], 16)
+            fnum = int(p[0][4:6]) if p[0][4:6].isdigit() else 0
+            pas_map[p[0]] = sid
+            scenes.setdefault(sid, scene_to_area(sid, fnum))
+
+    in_scen, steps = False, []
+    for line in sc_csv.splitlines():
+        p = line.strip().split(',')
+        if p[0] == 'File_Scenario':
+            in_scen = True
+            continue
+        if p[0] != '':
+            if in_scen:
+                break
+            continue
+        if in_scen and len(p) >= 2 and p[1]:
+            sname = p[1]
+            praw = p[2] if len(p) > 2 else ''
+            comment = p[3] if len(p) > 3 else ''
+            pid = int(praw[:4], 16) if len(praw) >= 4 and all(c in '0123456789abcdefABCDEF' for c in praw[:4]) else 0
+            fnum = int(sname[4:6]) if sname.startswith('file') and sname[4:6].isdigit() else 0
+            fnum = fnum if fnum <= 12 else 0
+            aid = scene_to_area(pas_map.get(sname, 0), fnum)
+            if not aid and fnum:
+                for kw, kaid in (('亜空間', 0x5010), ('ノア空間', 0x5010), ('警察署', 0x5150),
+                                 ('大通り', 0x5210 if fnum == 7 else 0x5220), ('メゾフォレスト', 0x5180),
+                                 ('モール', 0x51A0), ('地下鉄', 0x51D0), ('研究所', 0x5110),
+                                 ('下水道', 0x5230), ('アジト', 0x5120), ('九龍', 0x5120), ('広場', 0x51C0)):
+                    if kw in comment:
+                        aid = kaid
+                        break
+            h = zlib.crc32(sname.lower().encode('ascii')) & 0x7FFFFFFF
+            steps.append([h, fnum, pid, aid])
+
+    for i in range(1, len(steps)):
+        if steps[i][1] == steps[i - 1][1] and steps[i][1] != 0:
+            if (steps[i][2] == 0 or (steps[i][2] & 0xFF) >= 0x50) and 0 < (steps[i - 1][2] & 0xFF) < 0x50:
+                steps[i][2] = steps[i - 1][2]
+            if steps[i][3] == 0:
+                steps[i][3] = steps[i - 1][3]
+    for i in range(len(steps) - 2, -1, -1):
+        if steps[i][1] == steps[i + 1][1] and steps[i][1] != 0:
+            if steps[i][2] == 0 or (steps[i][2] & 0xFF) >= 0x50:
+                steps[i][2] = steps[i + 1][2]
+            if steps[i][3] == 0:
+                steps[i][3] = steps[i + 1][3]
+    return steps, scenes
+
 
 def main():
     if not ROMFS.is_file():
@@ -255,103 +355,54 @@ def main():
 
     menu = Ptd(members['menu_text_USen.bin'])
     words = Ptd(members['GameWord_USen.bin'])
-    print(f'menu_text_USen.bin: {menu.count} keys; GameWord_USen.bin: {words.count} keys')
+    core_txt = Ptd(members['Core_text_USen.bin'])
 
-    areas = menu.find_value_table('MENU_DATA_AREA_NAME_')
-    menu_missions = menu.find_value_table('MENU_MISSION_NAME_')
-    file_missions = words.find_value_table('FILE_MISSION_')
-    bosses = words.find_value_table('EVENT_BOSS_NAME_')
+    areas = {k: ascii_text(join_lines(v)) for k, v in menu.find_value_table('MENU_DATA_AREA_NAME_').items()}
+    bosses = {k: ascii_text(join_lines(v)) for k, v in words.find_value_table('EVENT_BOSS_NAME_').items()}
+    purposes = {k.lower(): ascii_text(join_lines(v)) for k, v in core_txt.find_value_table('CORE_PURPOSE_FILE_').items()}
 
-    areas = {k: ascii_text(join_lines(v)) for k, v in areas.items()}
-    bosses = {k: ascii_text(join_lines(v)) for k, v in bosses.items()}
-
-    # Merge campaign missions (GameWord FILE_MISSION_) and postgame (menu MENU_MISSION_NAME_).
     missions = {}
-    for k, v in file_missions.items():
-        if len(k) == 4 and all(c in '0123456789abcdefABCDEF' for c in k):
-            missions[k.lower()] = ascii_text(join_lines(v))
-    for k, v in menu_missions.items():
-        if len(k) == 4 and all(c in '0123456789abcdefABCDEF' for c in k):
-            missions[k.lower()] = ascii_text(join_lines(v))
+    for src in (words.find_value_table('FILE_MISSION_'), menu.find_value_table('MENU_MISSION_NAME_')):
+        for k, v in src.items():
+            if len(k) == 4 and all(c in '0123456789abcdefABCDEF' for c in k):
+                missions[k.lower()] = ascii_text(join_lines(v))
 
     files = {
         '1': 'Startup', '2': 'Awake', '3': 'Link', '4': 'Siege',
         '5': 'Accord', '6': 'Complicit', '7': 'Wild', '8': 'Peace',
         '9': 'Salvation', 'a': 'Madness', 'b': 'Reckoning', 'c': 'Rebirth',
     }
-
     legions = {
-        '0': 'Sword Legion', '1': 'Arrow Legion', '2': 'Arm Legion',
-        '3': 'Beast Legion', '4': 'Axe Legion',
+        '0': 'Sword Legion', '1': 'Arm Legion', '2': 'Beast Legion',
+        '3': 'Axe Legion', '4': 'Arrow Legion',
     }
-
-    # Sanity checks.
-    if len(areas) != 22:
-        raise SystemExit(f'area: expected 22 names, got {len(areas)}')
-    if len(bosses) != 82:
-        raise SystemExit(f'boss: expected 82 names, got {len(bosses)}')
-    if len(missions) < 290:
-        raise SystemExit(f'missions: expected >= 290, got {len(missions)}')
+    steps, scene_areas = extract_scenario_steps()
+    scene_list = [(sid, aid, areas.get(f'{aid:04x}', '')) for sid, aid in sorted(scene_areas.items())]
 
     lines = [
-        "// [extra] Id -> display-name tables extracted from the game's own text archives.",
-        '// Source: romfs Text.pkz -> menu_text_USen.bin and GameWord_USen.bin.',
-        '// Generated by extra/tools/reinfo_tables.py - do not hand-edit.',
-        '#pragma once',
-        '',
-        'struct AcNameEntry {',
-        '    unsigned id;',
-        '    const char *name;',
-        '};',
-        '',
-        'struct AcSceneEntry {',
-        '    unsigned scene_id;',
-        '    unsigned area_id;',
-        '    const char *case_name;',
-        '};',
-        '',
+        "// [extra] Id -> display-name tables extracted from the game's own archives.",
+        '// Generated by tools/qa/reinfo_tables.py - do not hand-edit.',
+        '#pragma once', '',
+        'struct AcNameEntry {', '    unsigned id;', '    const char *name;', '};', '',
+        'struct AcSceneEntry {', '    unsigned scene_id;', '    unsigned area_id;', '    const char *case_name;', '};', '',
+        'struct AcScenarioStep {',
+        '    unsigned step_hash;',
+        '    unsigned char file_num;',
+        '    unsigned short purpose_id;',
+        '    unsigned short area_id;',
+        '};', '',
     ]
-    lines += emit(areas, 'k_ac_areas', f'{len(areas)} areas')
-    lines.append('')
-    lines += emit(missions, 'k_ac_missions', f'{len(missions)} missions (campaign + olive)')
-    lines.append('')
-    lines += emit(bosses, 'k_ac_bosses', f'{len(bosses)} boss name ids')
-    lines.append('')
-    lines += emit(files, 'k_ac_files', f'{len(files)} story files')
-    lines.append('')
-    lines += emit(legions, 'k_ac_legions', f'{len(legions)} legion types')
-    lines.append('')
-
-    scene_areas = {
-        0x1100: 0x51f0, 0x1101: 0x51f0,
-        0x1200: 0x5150, 0x1201: 0x5220, 0x1202: 0x5010,
-        0x1300: 0x5150, 0x1301: 0x5180, 0x1302: 0x5010, 0x1303: 0x5180, 0x1304: 0x5010,
-        0x1400: 0x5150, 0x1401: 0x51c0, 0x1402: 0x5010, 0x1403: 0x51c0, 0x1404: 0x51a0, 0x1405: 0x51a0,
-        0x1500: 0x5150, 0x1501: 0x5110, 0x1502: 0x51d0, 0x1503: 0x51d0, 0x1504: 0x51d0, 0x1505: 0x5010, 0x1506: 0x5010,
-        0x1600: 0x5150, 0x1601: 0x5130, 0x1602: 0x5130, 0x1603: 0x5130, 0x1604: 0x5130, 0x1605: 0x5130, 0x1606: 0x5130, 0x1607: 0x5010, 0x1608: 0x5010,
-        0x1700: 0x5210, 0x1701: 0x5210, 0x1702: 0x5210, 0x1703: 0x5010,
-        0x1800: 0x5150, 0x1801: 0x5200, 0x1802: 0x5200, 0x1803: 0x5200, 0x1804: 0x5010,
-        0x1900: 0x5150, 0x1901: 0x51c0, 0x1902: 0x51c0, 0x1903: 0x51c0, 0x1904: 0x5010,
-        0x1a00: 0x5230, 0x1a01: 0x5110, 0x1a02: 0x5110, 0x1a03: 0x5010,
-        0x1b00: 0x5100, 0x1b01: 0x5100, 0x1b02: 0x5010,
-        0x1c00: 0x5150,
-    }
-    cases = menu.find_value_table('MENU_SELECT_CASE_NAME_')
-    scene_list = []
-    for sid, aid in sorted(scene_areas.items()):
-        if sid == 0x1c00:
-            cname = 'Securing the Ark'
-        else:
-            k = f'{((sid >> 8) - 0x10):02d}{sid & 0xff:02x}'
-            cname = ascii_text(join_lines(cases.get(k, '')))
-        scene_list.append((sid, aid, cname))
-
-    lines += emit_scenes(scene_list)
-    lines.append('')
+    for tbl, cname, desc in ((areas, 'k_ac_areas', f'{len(areas)} areas'),
+                             (missions, 'k_ac_missions', f'{len(missions)} missions'),
+                             (bosses, 'k_ac_bosses', f'{len(bosses)} bosses'),
+                             (files, 'k_ac_files', f'{len(files)} story files'),
+                             (legions, 'k_ac_legions', f'{len(legions)} legion types'),
+                             (purposes, 'k_ac_purposes', f'{len(purposes)} case objectives')):
+        lines += emit(tbl, cname, desc) + ['']
+    lines += emit_scenes(scene_list) + ['']
+    lines += emit_scenario_steps(steps) + ['']
     OUT.write_text('\n'.join(lines), encoding='utf-8')
-    print(f'wrote {OUT.relative_to(PROJECT)} ({len(lines)} lines): '
-          f'{len(areas)} areas, {len(missions)} missions, {len(bosses)} bosses, '
-          f'{len(files)} files, {len(legions)} legions, {len(scene_list)} scenes')
+    print(f'wrote {OUT.relative_to(PROJECT)} ({len(lines)} lines)')
 
 
 if __name__ == '__main__':

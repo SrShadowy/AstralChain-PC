@@ -158,9 +158,10 @@ QWidget* SettingsDialog::createGraphicsTab()
     m_scaleCombo->addItem("0.67x (FSR Quality)", 0.67);
     m_scaleCombo->addItem("0.75x (FSR Ultra Quality)", 0.75);
     m_scaleCombo->addItem("1.00x (Nativo / FSR 3.1 Native AA)", 1.00);
-    m_scaleCombo->addItem("1.25x (Supersampling)", 1.25);
-    m_scaleCombo->addItem("1.50x (Supersampling)", 1.50);
-    m_scaleCombo->addItem("2.00x (Supersampling)", 2.00);
+    m_scaleCombo->addItem("1.25x (FSR 1.0 / 3.1 Supersampling - Qualidade)", 1.25);
+    m_scaleCombo->addItem("1.50x (FSR 1.0 / 3.1 Supersampling - Ultra)", 1.50);
+    m_scaleCombo->addItem("1.75x (FSR 1.0 / 3.1 Supersampling - Extremo)", 1.75);
+    m_scaleCombo->addItem("2.00x (FSR 1.0 / 3.1 Supersampling - 4K)", 2.00);
 
     m_upscalerCombo = new QComboBox(page);
     m_upscalerCombo->addItem("AMD FSR 3.1 (Temporal + Jitter + RCAS)", "fsr3");

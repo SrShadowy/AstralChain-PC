@@ -25,7 +25,9 @@ bool guest_range(unsigned long long a, size_t n) {
 }
 
 bool read_raw(unsigned long long a, void *out, size_t n) {
-    if (!guest_range(a, n)) return false;
+    if (!guest_range(a, n)) {
+        return false;
+    }
     std::memcpy(out, reinterpret_cast<const void *>(static_cast<uintptr_t>(a)), n);
     return true;
 }
@@ -33,50 +35,128 @@ bool read_raw(unsigned long long a, void *out, size_t n) {
 bool slot64(unsigned off, unsigned long long *out) {
     unsigned long long ptr = 0;
     const unsigned long long base = ac_reinfo_main_base();
-    if (!base || !read_raw(base + off, &ptr, sizeof ptr)) return false;
-    if (!guest_range(ptr, 8) || (ptr & 3)) return false;
+    if (!base || !read_raw(base + off, &ptr, sizeof ptr)) {
+        return false;
+    }
+    if (!guest_range(ptr, sizeof ptr) || (ptr & 3)) {
+        return false;
+    }
     *out = ptr;
     return true;
 }
 
-bool slot_u32(unsigned off, unsigned *out) {
+template <typename T>
+bool slot_val(unsigned off, T *out) {
     unsigned long long ptr = 0;
     return slot64(off, &ptr) && read_raw(ptr, out, sizeof *out);
 }
 
-bool slot_f32(unsigned off, float *out) {
-    unsigned long long ptr = 0;
-    return slot64(off, &ptr) && read_raw(ptr, out, sizeof *out);
-}
-
-const char* lookup_name(const AcNameEntry *t, size_t n, unsigned id) {
-    for (size_t i = 0; i < n; ++i) {
-        if (t[i].id == id) return t[i].name;
+template <size_t N>
+const char* lookup_name(const AcNameEntry (&t)[N], unsigned id) {
+    for (size_t i = 0; i < N; ++i) {
+        if (t[i].id == id) {
+            return t[i].name;
+        }
     }
     return nullptr;
 }
 
-const AcSceneEntry* lookup_scene(const AcSceneEntry *t, size_t n, unsigned scene_id) {
-    for (size_t i = 0; i < n; ++i) {
-        if (t[i].scene_id == scene_id) return &t[i];
+template <size_t N>
+void resolve_name(const AcNameEntry (&t)[N], unsigned id, std::string& out) {
+    if (id != 0 && out.empty()) {
+        if (const char* name = lookup_name(t, id)) {
+            out = name;
+        }
+    }
+}
+
+template <size_t N>
+const AcSceneEntry* lookup_scene(const AcSceneEntry (&t)[N], unsigned scene_id) {
+    for (size_t i = 0; i < N; ++i) {
+        if (t[i].scene_id == scene_id) {
+            return &t[i];
+        }
     }
     return nullptr;
 }
 
-const char* difficulty_to_str(int raw) {
-    static const char *k_diff[] = {"Super Casual", "Casual", "Standard", "Hardcore"};
-    if (raw == -2) return k_diff[0];
-    if (raw == 0) return k_diff[1];
-    if (raw == 1) return k_diff[2];
-    if (raw == 2) return k_diff[3];
-    return "Standard";
+bool read_scenario_group_step(unsigned long long mgr, unsigned idx_off, int *out_step) {
+    int32_t grp_idx = -1;
+    if (!read_raw(mgr + idx_off, &grp_idx, sizeof grp_idx)) {
+        return false;
+    }
+    if (grp_idx < 0 || grp_idx >= kMaxScenGroups) {
+        return false;
+    }
+    unsigned long long grp_ptr = 0;
+    if (!read_raw(mgr + kOffScenGroups + static_cast<unsigned>(grp_idx) * 8, &grp_ptr, sizeof grp_ptr)) {
+        return false;
+    }
+    int32_t step = -1;
+    if (!read_raw(grp_ptr + kOffScenStepIdx, &step, sizeof step)) {
+        return false;
+    }
+    *out_step = static_cast<int>(step);
+    return true;
 }
 
-int derive_file_num(unsigned mission_id) {
-    if (!mission_id) return 0;
-    unsigned hi = (mission_id >> 8) & 0xFF;
-    if (hi >= 0x21 && hi <= 0x2c) return static_cast<int>(hi - 0x20);
-    if (hi >= 0x31 && hi <= 0x3b) return static_cast<int>(hi - 0x30);
+unsigned map_trigger_area(unsigned raw_area, uint32_t phase_id, int file_num) {
+    if (raw_area == 0 || raw_area >= 0x10000 || (phase_id >= 0x0a00u && phase_id < 0x0c00u)) {
+        return 0;
+    }
+    if (phase_id != 0) {
+        unsigned p_hi = (phase_id >> 8) & 0x0F;
+        unsigned a_hi = (raw_area >> 12) & 0x0F;
+        bool mismatch = (a_hi != 0 && a_hi != p_hi) ||
+                        (phase_id == 0x0840u && (raw_area >> 8) != 0x84u) ||
+                        (phase_id == 0x0800u && (raw_area >> 8) == 0x84u);
+        if (mismatch) {
+            return 0;
+        }
+    }
+    unsigned hi = (raw_area >> 8) & 0xFF;
+    if (hi == 0x00) {
+        return (raw_area >= 0x0002) ? kAreaRayleighPlaza : kAreaGrandAvenue;
+    }
+    if (hi >= 0x11 && hi <= 0x15) {
+        if (raw_area == 0x1302 || raw_area == 0x1303 || file_num == 7) {
+            return kAreaRayleighPlaza;
+        }
+        return kAreaGrandAvenue;
+    }
+    if (hi == 0x50 && (phase_id == 0x0500u || raw_area == 0x5001u || file_num == 10)) {
+        return kAreaArkSewer;
+    }
+    for (const auto& r : kTriggerAreaRanges) {
+        if (hi >= r.hi_min && hi <= r.hi_max) {
+            return r.area_id;
+        }
+    }
+    if (lookup_name(k_ac_areas, raw_area)) {
+        return raw_area;
+    }
+    return 0;
+}
+
+unsigned resolve_area_id(const PresenceSnapshot& s, const AcSceneEntry* sc, const AcScenarioStep* step_info) {
+    if ((s.scene_id & 0xF000u) == 0x6000u || (s.phase_id >= 0x0a00u && s.phase_id < 0x0c00u)) {
+        return kAreaAstralPlane;
+    }
+    if (unsigned a = map_trigger_area(s.raw_area_id, s.phase_id, s.file_num); a != 0) {
+        return a;
+    }
+    if (unsigned a = map_trigger_area(s.area_id, s.phase_id, s.file_num); a != 0) {
+        return a;
+    }
+    if (unsigned a = MapSceneOrPhaseArea(s.scene_id, s.phase_id, s.file_num); a != 0) {
+        return a;
+    }
+    if (sc && sc->area_id != 0) {
+        return sc->area_id;
+    }
+    if (step_info && step_info->area_id != 0) {
+        return step_info->area_id;
+    }
     return 0;
 }
 
@@ -96,94 +176,137 @@ uint64_t GetSessionElapsedSeconds() {
     return std::chrono::duration_cast<std::chrono::seconds>(now - g_session_steady_start).count();
 }
 
-PresenceSnapshot GetSnapshot() {
-    Init();
-    PresenceSnapshot s;
-    s.session_start_unix_s = g_session_start_unix;
-
-    if (!ac_reinfo_main_base()) return s;
-
-    (void)slot_u32(0xdbcf10, &s.area_id);
-    (void)slot_u32(0xdbcf20, &s.sub_area);
-    (void)slot_u32(0xdbc420, &s.mission_id);
-    (void)slot_u32(0xdbc950, &s.boss_id);
-
-    unsigned b_act = 0;
-    if (slot_u32(0xdbc928, &b_act)) s.boss_active = (b_act == 1);
-    (void)slot_u32(0xdbc930, &s.boss_stage);
-    (void)slot_u32(0xdbc940, &s.battle_state);
-    (void)slot_f32(0xdbc948, &s.battle_timer);
-
-    unsigned long long scene_ptr = 0;
-    if (slot64(0xdb84c8, &scene_ptr)) {
-        (void)read_raw(scene_ptr + 0x180, &s.scene_id, sizeof s.scene_id);
-    }
-
-    unsigned long long save_ptr = 0;
-    if (slot64(0xdb83d8, &save_ptr)) {
-        (void)read_raw(save_ptr, &s.total_playtime_s, sizeof s.total_playtime_s);
-        unsigned diff_raw = 0;
-        if (read_raw(save_ptr + 0xaefa0, &diff_raw, sizeof diff_raw)) {
-            s.difficulty_raw = static_cast<int>(diff_raw);
-            s.difficulty_name = difficulty_to_str(s.difficulty_raw);
+void ResolveSnapshot(PresenceSnapshot& s) {
+    constexpr size_t kStepCount = sizeof(k_ac_scenario_steps) / sizeof(k_ac_scenario_steps[0]);
+    const AcScenarioStep* step_info = nullptr;
+    if (s.scenario_step > 0 && static_cast<size_t>(s.scenario_step) < kStepCount) {
+        step_info = &k_ac_scenario_steps[s.scenario_step];
+    } else if (s.scenario_hash != 0) {
+        for (size_t i = 1; i < kStepCount; ++i) {
+            if (k_ac_scenario_steps[i].step_hash == s.scenario_hash) {
+                step_info = &k_ac_scenario_steps[i];
+                s.scenario_step = static_cast<int>(i);
+                break;
+            }
         }
     }
 
-    s.in_game = (s.total_playtime_s > 0 || (s.scene_id >= 0x1100 && s.scene_id <= 0x1cff) ||
-                 s.area_id != 0 || s.mission_id != 0);
-
-    // Filter out uninitialized / outside-volume -1 (0xFFFFFFFF) from slot 0xdbcf10
-    if (s.area_id == 0xFFFFFFFF || s.area_id >= 0x10000) {
-        s.area_id = 0;
+    if (s.file_num < kMinFileNum || s.file_num > kMaxFileNum) {
+        if (step_info && step_info->file_num >= kMinFileNum && step_info->file_num <= kMaxFileNum) {
+            s.file_num = step_info->file_num;
+        } else if (int fm = DeriveFileFromMission(s.mission_id); fm != 0) {
+            s.file_num = fm;
+        } else {
+            s.file_num = DeriveFileFromScene(s.scene_id);
+        }
+    }
+    if (s.file_num >= kMinFileNum && s.file_num <= kMaxFileNum) {
+        resolve_name(k_ac_files, static_cast<unsigned>(s.file_num), s.file_name);
     }
 
-    // Resolve Scene Info (Case name and canonical area fallback)
+    if (step_info && step_info->purpose_id != 0 && s.purpose_id == 0) {
+        s.purpose_id = step_info->purpose_id;
+    }
+    resolve_name(k_ac_purposes, s.purpose_id, s.case_name);
+
     const AcSceneEntry* sc = nullptr;
     if (s.scene_id != 0) {
-        sc = lookup_scene(k_ac_scenes, sizeof(k_ac_scenes)/sizeof(k_ac_scenes[0]), s.scene_id);
-        if (sc && sc->case_name) {
+        sc = lookup_scene(k_ac_scenes, s.scene_id);
+        if (s.case_name.empty() && sc && sc->case_name) {
             s.case_name = sc->case_name;
         }
     }
 
-    // Look up Area Name: use active trigger area or fall back to canonical scene area
-    const char* aname = nullptr;
-    if (s.area_id != 0) {
-        aname = lookup_name(k_ac_areas, sizeof(k_ac_areas)/sizeof(k_ac_areas[0]), s.area_id);
-    }
-    if (!aname && sc && sc->area_id != 0) {
-        s.area_id = sc->area_id;
-        aname = lookup_name(k_ac_areas, sizeof(k_ac_areas)/sizeof(k_ac_areas[0]), s.area_id);
-    }
-    s.area_name = aname ? aname : "";
-
-    // Look up Boss Name
-    const char* bname = lookup_name(k_ac_bosses, sizeof(k_ac_bosses)/sizeof(k_ac_bosses[0]), s.boss_id);
-    s.boss_name = bname ? bname : "";
-
-    // Derive File / Chapter
-    s.file_num = derive_file_num(s.mission_id);
-    if (s.file_num == 0 && s.scene_id >= 0x1100 && s.scene_id <= 0x1cff) {
-        s.file_num = static_cast<int>(((s.scene_id >> 8) & 0xFF) - 0x10);
-    }
-    if (s.file_num >= 1 && s.file_num <= 12) {
-        const char* fname = lookup_name(k_ac_files, sizeof(k_ac_files)/sizeof(k_ac_files[0]), s.file_num);
-        s.file_name = fname ? fname : "";
+    unsigned resolved_area = resolve_area_id(s, sc, step_info);
+    if (resolved_area != 0) {
+        s.area_id = resolved_area;
+        resolve_name(k_ac_areas, s.area_id, s.area_name);
     }
 
-    // Look up Mission / Case Name: active combat mission or current story Case
-    const char* mname = nullptr;
-    if (s.mission_id != 0) {
-        mname = lookup_name(k_ac_missions, sizeof(k_ac_missions)/sizeof(k_ac_missions[0]), s.mission_id);
+    if (s.legion_id >= kMinLegionId && s.legion_id <= kMaxLegionId && s.legion_name.empty()) {
+        if (const char* lname = lookup_name(k_ac_legions, static_cast<unsigned>(s.legion_id))) {
+            s.legion_name = lname;
+        } else {
+            s.legion_name = LegionToStr(s.legion_id);
+        }
     }
-    if (mname) {
-        s.mission_name = mname;
-    } else if (!s.case_name.empty()) {
+
+    resolve_name(k_ac_bosses, s.boss_id, s.boss_name);
+    resolve_name(k_ac_missions, s.mission_id, s.mission_name);
+    if (s.mission_name.empty() && !s.case_name.empty()) {
         s.mission_name = s.case_name;
-    } else {
-        s.mission_name = "";
+    }
+    s.in_game = (s.total_playtime_s > 0 || s.file_num > 0 || s.scene_id != 0 ||
+                 s.area_id != 0 || s.mission_id != 0);
+}
+
+PresenceSnapshot GetSnapshot() {
+    Init();
+    PresenceSnapshot s;
+    s.session_start_unix_s = g_session_start_unix;
+    if (!ac_reinfo_main_base()) {
+        return s;
     }
 
+    (void)slot_val(kSlotArea, &s.raw_area_id);
+    if (s.raw_area_id == 0xFFFFFFFFu || s.raw_area_id >= 0x10000u) {
+        s.raw_area_id = 0;
+    }
+    (void)slot_val(kSlotSubArea, &s.sub_area);
+    (void)slot_val(kSlotMission, &s.mission_id);
+    (void)slot_val(kSlotBossId, &s.boss_id);
+    (void)slot_val(kSlotPhase, &s.phase_id);
+
+    int32_t leg_raw = -1;
+    if (slot_val(kSlotLegion, &leg_raw) && leg_raw >= kMinLegionId && leg_raw <= kMaxLegionId) {
+        s.legion_id = static_cast<int>(leg_raw);
+    }
+
+    unsigned b_act = 0;
+    if (slot_val(kSlotBossActive, &b_act)) {
+        s.boss_active = (b_act == 1);
+    }
+    (void)slot_val(kSlotBossStage, &s.boss_stage);
+    (void)slot_val(kSlotBattleState, &s.battle_state);
+    (void)slot_val(kSlotBattleTimer, &s.battle_timer);
+
+    unsigned long long scene_ptr = 0;
+    if (slot64(kSlotScene, &scene_ptr)) {
+        (void)read_raw(scene_ptr + kOffSceneId, &s.scene_id, sizeof s.scene_id);
+    }
+
+    unsigned long long scen_mgr = 0;
+    if (slot64(kSlotScenario, &scen_mgr)) {
+        int f_step = 0;
+        if (read_scenario_group_step(scen_mgr, kOffScenFileGrpIdx, &f_step) &&
+            f_step >= kMinFileNum && f_step <= kMaxFileNum) {
+            s.file_num = f_step;
+        }
+        (void)read_scenario_group_step(scen_mgr, kOffScenStepGrpIdx, &s.scenario_step);
+    }
+
+    unsigned long long save_ptr = 0;
+    if (slot64(kSlotSave, &save_ptr)) {
+        (void)read_raw(save_ptr, &s.total_playtime_s, sizeof s.total_playtime_s);
+        unsigned diff_raw = 0;
+        if (read_raw(save_ptr + kOffSaveDiff, &diff_raw, sizeof diff_raw)) {
+            s.difficulty_raw = static_cast<int>(diff_raw);
+            s.difficulty_name = DifficultyToStr(s.difficulty_raw);
+        }
+        if (s.file_num == 0) {
+            uint16_t saved_file = 0;
+            if (read_raw(save_ptr + kOffSaveFile, &saved_file, sizeof saved_file) &&
+                saved_file >= kMinFileNum && saved_file <= kMaxFileNum) {
+                s.file_num = static_cast<int>(saved_file);
+            }
+        }
+        uint32_t grp_hash = 0;
+        if (read_raw(save_ptr + kOffSaveScenGrp, &grp_hash, sizeof grp_hash) && grp_hash == kScenGrpHash) {
+            (void)read_raw(save_ptr + kOffSaveScenStep, &s.scenario_hash, sizeof s.scenario_hash);
+        }
+    }
+
+    ResolveSnapshot(s);
     return s;
 }
 
@@ -201,42 +324,35 @@ ActivityDisplay FormatActivity(const PresenceSnapshot& snap, bool show_file, boo
         return act;
     }
 
-    struct AreaKeyEntry {
-        unsigned id;
-        const char* key;
-    };
-    static const AreaKeyEntry k_area_keys[] = {
-        {0x5000, "01_hypermegafloat_ark"}, {0x5010, "02_astral_plane"},
-        {0x5100, "03_restricted_district"}, {0x5110, "04_aegis_research_institute"},
-        {0x5120, "05_zone_09"}, {0x5130, "06_sector_v"},
-        {0x5140, "07_zone_10"}, {0x5150, "08_ark_police_headquarters"},
-        {0x5160, "09_special_ops_bureau_hq"}, {0x5170, "10_zone_30"},
-        {0x5180, "11_maison_forest"}, {0x5190, "12_zone_32"},
-        {0x51a0, "13_ark_mall"}, {0x51b0, "14_zone_33"},
-        {0x51c0, "15_harmony_square"}, {0x51d0, "16_harmony_square_station"},
-        {0x51e0, "17_zone_36"}, {0x51f0, "18_central_city"},
-        {0x5200, "19_eastside_highway"}, {0x5210, "20_rayleigh_plaza"},
-        {0x5220, "21_grand_avenue"}, {0x5230, "22_ark_sewer_management"}
-    };
-    for (const auto& ak : k_area_keys) {
+    for (const auto& ak : kAreaKeys) {
         if (ak.id == snap.area_id) {
             act.large_image = ak.key;
-            if (!snap.area_name.empty()) act.large_text = snap.area_name;
+            if (!snap.area_name.empty()) {
+                act.large_text = snap.area_name;
+            }
             break;
         }
     }
 
-    // File / Chapter for small_image
-    if (snap.file_num >= 1 && snap.file_num <= 11) {
+    if (const char* lkey = LegionToIconKey(snap.legion_id)) {
+        act.small_image = lkey;
+        std::string ltxt = !snap.legion_name.empty() ? snap.legion_name : LegionToStr(snap.legion_id);
+        if (snap.file_num >= kMinFileNum && snap.file_num <= kMaxFileNum) {
+            char ftitle[32];
+            std::snprintf(ftitle, sizeof ftitle, " | File %02d", snap.file_num);
+            ltxt += ftitle;
+        }
+        act.small_text = ltxt;
+    } else if (snap.file_num >= kMinFileNum && snap.file_num <= kMaxFileNum) {
+        int icon_num = (snap.file_num <= kMaxFileIcon) ? snap.file_num : kMaxFileIcon;
         char fkey[16];
-        std::snprintf(fkey, sizeof fkey, "file_%02u", snap.file_num);
+        std::snprintf(fkey, sizeof fkey, "file_%02d", icon_num);
         act.small_image = fkey;
         char ftitle[32];
-        std::snprintf(ftitle, sizeof ftitle, "File %02u", snap.file_num);
+        std::snprintf(ftitle, sizeof ftitle, "File %02d", snap.file_num);
         act.small_text = ftitle;
     }
 
-    // Details Line: File / Chapter + Mission or Difficulty
     std::string d;
     if (show_file && snap.file_num > 0) {
         char fbuf[32];
@@ -247,19 +363,22 @@ ActivityDisplay FormatActivity(const PresenceSnapshot& snap, bool show_file, boo
         }
     }
 
+    std::string suffix;
     if (show_mission && !snap.mission_name.empty()) {
-        if (!d.empty()) d += " | ";
-        d += snap.mission_name;
+        suffix = snap.mission_name;
     } else if (show_diff && !snap.difficulty_name.empty()) {
-        if (!d.empty()) d += " | ";
-        d += snap.difficulty_name;
+        suffix = snap.difficulty_name;
+    }
+    if (!suffix.empty()) {
+        d = d.empty() ? suffix : (d + " | " + suffix);
     }
     act.details = d.empty() ? "Em Patrulha" : d;
 
-    // State Line: Combat / Boss / Area
     std::string st;
     if (show_boss && snap.boss_active && !snap.boss_name.empty()) {
-        if (show_area && !snap.area_name.empty()) st = snap.area_name + " | ";
+        if (show_area && !snap.area_name.empty()) {
+            st = snap.area_name + " | ";
+        }
         st += "Lutando: " + snap.boss_name;
     } else if (show_area && !snap.area_name.empty()) {
         st = snap.area_name + " (Explorando)";
@@ -270,23 +389,17 @@ ActivityDisplay FormatActivity(const PresenceSnapshot& snap, bool show_file, boo
     }
     act.state = st;
 
-    // Time Text
     if (show_time) {
         act.has_time = true;
-        uint64_t elapsed = GetSessionElapsedSeconds();
-        uint64_t hrs = elapsed / 3600;
-        uint64_t min = (elapsed / 60) % 60;
-        uint64_t sec = elapsed % 60;
+        unsigned long long elapsed = GetSessionElapsedSeconds();
+        unsigned long long hrs = elapsed / 3600;
+        unsigned long long min = (elapsed / 60) % 60;
+        unsigned long long sec = elapsed % 60;
         char tbuf[64];
         if (hrs > 0) {
-            std::snprintf(tbuf, sizeof tbuf, "%02llu:%02llu:%02llu decorridos",
-                          static_cast<unsigned long long>(hrs),
-                          static_cast<unsigned long long>(min),
-                          static_cast<unsigned long long>(sec));
+            std::snprintf(tbuf, sizeof tbuf, "%02llu:%02llu:%02llu decorridos", hrs, min, sec);
         } else {
-            std::snprintf(tbuf, sizeof tbuf, "%02llu:%02llu decorridos",
-                          static_cast<unsigned long long>(min),
-                          static_cast<unsigned long long>(sec));
+            std::snprintf(tbuf, sizeof tbuf, "%02llu:%02llu decorridos", min, sec);
         }
         act.time_text = tbuf;
     }

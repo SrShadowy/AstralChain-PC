@@ -1308,7 +1308,7 @@ VkSampler vk_sampler(NvnSamplerDesc *d) {
     if (mf <= 1) si.maxLod = si.minLod + 0.25f;  // not mipmapped: stay on the base level
     if (si.maxLod < si.minLod) si.maxLod = si.minLod;
     si.mipLodBias = d->lod_bias + extra_lod_bias() + (mf > 1 && d->max_aniso > 1 && extra_lod_bias() == 0.0f ? extra_fsr3_mip_bias() : 0.0f); // [extra]
-    if (d->max_aniso > 1) { si.anisotropyEnable = VK_TRUE; si.maxAnisotropy = fminf(d->max_aniso, 16); }
+    if (d->max_aniso > 1) { si.anisotropyEnable = VK_TRUE; si.maxAnisotropy = 16.0f; } // [extra]
     float lodmin = extra_lod_min(); // [extra]
     if (lodmin > 0 && mf > 1) si.minLod = fmaxf(si.minLod, lodmin);
     static int stest = -1;

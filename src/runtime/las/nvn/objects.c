@@ -805,8 +805,6 @@ NVN(nvnQueueAcquireTexture) {
 NVN(nvnQueuePresentTexture) {
     NvnWindow *w = HOST(NvnWindow, A(1));
     int i = (int)A(2);
-    extern void nvn_present_pace(int interval); // [extra]
-    nvn_present_pace(w->interval); // [extra]
     if (i >= 0 && i < w->num) {
         if (aq_on > 0) {
             AsyncJob j = {.kind = AJ_PRESENT, .tex = HOST(NvnTexture, w->textures[i])};
@@ -817,6 +815,8 @@ NVN(nvnQueuePresentTexture) {
             backend_present(HOST(NvnTexture, w->textures[i]));
         }
     }
+    extern void nvn_present_pace(int interval); // [extra]
+    nvn_present_pace(w->interval); // [extra]
 }
 
 // ================================================================== small state objects

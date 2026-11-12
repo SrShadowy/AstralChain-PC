@@ -66,6 +66,7 @@ static inline void settings_save(void) {
     // [extra]
     const char *ustr = g_settings.upscaler == UPSCALE_FSR3 ? "fsr3" : g_settings.upscaler == UPSCALE_FSR1 ? "fsr1" : "bilinear"; // [extra]
     fprintf(f, "upscaler = %s\n", ustr);
+    fprintf(f, "antialias = %s\n", g_settings.antialias == AA_SMAA ? "smaa" : "off"); // [extra]
     fprintf(f, "framegen = %d\n", g_settings.framegen ? 1 : 0);
     fprintf(f, "fsr_jitter = %d\n", g_settings.fsr_jitter ? 1 : 0);
     fprintf(f, "fsr_sharpness = %.2f\n", g_settings.fsr_sharpness);
@@ -74,6 +75,7 @@ static inline void settings_save(void) {
     fclose(f);
 } // [extra]
 static inline void settings_load(void) { // [extra]
+    g_settings.antialias = AA_SMAA; // [extra]
     g_settings.upscaler = UPSCALE_FSR3; // [extra]
     g_settings.fsr_jitter = 1;
     g_settings.fsr_sharpness = 0.80f;
@@ -108,6 +110,9 @@ static inline void settings_load(void) { // [extra]
             else if (sscanf(line, " %31[^= ] = %63[^\n]", key, val) == 2 && !strcmp(key, "upscaler") && !u) { // [extra]
                 g_settings.upscaler = !strcmp(val, "fsr3") ? UPSCALE_FSR3 : !strcmp(val, "fsr1") ? UPSCALE_FSR1 : UPSCALE_BILINEAR;
             }
+            else if (sscanf(line, " %31[^= ] = %63[^\n]", key, val) == 2 && !strcmp(key, "antialias") && !aa) { // [extra]
+                g_settings.antialias = (!strcmp(val, "off") || !strcmp(val, "0")) ? AA_OFF : AA_SMAA;
+            } // [extra]
             else if (sscanf(line, " %31[^= ] = %63[^\n]", key, val) == 2 && !strcmp(key, "framegen")) {
                 g_settings.framegen = atoi(val) != 0;
             }

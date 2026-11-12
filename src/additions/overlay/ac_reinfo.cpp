@@ -20,6 +20,7 @@
 #include "additions/overlay/ac_hud.h"
 #include "additions/overlay/ac_reinfo.h"
 #include "additions/overlay/ac_reinfo_tables.h"
+#include "additions/rpc/ac_game_data.h"
 
 extern "C" unsigned long long ac_reinfo_main_base(void);   // (ac_reinfo_probe.c)
 extern "C" unsigned long long ac_reinfo_guest_lo(void);
@@ -38,35 +39,15 @@ bool guest_range(unsigned long long a, size_t n) {
 }
 
 bool read_raw(unsigned long long a, void *out, size_t n) {
-    if (!guest_range(a, n)) return false;
+    if (!guest_range(a, n)) {
+        return false;
+    }
     memcpy(out, reinterpret_cast<const void *>(static_cast<uintptr_t>(a)), n);
     return true;
 }
 
-unsigned long long base_addr(void) { return ac_reinfo_main_base(); }
-
-// Value behind a global slot: slot word -> pointer -> payload.
-bool slot64(unsigned off, unsigned long long *out) {
-    unsigned long long ptr = 0;
-    const unsigned long long base = base_addr();
-    if (!base || !read_raw(base + off, &ptr, sizeof ptr)) return false;
-    if (!guest_range(ptr, 8) || (ptr & 3)) return false;
-    *out = ptr;
-    return true;
-}
-
-bool slot_u32(unsigned off, unsigned *out) {
-    unsigned long long ptr = 0;
-    return slot64(off, &ptr) && read_raw(ptr, out, sizeof *out);
-}
-
-bool slot_f32(unsigned off, float *out) {
-    unsigned long long ptr = 0;
-    return slot64(off, &ptr) && read_raw(ptr, out, sizeof *out);
-}
-
-bool field_u32(unsigned long long p, unsigned off, unsigned *out) {
-    return p && read_raw(p + off, out, sizeof *out);
+unsigned long long base_addr(void) {
+    return ac_reinfo_main_base();
 }
 
 // A pointer value that would be a guest address, for the raw slot dump.
@@ -78,23 +59,32 @@ bool slot_word(unsigned off, unsigned long long *out) {
 // ---- name tables --------------------------------------------------------
 
 const char *lookup_name(const AcNameEntry *t, int n, unsigned id) {
-    for (int i = 0; i < n; i++)
-        if (t[i].id == id) return t[i].name;
+    for (int i = 0; i < n; i++) {
+        if (t[i].id == id) {
+            return t[i].name;
+        }
+    }
     return nullptr;
 }
 
 void name_cell(const AcNameEntry *t, int n, unsigned id) {
     const char *nm = lookup_name(t, n, id);
-    if (!nm) ImGui::TextDisabled("(sem nome)");
-    else if (!strcmp(nm, "-----")) ImGui::TextDisabled("(oculto)");
-    else ImGui::TextUnformatted(nm);
+    if (!nm) {
+        ImGui::TextDisabled("(sem nome)");
+    } else if (!strcmp(nm, "-----")) {
+        ImGui::TextDisabled("(oculto)");
+    } else {
+        ImGui::TextUnformatted(nm);
+    }
 }
 
 // Full id -> name table, filtered by a per-window search box, current id marked.
 // `filter` must outlive the frame: ImGui keeps editing the same buffer.
 void table_section(const char *label, const AcNameEntry *t, int n, unsigned cur, bool has_cur,
                    char *filter, size_t filter_cap) {
-    if (!ImGui::CollapsingHeader(label, ImGuiTreeNodeFlags_None)) return;
+    if (!ImGui::CollapsingHeader(label, ImGuiTreeNodeFlags_None)) {
+        return;
+    }
     ImGui::PushID(label);
     ImGui::SetNextItemWidth(-1.0f);
     ImGui::InputTextWithHint("##filter", "filtrar id ou nome", filter, filter_cap);
@@ -108,15 +98,23 @@ void table_section(const char *label, const AcNameEntry *t, int n, unsigned cur,
             char id[16];
             snprintf(id, sizeof id, "0x%04x", t[i].id);
             const char *nm = t[i].name ? t[i].name : "(sem nome)";
-            if (filter[0] && !strstr(id, filter) && !strstr(nm, filter)) continue;
+            if (filter[0] && !strstr(id, filter) && !strstr(nm, filter)) {
+                continue;
+            }
             const bool hot = has_cur && t[i].id == cur;
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
-            if (hot) ImGui::TextColored(AcIrisColors::Cyan, "%s", id);
-            else ImGui::TextUnformatted(id);
+            if (hot) {
+                ImGui::TextColored(AcIrisColors::Cyan, "%s", id);
+            } else {
+                ImGui::TextUnformatted(id);
+            }
             ImGui::TableSetColumnIndex(1);
-            if (hot) ImGui::TextColored(AcIrisColors::Cyan, "%s", nm);
-            else ImGui::TextUnformatted(nm);
+            if (hot) {
+                ImGui::TextColored(AcIrisColors::Cyan, "%s", nm);
+            } else {
+                ImGui::TextUnformatted(nm);
+            }
         }
         ImGui::EndTable();
     }
@@ -139,73 +137,23 @@ void name_row(const char *label, bool ok, unsigned id, const AcNameEntry *t, int
     name_cell(t, n, id);
 }
 
-// Difficulty labels from the game's own jump table (0xbe08fc, used by the
-// getter at 0x4c26e0): index = value + 2, valid for -2..2.
-const char *difficulty_name(int raw) {
-    static const char *k_names[] = {"super_casual", "error", "casual", "standard", "hardcore"};
-    const int i = raw + 2;
-    return (i >= 0 && i < AC_COUNT(k_names)) ? k_names[i] : nullptr;
-}
-
-void section_live(void) {
+void section_live(const AcGameData::PresenceSnapshot &s) {
     ac_ui_section_header("ESTADO ATUAL (LEITURA AO VIVO)", "// MEM.LIVE");
     if (!base_addr()) {
         ImGui::TextDisabled("main fora da janela guest (build sem a imagem carregada).");
         return;
     }
-    unsigned area = 0, sub = 0, mission = 0, boss = 0, active = 0, stage = 0, battle = 0;
-    float timer = 0.0f;
-    const bool ok_area = slot_u32(0xdbcf10, &area);
-    const bool ok_sub = slot_u32(0xdbcf20, &sub);
-    const bool ok_mis = slot_u32(0xdbc420, &mission);
-    const bool ok_boss = slot_u32(0xdbc950, &boss);
-    const bool ok_act = slot_u32(0xdbc928, &active);
-    const bool ok_stg = slot_u32(0xdbc930, &stage);
-    const bool ok_btl = slot_u32(0xdbc940, &battle);
-    const bool ok_tmr = slot_f32(0xdbc948, &timer);
-
-    unsigned long long save = 0, scene = 0;
-    const bool ok_save = slot64(0xdb83d8, &save);
-    const bool ok_scene = slot64(0xdb84c8, &scene);
-    unsigned long long playtime = 0;
-    unsigned diff_raw = 0, diff_flags = 0, scene_id = 0, scene_phase = 0;
-    const bool ok_play = ok_save && read_raw(save, &playtime, sizeof playtime);
-    const bool ok_diff = ok_save && field_u32(save, 0xaefa0, &diff_raw);
-    const bool ok_flags = ok_save && field_u32(save, 0xa8b8c, &diff_flags);
-    const bool ok_sid = ok_scene && field_u32(scene, 0x180, &scene_id);
-    const bool ok_phase = ok_scene && field_u32(scene, 0x100, &scene_phase);
-
-    int file_num = 0;
-    if (ok_mis && mission) {
-        unsigned hi = (mission >> 8) & 0xFF;
-        if (hi >= 0x21 && hi <= 0x2c) file_num = static_cast<int>(hi - 0x20);
-        else if (hi >= 0x31 && hi <= 0x3b) file_num = static_cast<int>(hi - 0x30);
-    }
-    if (!file_num && ok_sid && scene_id >= 0x1100 && scene_id <= 0x1cff) {
-        file_num = static_cast<int>(((scene_id >> 8) & 0xFF) - 0x10);
-    }
-
-    unsigned disp_area = (ok_area && area != 0xFFFFFFFF) ? area : 0;
-    const char *scene_case = nullptr;
-    if (ok_sid) {
-        for (const auto &sc : k_ac_scenes) {
-            if (sc.scene_id == scene_id) {
-                if (!disp_area) disp_area = sc.area_id;
-                scene_case = sc.case_name;
-                break;
-            }
-        }
-    }
-
     if (ImGui::BeginTable("live", 3, ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
         ImGui::TableSetupColumn("Campo");
         ImGui::TableSetupColumn("Id");
         ImGui::TableSetupColumn("Nome / valor");
         ImGui::TableHeadersRow();
-        name_row("File / Capitulo", file_num > 0, file_num, k_ac_files, AC_COUNT(k_ac_files));
-        name_row("Area", disp_area != 0, disp_area, k_ac_areas, AC_COUNT(k_ac_areas));
-        name_row("Missao", ok_mis, mission, k_ac_missions, AC_COUNT(k_ac_missions));
-        name_row("Boss", ok_boss, boss, k_ac_bosses, AC_COUNT(k_ac_bosses));
+        name_row("File / Capitulo", s.file_num > 0, static_cast<unsigned>(s.file_num), k_ac_files, AC_COUNT(k_ac_files));
+        name_row("Area (canonica)", s.area_id != 0, s.area_id, k_ac_areas, AC_COUNT(k_ac_areas));
+        name_row("Objetivo (Caso)", s.purpose_id != 0, s.purpose_id, k_ac_purposes, AC_COUNT(k_ac_purposes));
+        name_row("Missao", s.mission_id != 0, s.mission_id, k_ac_missions, AC_COUNT(k_ac_missions));
+        name_row("Legiao ativa", s.legion_id >= 0, static_cast<unsigned>(s.legion_id), k_ac_legions, AC_COUNT(k_ac_legions));
+        name_row("Boss", s.boss_id != 0, s.boss_id, k_ac_bosses, AC_COUNT(k_ac_bosses));
 
         auto plain = [](const char *label, bool ok, const char *fmt, auto value) {
             ImGui::TableNextRow();
@@ -214,37 +162,30 @@ void section_live(void) {
             ImGui::TableSetColumnIndex(1);
             ImGui::TextDisabled("--");
             ImGui::TableSetColumnIndex(2);
-            if (ok) ImGui::Text(fmt, value);
-            else ImGui::TextDisabled("(n/d)");
+            if (ok) {
+                ImGui::Text(fmt, value);
+            } else {
+                ImGui::TextDisabled("(n/d)");
+            }
         };
-        plain("Sub-area", ok_sub, "%u", sub);
-        plain("Area >> 8 (chave do mapa)", ok_area, "0x%02x", area >> 8);
-        plain("Boss ativo", ok_act, "%u", active);
-        plain("Fase do boss", ok_stg, "%u", stage);
-        plain("Estado de batalha", ok_btl, "%u", battle);
-        plain("Timer de batalha", ok_tmr, "%.2f s", timer);
-        plain("Playtime (seg)", ok_play, "%llu", playtime);
-        plain("Dificuldade (raw +0xaefa0)", ok_diff, "%d", static_cast<int>(diff_raw));
-        if (scene_case) {
-            char sbuf[64];
-            snprintf(sbuf, sizeof sbuf, "0x%04x (%s)", scene_id, scene_case);
-            plain("Scene id (+0x180)", ok_sid, "%s", sbuf);
-        } else {
-            plain("Scene id (+0x180)", ok_sid, "0x%04x", scene_id);
-        }
-        plain("Scene phase (+0x100)", ok_phase, "0x%04x", scene_phase);
+        plain("Trigger area (0xdbcf10)", s.raw_area_id != 0, "0x%04x", s.raw_area_id);
+        plain("Sub-area", true, "%u", s.sub_area);
+        plain("Phase id (0xdb84f8)", s.phase_id != 0, "0x%04x", s.phase_id);
+        plain("Scene id (+0x180)", s.scene_id != 0, "0x%04x", s.scene_id);
+        plain("Scenario step (0xdb8930)", s.scenario_step >= 0, "%d", s.scenario_step);
+        plain("Boss ativo", true, "%u", s.boss_active ? 1u : 0u);
+        plain("Fase do boss", true, "%u", s.boss_stage);
+        plain("Estado de batalha", true, "%u", s.battle_state);
+        plain("Timer de batalha", true, "%.2f s", s.battle_timer);
+        plain("Playtime (seg)", s.total_playtime_s > 0, "%llu", static_cast<unsigned long long>(s.total_playtime_s));
+        plain("Dificuldade", !s.difficulty_name.empty(), "%s", s.difficulty_name.c_str());
         ImGui::EndTable();
     }
-    if (ok_play) {
-        const unsigned long long h = playtime / 3600;
-        const unsigned long long m = (playtime / 60) % 60;
-        const unsigned long long s = playtime % 60;
-        ImGui::Text("Playtime formatado: %03llu:%02llu:%02llu", h, m, s);
-    }
-    if (ok_diff) {
-        const char *name = difficulty_name(static_cast<int>(diff_raw));
-        if (name) ImGui::Text("Dificuldade: %s", name);
-        else ImGui::TextDisabled("Dificuldade: (fora da faixa -2..2)");
+    if (s.total_playtime_s > 0) {
+        const unsigned long long h = s.total_playtime_s / 3600;
+        const unsigned long long m = (s.total_playtime_s / 60) % 60;
+        const unsigned long long sec = s.total_playtime_s % 60;
+        ImGui::Text("Playtime formatado: %03llu:%02llu:%02llu", h, m, sec);
     }
 }
 
@@ -267,13 +208,23 @@ struct ReKeyDesc {
 
 void section_slots(void) {
     static const ReSlotDesc slots[] = {
-        {0xdbcf10, "area", "u32"},        {0xdbcf20, "sub-area", "u32"},
-        {0xdbc420, "mission", "u32"},     {0xdbc950, "boss id", "u32"},
-        {0xdbc928, "boss ativo", "u32"},  {0xdbc930, "fase do boss", "u32"},
-        {0xdbc940, "estado batalha", "u32"}, {0xdbc948, "timer batalha", "f32"},
-        {0xdb83d8, "save struct", "ptr"}, {0xdb84c8, "scene struct", "ptr"},
+        {AcGameData::kSlotArea,        "area trigger",   "u32"},
+        {AcGameData::kSlotSubArea,     "sub-area",       "u32"},
+        {AcGameData::kSlotMission,     "mission",        "u32"},
+        {AcGameData::kSlotLegion,      "legion ativa",   "s32"},
+        {AcGameData::kSlotBossId,      "boss id",        "u32"},
+        {AcGameData::kSlotBossActive,  "boss ativo",     "u32"},
+        {AcGameData::kSlotBossStage,   "fase do boss",   "u32"},
+        {AcGameData::kSlotBattleState, "estado batalha", "u32"},
+        {AcGameData::kSlotBattleTimer, "timer batalha",  "f32"},
+        {AcGameData::kSlotSave,        "save struct",    "ptr"},
+        {AcGameData::kSlotScene,       "scene struct",   "ptr"},
+        {AcGameData::kSlotPhase,       "phase id",       "u32"},
+        {AcGameData::kSlotScenario,    "scenario mgr",   "ptr"},
     };
-    if (!ImGui::CollapsingHeader("Slots globais (base + offset)")) return;
+    if (!ImGui::CollapsingHeader("Slots globais (base + offset)")) {
+        return;
+    }
     ImGui::TextDisabled("Valor = dupla desreferencia do slot; '-' quando fora do guest.");
     if (ImGui::BeginTable("slots", 4, ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
         ImGui::TableSetupColumn("Offset");
@@ -292,8 +243,11 @@ void section_slots(void) {
             ImGui::TableSetColumnIndex(2);
             ImGui::TextDisabled("%s", s.kind);
             ImGui::TableSetColumnIndex(3);
-            if (ok) ImGui::Text("0x%010llx", word);
-            else ImGui::TextDisabled("-");
+            if (ok) {
+                ImGui::Text("0x%010llx", word);
+            } else {
+                ImGui::TextDisabled("-");
+            }
         }
         ImGui::EndTable();
     }
@@ -301,14 +255,22 @@ void section_slots(void) {
 
 void section_getters(void) {
     static const ReGetterDesc getters[] = {
-        {0x56c240, "area()"},          {0x56c250, "area() >> 8 (mapa)"},
-        {0x56c270, "sub_area()"},      {0x4be600, "mission()"},
-        {0x5407f0, "boss ativo?"},     {0x3e43a0, "segundos -> h/m/s"},
-        {0x4c26e0, "label de dificuldade"}, {0x588080, "chave de boss"},
-        {0x578c10, "chave de area"},   {0x587d30, "lookup de texto"},
-        {0x587dc0, "lookup por chave"}, {0x91e170, "hash de chave"},
+        {0x56c240, "area()"},
+        {0x56c250, "area() >> 8 (mapa)"},
+        {0x56c270, "sub_area()"},
+        {0x4be600, "mission()"},
+        {0x5407f0, "boss ativo?"},
+        {0x3e43a0, "segundos -> h/m/s"},
+        {0x4c26e0, "label de dificuldade"},
+        {0x588080, "chave de boss"},
+        {0x578c10, "chave de area"},
+        {0x587d30, "lookup de texto"},
+        {0x587dc0, "lookup por chave"},
+        {0x91e170, "hash de chave"},
     };
-    if (!ImGui::CollapsingHeader("Getters (base + offset)")) return;
+    if (!ImGui::CollapsingHeader("Getters (base + offset)")) {
+        return;
+    }
     ImGui::TextDisabled("Endereco de entrada; chamar exige o ABI guest (nao invocado aqui).");
     if (ImGui::BeginTable("getters", 2, ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
         ImGui::TableSetupColumn("Offset");
@@ -333,7 +295,9 @@ void section_text_keys(void) {
         {0xb61e7c, "CORE_MAP_AREA_%04x", "mapa (Core_text)"},
         {0xb62fb7, "%03d:%02d:%02d", "playtime"},
     };
-    if (!ImGui::CollapsingHeader("Chaves de texto (format strings)")) return;
+    if (!ImGui::CollapsingHeader("Chaves de texto (format strings)")) {
+        return;
+    }
     if (ImGui::BeginTable("keys", 3, ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
         ImGui::TableSetupColumn("Offset");
         ImGui::TableSetupColumn("Formato");
@@ -352,17 +316,23 @@ void section_text_keys(void) {
     }
     ImGui::SeparatorText("Dificuldade (-2..2)");
     static const char *diff[] = {"super_casual", "error", "casual", "standard", "hardcore"};
-    for (int i = 0; i < AC_COUNT(diff); i++) ImGui::BulletText("%+d  %s", i - 2, diff[i]);
+    for (int i = 0; i < AC_COUNT(diff); i++) {
+        ImGui::BulletText("%+d  %s", i - 2, diff[i]);
+    }
 }
 
 bool g_visible;  // closed by default: F8 or AC_REINFO=1 opens it
 bool g_boot_done;
 
 void boot_state(void) {
-    if (g_boot_done) return;
+    if (g_boot_done) {
+        return;
+    }
     g_boot_done = true;
     const char *e = getenv("AC_REINFO");
-    if (e && atoi(e) != 0) g_visible = true;
+    if (e && atoi(e) != 0) {
+        g_visible = true;
+    }
 }
 
 }  // namespace
@@ -379,11 +349,10 @@ extern "C" void ac_reinfo_toggle(void) {
 
 extern "C" void ac_reinfo_frame(void) {
     boot_state();
-    if (!g_visible) return;
-    unsigned area = 0, mission = 0, boss = 0;
-    const bool ok_area = slot_u32(0xdbcf10, &area);
-    const bool ok_mis = slot_u32(0xdbc420, &mission);
-    const bool ok_boss = slot_u32(0xdbc950, &boss);
+    if (!g_visible) {
+        return;
+    }
+    const auto snap = AcGameData::GetSnapshot();
 
     ImGui::SetNextWindowSize(ImVec2(600, 680), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowPos(ImVec2(580, 36), ImGuiCond_FirstUseEver);
@@ -392,18 +361,19 @@ extern "C" void ac_reinfo_frame(void) {
         return;
     }
     ac_ui_draw_window_chrome();
-    section_live();
+    section_live(snap);
     section_slots();
     section_getters();
     section_text_keys();
-    // One persistent filter buffer per table (ImGui edits it across frames).
-    static char f_areas[32], f_missions[32], f_bosses[32];
+    static char f_areas[32], f_purposes[32], f_missions[32], f_bosses[32];
     ac_ui_section_header("TABELAS ID -> NOME", "// DB.TABLES");
-    table_section("Áreas (22)", k_ac_areas, AC_COUNT(k_ac_areas), area, ok_area,
+    table_section("Áreas (22)", k_ac_areas, AC_COUNT(k_ac_areas), snap.area_id, snap.area_id != 0,
                   f_areas, sizeof f_areas);
-    table_section("Missões (292)", k_ac_missions, AC_COUNT(k_ac_missions), mission, ok_mis,
+    table_section("Objetivos (118)", k_ac_purposes, AC_COUNT(k_ac_purposes), snap.purpose_id, snap.purpose_id != 0,
+                  f_purposes, sizeof f_purposes);
+    table_section("Missões (292)", k_ac_missions, AC_COUNT(k_ac_missions), snap.mission_id, snap.mission_id != 0,
                   f_missions, sizeof f_missions);
-    table_section("Bosses (82)", k_ac_bosses, AC_COUNT(k_ac_bosses), boss, ok_boss,
+    table_section("Bosses (82)", k_ac_bosses, AC_COUNT(k_ac_bosses), snap.boss_id, snap.boss_id != 0,
                   f_bosses, sizeof f_bosses);
     ImGui::End();
 }

@@ -105,8 +105,14 @@ tr = arr[:h//2, w//2:].mean()
 bl = arr[h//2:, :w//2].mean()
 br = arr[h//2:, w//2:].mean()
 green_flash = int(((arr[:, :, 1] > 200) & (arr[:, :, 0] < 30) & (arr[:, :, 2] < 30)).sum())
+red_core = (arr[1:-1, 1:-1, 0] > 210) & (arr[1:-1, 1:-1, 1] < 25) & (arr[1:-1, 1:-1, 2] < 25)
+red_bg = (
+    (arr[:-2, 1:-1, 0] < 80) & (arr[2:, 1:-1, 0] < 80) &
+    (arr[1:-1, :-2, 0] < 80) & (arr[1:-1, 2:, 0] < 80)
+)
+red_speckle = int((red_core & red_bg).sum())
 
-print(f"Resolução: {w}x{h} | Quadrantes (TL={tl:.1f}, TR={tr:.1f}, BL={bl:.1f}, BR={br:.1f}) | GreenFlash={green_flash}")
+print(f"Resolução: {w}x{h} | Quadrantes (TL={tl:.1f}, TR={tr:.1f}, BL={bl:.1f}, BR={br:.1f}) | GreenFlash={green_flash} | RedSpeckle={red_speckle}")
 if shot_frame >= 1200:
     q_counts = [
         int((arr[:h//2, :w//2] > 30).sum()),
@@ -124,6 +130,9 @@ else:
         sys.exit(1)
 if green_flash > 500:
     print("FAILED: Artefato de flash verde detectado na decodificação de textura.")
+    sys.exit(1)
+if red_speckle > 250:
+    print("FAILED: Artefato de pontos vermelhos (RedSpeckle) por desalinhamento de target/sampler NVN.")
     sys.exit(1)
 print("PASSED: Frame validado em 100% da janela sem artefatos.")
 EOF

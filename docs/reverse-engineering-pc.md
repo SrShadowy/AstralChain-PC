@@ -407,9 +407,9 @@ aparece como `(n/d)` em vez de derrubar o jogo.
 
 | Offset | Tipo | Campo | Getter |
 |---|---|---|---|
-| `0xdbcf10` | `u32` | área | `0x56c240` |
+| `0xdbcf10` | `u32` | área de trigger (`AreaName.csv` / `CORE_MAP_AREA_`) | `0x56c240` |
 | `0xdbcf20` | `u32` | sub-área | `0x56c270` |
-| `0xdbc420` | `u32` | missão | `0x4be600` |
+| `0xdbc420` | `u32` | missão ativa (combate / subcaso) | `0x4be600` |
 | `0xdbc950` | `u32` | id do boss | `0x69f5a0` (resolvedor de nome) |
 | `0xdbc928` | `u32` | boss ativo | `0x5407f0` (`== 1`) |
 | `0xdbc930` | `u32` | fase do boss | — |
@@ -417,10 +417,13 @@ aparece como `(n/d)` em vez de derrubar o jogo.
 | `0xdbc948` | `f32` | timer de batalha | reset para `30.0f` (`0x41f00000`) |
 | `0xdb83d8` | `ptr` | struct de save | — |
 | `0xdb84c8` | `ptr` | struct de cena | — |
+| `0xdb84f8` | `u32` | id de fase (`p100..pb01` → `0x0100..0x0b01`) | `0x561320` |
+| `0xdb8930` | `ptr` | gerenciador `ScenarioCounter` (`FILE` e `File_Scenario`) | `0x4fb2f0`, `0x522df0` |
 
-Campos derivados das structs: playtime `u64` em `save+0`, dificuldade raw em `save+0xaefa0`, flags em
-`save+0xa8b8c`; cena em `scene+0x180` (id) e `scene+0x100` (fase). O acesso a `+0xaefa0`/`+0xa8b8c`
-usa `mov`/`movk` porque o deslocamento não cabe nos 12 bits imediatos.
+Campos derivados das structs:
+- **Save (`*(0xdb83d8)`)**: playtime `u64` em `save+0`, File salvo (`u16` little-endian `1..12`) em `save+0x16` (`0x6f573c`), dificuldade raw em `save+0xaefa0`, flags em `save+0xa8b8c`, e pares `{group_hash, step_hash}` do `ScenarioCounter` a partir de `save+0x14d064` (`0x522480`, com `File_Scenario` em `save+0x14d06c` / `save+0x14d070`).
+- **Cena (`*(0xdb84c8)`)**: `scene_id` em `scene+0x180` (`0x53fc94`). Nos mapas terrestres da Arca (`0x11xx..0x1cxx`), o **byte alto** identifica o estágio (`0x11` Grand Avenue / Rayleigh Plaza, `0x12` Harmony Square, `0x13` Sector V, `0x14` Ark Mall, `0x15` Ark Sewer Management, `0x16` ARI, `0x18` Zone 09, `0x19` Police HQ, `0x1a` Maison Forest, `0x1b` Harmony Square Station, `0x1c` Eastside Highway) e o **byte baixo em BCD** (`0x01..0x12`) identifica o File (`1..12`). No **Astral Plane**, `scene_id` assume `0x6xxx` (`0x6000`, `0x6180`, `0x61a0`, `0x6420`, `0x6460`, `0x6480`, `0x64c0`, `0x64e0`) e `phase_id` (`*(0xdb84f8)`) assume `0x0a00..0x0bff` (`pa00..pb01`).
+- **`ScenarioCounter` (`mgr = *(0xdb8930)`)**: `*(s32*)(mgr + 0x12f0)` indexa o grupo `FILE` (`0`) em `*(u64*)(mgr + 0x28 + idx*8)`, cujo campo `+0x2c` (`s32`) guarda o File atual (`1..12`, ou `0` na tela de título). `*(s32*)(mgr + 0x12f4)` indexa o grupo `File_Scenario` (`1`), cujo campo `+0x2c` (`s32`, `0..326`) é o passo exato de `ScenarioCounter.csv` usado por `0x522df0` para exibir o objetivo atual do caso no HUD (`CORE_PURPOSE_FILE_%04x`, ex.: `0x0309` = `"Rescue Isabella."`).
 
 ### 10.2 Dificuldade
 
@@ -434,35 +437,32 @@ O jogo normaliza o valor salvo antes de exibir (`0x6f2240`, `0x6f6588`): flags `
 
 | Offset | Formato | Uso |
 |---|---|---|
-| `0xb6327d` | `MENU_DATA_AREA_NAME_%04x` | nome da área (`menu_text`) |
+| `0xb6327d` | `MENU_DATA_AREA_NAME_%04x` | nome canônico da área (`menu_text`, `0x5000..0x5230`) |
 | `0xb76832` | `MENU_MISSION_NAME_%04x` | nome da missão (`menu_text`) |
 | `0xb74339` | `EVENT_BOSS_NAME_%04x` | nome do boss (`GameWord`) |
-| `0xb61e7c` | `CORE_MAP_AREA_%04x` | chave do mapa (`Core_text`) |
-| `0xb6a2d3` | `CORE_MAP_AREA_%02x` | idem, índice de 1 byte (`área >> 8`) |
+| `0xb61e7c` | `CORE_MAP_AREA_%04x` | sub-região do mapa (`ui_core_us.dat -> messcore.mcd`, `AreaName.csv`) |
+| `0xb6a2d3` | `CORE_MAP_AREA_%02x` | região principal do mapa (`área >> 8` em `messcore.mcd`) |
 | `0xb62fb7` | `%03d:%02d:%02d` | playtime |
 
 ### 10.4 Tabelas id→nome
  
-`extra/ui/overlay/ac_reinfo_tables.h` é **gerado** por `extra/tools/reinfo_tables.py`, que lê
-`game/romfs.bin → /Text/Text.pkz`, descomprime `menu_text_USen.bin` e `GameWord_USen.bin` e resolve o
-PTD (cabeçalho `PTD\0`, contagem em `+0x0C`, tabela de chaves em `+0x10`; registro de 16 bytes
-`{hash, offset relativo, chars, bytes}`, string UTF-16LE com bias `0x2626`, `bytes == chars*2`).
+`src/additions/overlay/ac_reinfo_tables.h` é **gerado** por `tools/qa/reinfo_tables.py`, que lê
+`game/romfs.bin → /Text/Text.pkz` (`menu_text_USen.bin`, `GameWord_USen.bin`, `Core_text_USen.bin`) e
+`/core/core.pkz → core.dat` (`ScenarioCounter.csv`, `PlannerAutoSaveList.csv`).
 
 Resultado:
-- **22 áreas** (`MENU_DATA_AREA_NAME_*` em `menu_text`)
-- **292 missões** (`FILE_MISSION_*` em `GameWord` cobrindo os 11 Files da campanha + subcasos + `MENU_MISSION_NAME_*` pós-jogo File 12)
+- **22 áreas canônicas** (`MENU_DATA_AREA_NAME_*` em `menu_text`, `0x5000..0x5230`)
+- **118 objetivos de caso** (`CORE_PURPOSE_FILE_*` em `Core_text`, ex.: `"Rescue Isabella."`)
+- **327 passos de `File_Scenario`** (`k_ac_scenario_steps`: `{step_hash, file_num, purpose_id, area_id}`)
+- **292 missões** (`FILE_MISSION_*` em `GameWord` + `MENU_MISSION_NAME_*` em `menu_text`)
 - **82 ids de boss** (`EVENT_BOSS_NAME_*` em `GameWord`)
 - **12 Files da história** (`k_ac_files`: Startup, Awake, Link, Siege, Accord, Complicit, Wild, Peace, Salvation, Madness, Reckoning, Rebirth)
 - **5 Legions** (`k_ac_legions`: Sword, Arrow, Arm, Beast, Axe)
 
-> **Armadilha registrada.** O arquivo guarda cópias da tabela que contêm **só os hashes**, com todas as
-> strings vazias (é o caso de `0xa448`). A tabela real de nomes de boss fica em `0x988a`, um offset
-> **2-alinhado** — uma varredura com passo 4 a ignora e cai na cópia vazia. O gerador varre com passo 2 e
-> resolve cada hash individualmente.
->
-> **Derivação de File / Capítulo.** O ID de missão carrega o capítulo no byte alto: `0x21xx`..`0x2cxx`
-> corresponde aos Files 01 a 12 (`(id >> 8) - 0x20`), e `0x31xx`..`0x3bxx` aos subcasos dos Files 01 a 11
-> (`(id >> 8) - 0x30`). Essa relação alimenta o cliente de Discord Rich Presence (`extra/rpc/ac_game_data.cpp`).
+> **Armadilhas registradas.**
+> 1. `*(0xdbcf10)` (`0x56c240`) armazena IDs de trigger de `AreaName.csv` (`0x1000..0x9900`, onde o nibble alto `1..9` corresponde à família da fase `p100..p900`), e **não** IDs `0x5000..0x5230` de `MENU_DATA_AREA_NAME_`. Em particular, `0x5000` em `*(0xdbcf10)` na fase `p500` é `Ark Sewer Management (Canal Control Room)` (`0x5230`), e ao entrar no Astral Plane (`scene_id = 0x6xxx`, `phase_id = 0x0a00..0x0bff`) `*(0xdbcf10)` retém o último trigger terrestre visitado (ex.: `0x8404` Maison Forest). Por isso, `AcGameData::ResolveSnapshot` verifica primeiro `scene_id`/`phase_id` do Astral Plane e valida se `(raw_area >> 12)` pertence à fase atual antes de mapear para `0x5010..0x5230`.
+> 2. No buffer de save (`*(0xdb83d8)`), o File atual é um `uint16_t` little-endian em `+0x16` (`0x6f573c`); ler `+0x17` retorna sempre `0` (byte alto do `u16`).
+
 
 
 

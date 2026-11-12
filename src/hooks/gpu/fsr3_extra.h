@@ -35,6 +35,11 @@ extern "C" {
 #define FSR3_RENDER_SCALE_MIN       0.5f
 #define FSR3_RENDER_SCALE_MAX       2.0f
 #define FSR3_RENDER_SCALE_DEFAULT   1.0f
+#define FSR3_SCALE_THRESH_1080P     1.38f
+#define FSR3_SCALE_THRESH_1440P     1.80f
+#define FSR3_SCALE_1080P            1.2f
+#define FSR3_SCALE_1440P            1.6f
+#define FSR3_SCALE_1800P            2.0f
 #define FSR3_NS_PER_SEC             1000000000ull
 #define FSR3_FG_MAX_WAIT_NS         20000000ull
 #define FSR3_FG_SLEEP_THRESHOLD_NS  200000ull
@@ -71,6 +76,21 @@ static inline int extra_fsr3_should_jitter_pass(int has_depth, uint32_t rt_w, ui
     if (rt_w < FSR3_MIN_SCENE_WIDTH || rt_h < FSR3_MIN_SCENE_HEIGHT) return 0;
     float aspect = (float)rt_w / (float)rt_h;
     return (aspect >= FSR3_ASPECT_MIN_16_9 && aspect <= FSR3_ASPECT_MAX_16_9) ? 1 : 0;
+}
+
+/* Quantizes >1.0x render scale to exact even-mip multiples of 1600x900 (900->450->225):
+ * 1.2f = 1920x1080, 1.6f = 2560x1440, 2.0f = 3200x1800. */
+static inline float extra_fsr3_internal_3d_scale(float rscale) {
+    if (rscale <= FSR3_RENDER_SCALE_DEFAULT) {
+        return FSR3_RENDER_SCALE_DEFAULT;
+    }
+    if (rscale < FSR3_SCALE_THRESH_1080P) {
+        return FSR3_SCALE_1080P;
+    }
+    if (rscale < FSR3_SCALE_THRESH_1440P) {
+        return FSR3_SCALE_1440P;
+    }
+    return FSR3_SCALE_1800P;
 }
 
 /* Negative MIP LOD bias so 3D samplers select sharper mipmaps matching the output resolution. */
@@ -114,8 +134,11 @@ static inline float extra_fsr3_eff_render_scale(void) {
 }
 
 static inline float extra_fsr3_mip_bias(void) {
-    if (!extra_fsr3_eff_jitter()) return 0.0f;
-    return FSR3_MIP_BIAS_DEFAULT;
+    if (extra_fsr3_eff_jitter() || extra_fsr3_eff_render_scale() > FSR3_RENDER_SCALE_DEFAULT ||
+        g_settings.upscaler == UPSCALE_FSR1 || g_settings.upscaler == UPSCALE_FSR3) {
+        return FSR3_MIP_BIAS_DEFAULT;
+    }
+    return 0.0f;
 }
 
 /* Advances the per-frame Halton(2,3) camera jitter state at the end/start of a game frame. */

@@ -121,7 +121,19 @@ static const char *builtin_src(const char *name, int *stage) {
                "layout(set = 0, binding = 0) uniform sampler2D t;\n"
                "layout(location = 0) in vec2 uv;\n"
                "layout(location = 0) out vec4 o;\n"
-               "void main() { o = vec4(texture(t, uv).rgb, 1.0); }\n";
+               "void main() {\n" // [extra]
+               "  vec2 ts = vec2(textureSize(t, 0));\n"
+               "  vec2 fw = fwidth(uv) * ts;\n"
+               "  if (fw.x > 1.15 || fw.y > 1.15) {\n"
+               "    vec2 d = 0.25 / ts;\n"
+               "    vec3 c = texture(t, uv).rgb * 0.40\n"
+               "           + (texture(t, uv + vec2(-d.x, -d.y)).rgb + texture(t, uv + vec2(d.x, -d.y)).rgb\n"
+               "            + texture(t, uv + vec2(-d.x,  d.y)).rgb + texture(t, uv + vec2(d.x,  d.y)).rgb) * 0.15;\n"
+               "    o = vec4(c, 1.0);\n"
+               "  } else {\n"
+               "    o = vec4(texture(t, uv).rgb, 1.0);\n"
+               "  }\n"
+               "}\n"; // [extra]
     }
     // ---- post passes before the present (Video tab "Anti-aliasing" / "Upscaler"): exec.c vk_present_draw.
     // Each draws a fullscreen triangle into an image the size of its output; push constants: two vec4.
@@ -149,7 +161,7 @@ static const char *builtin_src(const char *name, int *stage) {
                 "layout(push_constant) uniform P { vec4 a; vec4 b; } pc;\n"
                 "#define SMAA_RT_METRICS pc.a\n"
                 "#define SMAA_GLSL_4\n"
-                "#define SMAA_PRESET_HIGH\n";
+                "#define SMAA_PRESET_ULTRA\n"; // [extra]
             static const char *mains[3] = {
                 "layout(set = 0, binding = 0) uniform sampler2D t0;\n"
                 "layout(location = 0) out vec4 o;\n"
@@ -157,7 +169,7 @@ static const char *builtin_src(const char *name, int *stage) {
                 "  vec2 uv = gl_FragCoord.xy * SMAA_RT_METRICS.xy;\n"
                 "  vec4 off[3];\n"
                 "  SMAAEdgeDetectionVS(uv, off);\n"
-                "  o = vec4(SMAALumaEdgeDetectionPS(uv, off, t0), 0.0, 0.0);\n"
+                "  o = vec4(SMAAColorEdgeDetectionPS(uv, off, t0), 0.0, 0.0);\n" // [extra]
                 "}\n",
                 "layout(set = 0, binding = 0) uniform sampler2D t0;\n"
                 "layout(set = 0, binding = 1) uniform sampler2D t1;\n"

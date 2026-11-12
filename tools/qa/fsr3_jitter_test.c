@@ -51,6 +51,19 @@ int main(void) {
     assert(near_eq(extra_fsr3_rcas_scale(1.0f), 1.0f, 1e-4f));
     assert(extra_fsr3_rcas_scale(0.80f) > extra_fsr3_rcas_scale(0.50f));
 
+    /* 6. Internal 3D scale quantization for exact 1600x900 mip-pyramid dimensions */
+    assert(near_eq(extra_fsr3_internal_3d_scale(0.75f), 1.0f, 1e-4f));
+    assert(near_eq(extra_fsr3_internal_3d_scale(1.00f), 1.0f, 1e-4f));
+    assert(near_eq(extra_fsr3_internal_3d_scale(1.25f), 1.2f, 1e-4f));
+    assert(near_eq(extra_fsr3_internal_3d_scale(1.50f), 1.6f, 1e-4f));
+    assert(near_eq(extra_fsr3_internal_3d_scale(2.00f), 2.0f, 1e-4f));
+
+    /* 7. Regression guard: non-FSR3 passes must ALWAYS have 0.0f MIP bias at any ratio
+     * so non-mipmap / lookup-table samplers never sample uninitialized mip levels. */
+    assert(near_eq(extra_fsr3_compute_mip_bias(0.5f, 0), 0.0f, 1e-6f));
+    assert(near_eq(extra_fsr3_compute_mip_bias(1.0f, 0), 0.0f, 1e-6f));
+    assert(near_eq(extra_fsr3_compute_mip_bias(2.0f, 0), 0.0f, 1e-6f));
+
     printf("PASSED: FSR 3.1 Halton(2,3) jitter, 3D pass filter, MIP bias, and RCAS math.\n");
     return 0;
 }

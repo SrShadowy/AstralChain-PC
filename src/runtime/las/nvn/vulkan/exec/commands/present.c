@@ -228,7 +228,8 @@ static VkImageView post_process(VkCommandBuffer cb, TexBackend *b, double ow_d, 
     uint32_t ow = (uint32_t)lround(ow_d * ssaa), oh = (uint32_t)lround(oh_d * ssaa);
     if (ow > 4096) ow = 4096;
     if (oh > 4096) oh = 4096; // [extra]
-    bool fsr = g_settings.upscaler == UPSCALE_FSR1 && (ow > b->width + 1 || oh > b->height + 1);  // (an upscale only)
+    bool ssaa_active = (g_settings.upscaler == UPSCALE_BILINEAR && rscale > 1.0f); // [extra]
+    bool fsr = (g_settings.upscaler == UPSCALE_FSR1 || ssaa_active); // [extra]
     bool fsr3 = g_settings.upscaler == UPSCALE_FSR3; // [extra]
     bool fg = extra_fsr3_eff_framegen() != 0;
     g_extra_fsr3.fg_ready = 0;
@@ -255,7 +256,7 @@ static VkImageView post_process(VkCommandBuffer cb, TexBackend *b, double ow_d, 
         float pe[8] = {iw / ow, ih / oh, 0.5f * iw / ow - 0.5f, 0.5f * ih / oh - 0.5f, iw, ih};
         VkImageView ei[3] = {v};
         post_pass(cb, "easu.frag", ei, 1, e, pe, false);
-        float pr[8] = {exp2f(-0.2f), 0, 0, 0, (float)ow, (float)oh};  // (sharpness 0.2 stops: AMD's default)
+        float pr[8] = {extra_fsr3_rcas_scale(extra_fsr3_eff_sharpness()), 0, 0, 0, (float)ow, (float)oh}; // [extra]
         VkImageView ri_[3] = {post_view(e)};
         post_pass(cb, "rcas.frag", ri_, 1, r, pr, false);
         v = post_view(r);

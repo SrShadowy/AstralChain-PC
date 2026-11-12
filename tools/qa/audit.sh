@@ -214,4 +214,52 @@ if command -v "$PACE_CC" > /dev/null 2>&1; then
     fi
 fi
 
+echo "--- 10. NVN Sampler/Target & FSR 3.1 FG Fluidity Regression Guard ---"
+"$PYTHON" - << 'PYEOF'
+import re, sys
+
+with open("src/runtime/las/nvn/vulkan/device/postprocess.c") as fp:
+    pp = fp.read()
+if "renderer_set_scale(" in pp:
+    print("FAILED: postprocess.c calls renderer_set_scale() which breaks guest NVN TLDS/SUST pixel coordinates.")
+    sys.exit(1)
+
+with open("src/runtime/las/nvn/vulkan/textures.c") as fp:
+    tex = fp.read()
+sv_match = re.search(r"VkImageView vk_storage_view\b.*?\n\}", tex, re.S)
+if not sv_match or "destroy_image" in sv_match.group(0) or "b->scalable =" in sv_match.group(0):
+    print("FAILED: vk_storage_view in textures.c must not destroy images or mutate b->scalable.")
+    sys.exit(1)
+samp_match = re.search(r"VkSampler vk_sampler\b.*?\n\}", tex, re.S)
+if not samp_match:
+    print("FAILED: vk_sampler not found in textures.c.")
+    sys.exit(1)
+samp_body = samp_match.group(0)
+if samp_body.count("si.mipmapMode") != 1:
+    print("FAILED: vk_sampler must set si.mipmapMode exactly once from NVN min_filter (mf == 4 || mf == 5).")
+    sys.exit(1)
+if "d->max_aniso > 1" not in samp_body:
+    print("FAILED: vk_sampler must gate anisotropyEnable on d->max_aniso > 1 to protect LUT/shadow samplers.")
+    sys.exit(1)
+
+with open("src/hooks/gpu/fsr3_shaders.h") as fp:
+    sh = fp.read()
+if "12.0 * texel" not in sh or "n_offs[4]" not in sh or "smoothstep(0.08, 0.25" in sh:
+    print("FAILED: fsr3_shaders.h missing hierarchical optical-flow search or contains legacy c_now snapback.")
+    sys.exit(1)
+
+with open("src/runtime/las/nvn/objects.c") as fp:
+    obj = fp.read()
+pres_match = re.search(r"NVN\(nvnQueuePresentTexture\).*?\n\}", obj, re.S)
+if not pres_match:
+    print("FAILED: nvnQueuePresentTexture not found in objects.c.")
+    sys.exit(1)
+pres_body = pres_match.group(0)
+if pres_body.find("nvn_present_pace") < pres_body.find("aq_push") or pres_body.find("nvn_present_pace") < pres_body.find("backend_present"):
+    print("FAILED: nvn_present_pace must execute AFTER aq_push/backend_present so FG Present #2 paces in parallel.")
+    sys.exit(1)
+
+print("PASSED: NVN render-target/sampler safety & FSR 3.1 FG optical-flow/pacing invariants verified.")
+PYEOF
+
 echo "=== All audits passed successfully! ==="

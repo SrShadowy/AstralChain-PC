@@ -19,6 +19,8 @@
 #define VK_FG_MAX_CYCLE_NS           60000000ull
 #define VK_FG_EMA_PREV_WEIGHT        3ull
 #define VK_FG_EMA_TOTAL_DIV          4ull
+#define VK_FG_MIDPOINT_NUM           42ull
+#define VK_FG_MIDPOINT_DEN           100ull
 #define VK_DEFAULT_RENDER_WIDTH      1920u
 #define VK_SLOW_FRAME_DEFAULT_START  2601L
 #define VK_PIPELINE_CACHE_SETTLE_NS  5000000000ull
@@ -120,14 +122,14 @@ void backend_present(NvnTexture *t) {
                 }
             }
             s_last_p1_ns = now_p1;
-            uint64_t target_p2_ns = now_p1 + (s_smoothed_cycle_ns / 2); // [extra]
+            uint64_t target_p2_ns = now_p1 + ((s_smoothed_cycle_ns * VK_FG_MIDPOINT_NUM) / VK_FG_MIDPOINT_DEN); // [extra]
             g_dev_state.frames++;
             g_extra_fsr3.fg_presenting_interp = VK_FG_STAGE_INTERP; // [extra]
+            extra_fsr3_fg_pace_midpoint(target_p2_ns); // [extra]
             if (vk_frame_begin(black)) {
                 VkCommandBuffer cb2 = vk_cmd();
                 vk_present_draw(cb2, b, (float)vx, (float)vy, (float)vw, (float)vh, pv);
                 ac_overlay_frame();
-                extra_fsr3_fg_pace_midpoint(target_p2_ns); // [extra]
                 vk_frame_end(shot ? "debug/frames/window.png" : NULL);
             } else {
                 renderer_submit();

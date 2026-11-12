@@ -133,8 +133,9 @@ void RenderWindow() {
     ImGui::PushStyleColor(ImGuiCol_ChildBg, AcIrisColors::BgCard);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(14.0f, 10.0f));
 
-    if (ImGui::BeginChild("##ac_discord_preview_card", ImVec2(0, 108.0f), ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar)) {
-        ImVec2 cp = ImGui::GetWindowPos(), cs = ImGui::GetWindowSize();
+    if (ImGui::BeginChild("##ac_discord_preview_card", ImVec2(0, 126.0f), ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar)) {
+        ImVec2 cp = ImGui::GetWindowPos();
+        ImVec2 cs = ImGui::GetWindowSize();
         ac_ui_draw_iris_corners(cp, ImVec2(cp.x + cs.x, cp.y + cs.y), IM_COL32(0, 212, 255, 180), 6.0f, 1.5f);
         ImGui::TextColored(AcIrisColors::Cyan, "JOGANDO UM JOGO");
 
@@ -156,6 +157,10 @@ void RenderWindow() {
 
         if (!act.state.empty()) {
             ImGui::TextColored(AcIrisColors::TextMain, "%s", act.state.c_str());
+        }
+
+        if (!act.small_text.empty()) {
+            ImGui::TextColored(AcIrisColors::CyanDim, "[%s] %s", act.small_image.c_str(), act.small_text.c_str());
         }
 
         if (act.has_time && !act.time_text.empty()) {
