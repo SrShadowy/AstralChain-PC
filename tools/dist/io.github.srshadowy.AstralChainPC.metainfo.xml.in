@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.srshadowy.AstralChainPC</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <name>Astral Chain PC</name>
+  <summary>Native Linux static recompilation port of Astral Chain</summary>
+  <developer_name>@DEVELOPER@</developer_name>
+  <description>
+    <p>
+      Astral Chain PC is an experimental native Linux port of Astral Chain (Nintendo Switch, PlatinumGames) powered by static ARM64-to-C/x86_64 recompilation rather than traditional runtime emulation or JIT.
+    </p>
+    <p>
+      It features a native Vulkan 1.3 NVN renderer, SDL3 window/audio/gamepad integration, AMD FSR 3.1 upscaling and frame generation, an in-game IRIS ImGui overlay, and a Qt6 launcher.
+    </p>
+    <p>
+      No proprietary game assets, firmware, or console keys are included. Users must supply their own legally dumped game files and keys during setup.
+    </p>
+  </description>
+  <launchable type="desktop-id">io.github.srshadowy.AstralChainPC.desktop</launchable>
+  <provides>
+    <binary>astral_chain_launcher</binary>
+  </provides>
+  <url type="homepage">https://github.com/SrShadowy/AstralChain-PC</url>
+  <url type="bugtracker">https://github.com/SrShadowy/AstralChain-PC/issues</url>
+  <categories>
+    <category>Game</category>
+    <category>ActionGame</category>
+  </categories>
+  <releases>
+    <release version="@VERSION@" date="@RELEASE_DATE@">
+      <description>
+        <p>Portable Linux release built for generic x86-64 (glibc 2.35+) with AppStream metadata, Qt6 launcher, Vulkan 1.3 renderer, and SDL3 runtime.</p>
+      </description>
+    </release>
+  </releases>
+  <content_rating type="oars-1.1" />
+</component>

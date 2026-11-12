@@ -1,0 +1,84 @@
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    file \
+    patchelf \
+    desktop-file-utils \
+    squashfs-tools \
+    gcc-12 \
+    g++-12 \
+    cmake \
+    ninja-build \
+    pkg-config \
+    qt6-base-dev \
+    qt6-wayland \
+    libgl-dev \
+    libvulkan-dev \
+    libfreetype-dev \
+    libxkbcommon-dev \
+    libx11-dev \
+    libxext-dev \
+    libxrandr-dev \
+    libxcursor-dev \
+    libxfixes-dev \
+    libxi-dev \
+    libxss-dev \
+    libwayland-dev \
+    wayland-protocols \
+    libpulse-dev \
+    libasound2-dev \
+    libdbus-1-dev \
+    libudev-dev \
+    libegl-dev \
+    python3 \
+    python3-dev \
+    python3-pip \
+    python3-venv \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV CC=/usr/bin/gcc-12 \
+    CXX=/usr/bin/g++-12
+
+# Build portable SDL3 (generic x86-64, zero host CPU extensions)
+ARG SDL3_VERSION=3.2.10
+RUN curl -fsSL "https://github.com/libsdl-org/SDL/archive/refs/tags/release-${SDL3_VERSION}.tar.gz" -o /tmp/sdl3.tar.gz \
+    && mkdir -p /tmp/sdl3-src \
+    && tar -xzf /tmp/sdl3.tar.gz -C /tmp/sdl3-src --strip-components=1 \
+    && cmake -B /tmp/sdl3-build -S /tmp/sdl3-src -GNinja \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX=/opt/sdl3 \
+        -DCMAKE_INSTALL_LIBDIR=lib \
+        -DCMAKE_C_FLAGS="-march=x86-64 -mtune=generic" \
+        -DSDL_TEST_LIBRARY=OFF \
+        -DSDL_TESTS=OFF \
+        -DSDL_EXAMPLES=OFF \
+    && cmake --build /tmp/sdl3-build \
+    && cmake --install /tmp/sdl3-build \
+    && rm -rf /tmp/sdl3.tar.gz /tmp/sdl3-src /tmp/sdl3-build
+
+# Pre-install Python build/runtime dependencies with generic x86-64 flags
+COPY requirements.txt /tmp/requirements.txt
+RUN CFLAGS="-march=x86-64 -mtune=generic" \
+    pip3 install --no-cache-dir --target /opt/pydeps -r /tmp/requirements.txt \
+    && rm -f /tmp/requirements.txt
+
+# Extract appimagetool inside container (avoids requiring FUSE at build time)
+RUN curl -fsSL "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage" -o /tmp/appimagetool.AppImage \
+    && chmod +x /tmp/appimagetool.AppImage \
+    && cd /opt \
+    && /tmp/appimagetool.AppImage --appimage-extract \
+    && mv /opt/squashfs-root /opt/appimagetool \
+    && chmod -R a+rX /opt/appimagetool \
+    && rm -f /tmp/appimagetool.AppImage
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    appstream \
+    librsvg2-bin \
+    libqt6svg6-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace

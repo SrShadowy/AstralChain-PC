@@ -33,11 +33,16 @@ SRC = Path(__file__).resolve().parent.parent.parent
 PROJECT = SRC.parent
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
-TOOLS = PROJECT/'tools'
-GAME = PROJECT/'game'
+from astral_chain.build.native_build import (
+    data_root, host_link_flags, is_portable_build, runtime_include_flags, sdl3_include_flags, target_flags,
+)
+
+DATA_ROOT = data_root(PROJECT)
+TOOLS = DATA_ROOT/'tools'
+GAME = DATA_ROOT/'game'
 WORK = GAME/'work'
-BUILD = PROJECT/'build'
-USERDATA = PROJECT/'userdata'
+BUILD = DATA_ROOT/'build'
+USERDATA = DATA_ROOT/'userdata'
 SETTINGS = USERDATA/'setup.json'
 
 DOWNLOADS = {
@@ -51,7 +56,8 @@ DOWNLOADS = {
 ZIG = TOOLS/'zig'/'zig'
 NSTOOL = TOOLS/'nstool'/'nstool'
 GLSLANG = TOOLS/'glslang'/'bin'/'glslang'
-ROMFS_TOOL = TOOLS/'romfs-build'
+PREBUILT_ROMFS_TOOL = PROJECT/'tools'/'romfs-build'
+ROMFS_TOOL = PREBUILT_ROMFS_TOOL if PREBUILT_ROMFS_TOOL.is_file() else TOOLS/'romfs-build'
 
 LASRECOMP = PROJECT/'third_party'/'LASRecomp'
 # Applied in this order: the Dynamic-FPS timing fixes, then (only with AC_FPS_UNLOCKED=1) the two-word
@@ -153,8 +159,8 @@ def fetch_tools():
         archive.unlink()
     if not ROMFS_TOOL.is_file():
         step('Building the RomFS packer')
-        from astral_chain.build.native_build import runtime_include_flags
-        run([ZIG, 'cc', '-O2', '-target', 'x86_64-linux-gnu', *runtime_include_flags(None, LASRECOMP/'runtime'),
+        run([ZIG, 'cc', '-O2', '-target', 'x86_64-linux-gnu.2.35', '-mcpu=x86_64',
+             *runtime_include_flags(None, LASRECOMP/'runtime'),
              SRC/'runtime'/'tools'/'romfs_tool.c', LASRECOMP/'runtime'/'build'/'romfs_build.c', '-o', ROMFS_TOOL])
         ROMFS_TOOL.chmod(ROMFS_TOOL.stat().st_mode | 0o755)
 
@@ -373,6 +379,7 @@ def fingerprint():
     """Changes to the sources, vendored code or patches make the next launch rebuild."""
     digest = hashlib.sha256()
     digest.update(b'unlocked=1\n' if fps_unlocked() else b'unlocked=0\n')  # (the FPS patch variant)
+    digest.update(b'portable=1\n' if is_portable_build() else b'portable=0\n')
     for root in (SRC/'astral_chain', SRC/'runtime', SRC/'hooks', SRC/'additions', SRC/'resources'/'patches', PROJECT/'third_party'):
         if not root.exists():
             continue
@@ -389,7 +396,7 @@ def guest_fingerprint():
     if UPDATE_EXEFS.exists():
         for path in sorted(UPDATE_EXEFS.rglob('*')):
             if path.is_file():
-                digest.update(str(path.relative_to(PROJECT)).encode())
+                digest.update(str(path.relative_to(DATA_ROOT)).encode())
                 digest.update(path.read_bytes())
     for patch in active_patches():
         if Path(patch).is_file():
@@ -419,7 +426,7 @@ def _refresh_trace_host_runtime(trace_c: Path) -> None:
 def try_fast_relink():
     """Fast incremental relink of the native binary when guest code hasn't changed."""
     round_dir = GAME_BUILD/'round-00'
-    traces_dir = PROJECT/'debug'/'traces'
+    traces_dir = DATA_ROOT/'debug'/'traces'
     traces_dir.mkdir(parents=True, exist_ok=True)
     trace_c = traces_dir/'trace.c' if (traces_dir/'trace.c').is_file() else round_dir/'trace.c'
     unit_json = round_dir/'unit_objects.json'
@@ -434,17 +441,18 @@ def try_fast_relink():
 
     _refresh_trace_host_runtime(trace_c)
     from astral_chain.gpu.nvn_build import build_nvn_objects
-    from astral_chain.build.native_build import FLAGS, run_compiler, runtime_include_flags
+    from astral_chain.build.native_build import FLAGS, run_compiler
     nvn_objects, nvn_link = build_nvn_objects(ZIG, LASRECOMP, BUILD/'objects', 'vulkan')
     vk_headers = PROJECT/'third_party/Vulkan-Headers/include'
     command = [str(ZIG.resolve()), 'cc', *FLAGS,
+               *sdl3_include_flags(PROJECT),
                '-I', str(SRC), '-I', str(vk_headers),
                *runtime_include_flags(SRC/'runtime', LASRECOMP/'runtime'),
                str(trace_c),
                *(str(obj) for obj in unit_objs),
                *(str(obj) for obj in nvn_objects),
                *nvn_link,
-               '-lvulkan', '-lSDL3', '-lpthread', '-lm', '-ldl',
+               *host_link_flags(PROJECT),
                '-Wl,-z,stack-size=67108864',
                '-o', str(round_dir/'trace')]
     res = run_compiler(command)
@@ -489,7 +497,7 @@ def build_game():
     for patch in active_patches():
         command += ['--patch', patch]
     command.append('--build-only')
-    result = subprocess.run([str(c) for c in command], cwd=PROJECT, env=env)
+    result = subprocess.run([str(c) for c in command], cwd=DATA_ROOT, env=env)
     if result.returncode or not (GAME_BUILD/'round-00'/'trace').is_file():
         raise SetupError('The game build failed (see the messages above).')
     FINGERPRINT.write_text(fingerprint() + '\n', encoding='ascii')
@@ -518,7 +526,7 @@ def prepare_bc7():
     if stamp.is_file() and stamp.read_text(encoding='ascii').strip() == want:
         return
     step('Preparing BC7 textures (about 12 minutes and 16 GB of disk space, once)')
-    free = shutil.disk_usage(PROJECT).free / 1e9
+    free = shutil.disk_usage(DATA_ROOT).free / 1e9
     if free < 20:
         print(f'  Skipped: about 20 GB free disk space needed ({free:.0f} GB free). The game converts its textures on '
               'the GPU instead.')
@@ -552,7 +560,7 @@ def setup_install_dir(target_dir):
         return
     target = Path(target_dir).resolve()
     target.mkdir(parents=True, exist_ok=True)
-    game_link = PROJECT / 'game'
+    game_link = DATA_ROOT / 'game'
     if game_link.resolve() != target:
         if game_link.is_symlink():
             game_link.unlink()
@@ -572,11 +580,16 @@ def main():
     parser.add_argument('--keys', type=Path, help='prod.keys')
     parser.add_argument('--install-dir', type=Path, help='custom installation directory for game data and romfs')
     parser.add_argument('--keep-temp', action='store_true', help='keep the extracted NCAs and RomFS folder')
+    parser.add_argument('--portable', action='store_true', help='compile binaries for generic x86-64 without host CPU features')
     parser.add_argument('--rebuild-if-stale', action='store_true', help='(launcher) rebuild only if sources changed')
     parser.add_argument('--force-shaders', action='store_true',
                         help='(with --rebuild-if-stale) check every shader and compile for the GPU again')
     parser.add_argument('--status', action='store_true', help='(launcher) print the setup and shader state as JSON')
     args = parser.parse_args()
+    if args.portable:
+        os.environ['AC_PORTABLE_BUILD'] = '1'
+        from astral_chain.build import native_build
+        native_build.FLAGS[:] = target_flags(optimize=False)
     if args.status:
         print_status()
         return
@@ -602,9 +615,9 @@ def main():
             prepare_shaders()
             prepare_bc7()
             return
-        GAME.mkdir(exist_ok=True)
+        GAME.mkdir(parents=True, exist_ok=True)
         if not game_data_ready():
-            free_target = GAME.resolve() if GAME.exists() else PROJECT
+            free_target = GAME.resolve() if GAME.exists() else DATA_ROOT
             free = shutil.disk_usage(free_target).free / 1e9
             if free < FREE_SPACE_GB:
                 raise SetupError(f'Setup needs about {FREE_SPACE_GB} GB free on this drive ({free:.0f} GB free).')

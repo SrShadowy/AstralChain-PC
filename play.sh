@@ -1,11 +1,16 @@
 #!/usr/bin/env bash
 # Astral Chain PC: starts the game on Linux under SDL3/Vulkan.
 set -e
-PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$PROJECT_ROOT"
+APP_ROOT="${AC_APP_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
+DATA_ROOT="${AC_DATA_DIR:-$APP_ROOT}"
+cd "$DATA_ROOT"
 
-if [ -f ".venv/bin/python" ]; then
-    PY_EXEC=".venv/bin/python"
+if [ -n "${AC_PYTHON:-}" ] && [ -x "$AC_PYTHON" ]; then
+    PY_EXEC="$AC_PYTHON"
+elif [ -x "$APP_ROOT/usr/bin/python3" ]; then
+    PY_EXEC="$APP_ROOT/usr/bin/python3"
+elif [ -f "$DATA_ROOT/.venv/bin/python" ]; then
+    PY_EXEC="$DATA_ROOT/.venv/bin/python"
 elif command -v python3 >/dev/null 2>&1; then
     PY_EXEC="python3"
 else
@@ -40,11 +45,14 @@ if [ "${#ENV_ITEMS[@]}" -gt 0 ]; then
     done
 fi
 
-export PYTHONPATH="$PROJECT_ROOT/src${PYTHONPATH:+:$PYTHONPATH}"
+if [ -d "$APP_ROOT/usr/lib" ]; then
+    export LD_LIBRARY_PATH="$APP_ROOT/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+fi
+export PYTHONPATH="$APP_ROOT/src${PYTHONPATH:+:$PYTHONPATH}"
 "$PY_EXEC" -m astral_chain.build.setup_game --rebuild-if-stale
 
 if [ "$HAS_ENV" -eq 1 ]; then
-    exec ./src/astral_chain/tools/run_guarded.sh --run build/game --seconds 604800 "$@"
+    exec "$APP_ROOT/src/astral_chain/tools/run_guarded.sh" --run build/game --seconds 604800 "$@"
 else
-    exec ./src/astral_chain/tools/run_guarded.sh --run build/game --seconds 604800 --env "$DEFAULT_ENV" "$@"
+    exec "$APP_ROOT/src/astral_chain/tools/run_guarded.sh" --run build/game --seconds 604800 --env "$DEFAULT_ENV" "$@"
 fi

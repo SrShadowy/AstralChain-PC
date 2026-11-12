@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
 # Astral Chain PC: guarded game execution on Linux.
 set -e
-PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-cd "$PROJECT_ROOT"
+APP_ROOT="${AC_APP_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)}"
+DATA_ROOT="${AC_DATA_DIR:-$APP_ROOT}"
+cd "$DATA_ROOT"
+
+if [ -d "$APP_ROOT/usr/lib" ]; then
+    export LD_LIBRARY_PATH="$APP_ROOT/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+fi
 
 RUN_DIR="build/game"
 SECONDS_LIMIT=604800

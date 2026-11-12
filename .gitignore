@@ -57,9 +57,12 @@ ninja.log
 # ==============================================================================
 # Python Virtual Environments, Tools & Caches
 # ==============================================================================
+/dist/
 /tools/*
 !/tools/qa/
 !/tools/qa/**
+!/tools/dist/
+!/tools/dist/**
 /.venv/
 /venv/
 /env/

@@ -22,7 +22,7 @@ import subprocess
 import sys
 
 from .shader_build import prepare_translator
-from astral_chain.build.native_build import runtime_include_flags
+from astral_chain.build.native_build import data_root, host_link_flags, runtime_include_flags, sdl3_include_flags, target_flags
 
 SRC = Path(__file__).resolve().parent.parent.parent
 PROJECT = SRC.parent
@@ -125,8 +125,9 @@ def extract_shaders(romfs: Path, out: Path) -> int:
 
 
 def tool_digest() -> str:
-    """Identity of shader_precompile.exe: its sources and the translator patches."""
+    """Identity of shader_precompile: its sources, compiler flags and translator patches."""
     digest = hashlib.sha256()
+    digest.update(' '.join(target_flags(optimize=True)).encode())
     for path in TOOL_SOURCES + (SRC/'astral_chain'/'gpu'/'shader_build.py', RUNTIME/'las'/'las_compat.h',
                                 LASRECOMP/'runtime'/'nvn'/'maxwell'/'translate.c'):
         digest.update(path.read_bytes())
@@ -141,14 +142,16 @@ def build_tool(zig: Path, build: Path) -> Path:
         return exe
     translator = prepare_translator(LASRECOMP, folder/'translator')
     las = RUNTIME/'las'
-    command = [str(zig), 'cc', '-target', 'native', '-O2', '-include', str(las/'las_compat.h'),
+    flags = target_flags(optimize=True)
+    command = [str(zig), 'cc', *flags, '-include', str(las/'las_compat.h'),
+               *sdl3_include_flags(PROJECT), # [extra]
                '-I', str(SRC), # [extra]
                '-I', str(PROJECT/'third_party'/'Vulkan-Headers'/'include'), # [extra]
                '-I', str(las), '-I', str(las/'shim'),
                *runtime_include_flags(None, LASRECOMP/'runtime'),
                '-I', str(LASRECOMP/'runtime'/'nvn'/'maxwell'),
                *map(str, TOOL_SOURCES), str(translator),
-               '-lvulkan', '-lSDL3', '-lpthread', '-ldl', '-lm', # [extra]
+               *host_link_flags(PROJECT), # [extra]
                '-Wl,-z,stack-size=67108864', '-o', str(exe)]
     result = subprocess.run(command, capture_output=True, text=True)
     if result.returncode:
@@ -179,7 +182,7 @@ def precompile(tool: Path, shaders: Path, game_build: Path, glslang: Path) -> No
     for leftover in (game_build/'cache'/'spirv').glob('*.spv.*'):  # (stores whose rename failed, before spirv_cache.c retried)
         leftover.unlink(missing_ok=True)
     threads = max(1, (os.cpu_count() or 4) - 2)
-    process = subprocess.Popen([str(tool), str(shaders), str(threads), *records], cwd=PROJECT, env=env,
+    process = subprocess.Popen([str(tool), str(shaders), str(threads), *records], cwd=data_root(PROJECT), env=env,
                                stdout=subprocess.PIPE, text=True)
     total = 0
     for line in process.stdout:
@@ -316,7 +319,7 @@ def warm_gpu(game_build: Path, shaders: Path, glslang: Path) -> None:
     old = _warmed_record_sizes(game_build)
     if old:
         env.update(AC_GPU_WARM_PREV=_warm_state(game_build, record_sizes=old), AC_GPU_WARM_FROM=f'{old[0]} {old[1]}')
-    process = subprocess.Popen([str(exe)], cwd=PROJECT, env=env, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+    process = subprocess.Popen([str(exe)], cwd=data_root(PROJECT), env=env, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                                text=True, errors='replace')
     shown = False
     try:

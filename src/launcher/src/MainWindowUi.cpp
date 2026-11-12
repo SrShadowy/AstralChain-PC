@@ -1,6 +1,7 @@
 #include "MainWindow.hpp"
 #include "LogWidget.hpp"
 #include "CustomButton.hpp"
+#include "LauncherIcons.hpp"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -35,22 +36,39 @@ void MainWindow::setupUi()
     title->setAlignment(Qt::AlignLeft);
     leftLayout->addWidget(title);
 
-    auto* subtitle = new QLabel("LINUX NATIVE  ·  VULKAN 1.3  ·  FSR 3.1", m_sidePanel);
+    auto* subtitle = new QLabel(
+        QStringLiteral("LINUX NATIVE  ·  VULKAN 1.3  ·  FSR 3.1  ·  v%1").arg(AC_APP_VERSION),
+        m_sidePanel
+    );
     subtitle->setObjectName("subtitleLabel");
     leftLayout->addWidget(subtitle);
 
     leftLayout->addSpacing(14);
 
-    m_playBtn = new CustomButton("▶  JOGAR", m_sidePanel, true /* isPrimary */);
+    const QColor normalIcon("#dff2fc");
+    const QColor hoverIcon("#08101c");
+    const QColor secondaryIcon("#7ee8ff");
+
+    m_playBtn = new CustomButton(" JOGAR", m_sidePanel, true /* isPrimary */);
+    m_playBtn->setIcon(makeLauncherIcon("play", normalIcon, hoverIcon, kDefaultUiIconPx));
     m_playBtn->setFixedHeight(52);
     leftLayout->addWidget(m_playBtn);
     leftLayout->addSpacing(10);
 
-    m_diagBtn = new CustomButton("  Jogar (Diagnósticos)", m_sidePanel);
-    m_setupBtn = new CustomButton("  Configurar Jogo", m_sidePanel);
-    m_shadersBtn = new CustomButton("  Compilar Shaders", m_sidePanel);
-    m_settingsBtn = new CustomButton("  Configurações", m_sidePanel);
-    m_controlsBtn = new CustomButton("  Controles", m_sidePanel);
+    m_diagBtn = new CustomButton(" Jogar (Diagnósticos)", m_sidePanel);
+    m_diagBtn->setIcon(makeLauncherIcon("terminal", secondaryIcon, hoverIcon, kDefaultUiIconPx));
+
+    m_setupBtn = new CustomButton(" Configurar Jogo", m_sidePanel);
+    m_setupBtn->setIcon(makeLauncherIcon("setup", secondaryIcon, hoverIcon, kDefaultUiIconPx));
+
+    m_shadersBtn = new CustomButton(" Compilar Shaders", m_sidePanel);
+    m_shadersBtn->setIcon(makeLauncherIcon("shaders", secondaryIcon, hoverIcon, kDefaultUiIconPx));
+
+    m_settingsBtn = new CustomButton(" Configurações", m_sidePanel);
+    m_settingsBtn->setIcon(makeLauncherIcon("settings", secondaryIcon, hoverIcon, kDefaultUiIconPx));
+
+    m_controlsBtn = new CustomButton(" Controles", m_sidePanel);
+    m_controlsBtn->setIcon(makeLauncherIcon("input", secondaryIcon, hoverIcon, kDefaultUiIconPx));
 
     for (auto* btn : {m_diagBtn, m_setupBtn, m_shadersBtn, m_settingsBtn, m_controlsBtn}) {
         btn->setFixedHeight(42);

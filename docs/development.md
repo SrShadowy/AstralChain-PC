@@ -269,3 +269,26 @@ cmake -B build-launcher -S extra/ui/launcher -GNinja && cmake --build build-laun
 # 5. Formatação de código
 clang-format -i $(git ls-files 'extra/*.cpp' 'extra/*.h' 'extra/*.c')
 ```
+
+---
+
+## 10. Empacotamento Portável para Distribuição Linux (`.tar.gz` e `.AppImage`)
+
+Para gerar uma build limpa em container `ubuntu:22.04` (baseline `glibc 2.35`, CPU alvo genérica `x86-64` sem instruções específicas da máquina do desenvolvedor) contendo o launcher Qt6, runtime SDL3, cabeçalhos, Python 3.10 e utilitários sem nenhum arquivo de configuração, save ou dump:
+
+```bash
+./tools/dist/build_dist.sh
+```
+
+Artefatos gerados em `dist/` a partir do arquivo raiz [`VERSION`](../VERSION):
+- `dist/AstralChain-PC-<versão>-linux-x86_64.tar.gz`: Pacote enxuto e portável com scripts, código-fonte, metadados AppStream/ícones `hicolor` e dependências embarcadas (`usr/`, `tools/romfs-build`, `src/`, `third_party/`).
+- `dist/AstralChain-PC-<versão>-linux-x86_64.AppImage`: Executável único autossuficiente com identificação completa (`io.github.srshadowy.AstralChainPC.desktop`, `.metainfo.xml`/`.appdata.xml`, `.DirIcon` e ícones multi-resolução para **Gear Lever** e shells Linux) que armazena os dados do usuário e compilações por padrão em `~/.local/share/AstralChain-PC` (customizável via `AC_DATA_DIR`).
+
+### Variáveis de Ambiente de Portabilidade
+| Variável | Valores / Padrão | Efeito |
+|---|---|---|
+| `AC_PORTABLE_BUILD` | `0` (padrão) / `1` | Força alvo genérico (`-target x86_64-linux-gnu.2.35 -mcpu=x86_64 -mcx16`) na compilação do jogo/utilitários via Zig Clang (automático ao rodar por `AppRun` ou com `--portable`) |
+| `AC_APP_DIR` | diretório raiz | Sobrescreve o diretório somente leitura onde residem `src/`, `third_party/` e `usr/` |
+| `AC_DATA_DIR` | raiz local / XDG | Define o diretório gravável para `tools/`, `game/`, `build/`, `userdata/` e `debug/` |
+| `AC_PYTHON` | caminho Python | Seleciona explicitamente o interpretador Python utilizado pelos scripts e pelo Launcher Qt6 |
+

@@ -27,7 +27,10 @@ from astral_chain.build.romfs_image import inspect_romfs, runtime_constants
 from .static_targets import plt_got, import_hints, switch_targets, initialization_targets, adjacent_code_targets, relocated_code_targets, CODE_POINTER_RADIUS
 from .block_codegen import emit_blocks
 from .lift_extensions import lift
-from astral_chain.build.native_build import split_dispatch, build as cached_build, run_compiler, runtime_include_flags
+from astral_chain.build.native_build import (
+    split_dispatch, build as cached_build, run_compiler, runtime_include_flags,
+    data_root, target_flags, sdl3_include_flags, host_link_flags,
+)
 from astral_chain.gpu.nvn_build import build_nvn_objects, GLSLANG
 
 
@@ -358,7 +361,7 @@ def main():
     parser.add_argument('--direct-calls',action='store_true',help='With --lean: BL to a translated page calls its function directly')
     parser.add_argument('--jumps',action='store_true',help='With --lean: branches within a page jump to their case directly')
     parser.add_argument('--patch',type=Path,action='append',default=[],help='pchtxt code patch for main (enabled sections; checked against its build ID)')
-    parser.add_argument('--account-profile',type=Path,default=PROJECT/'userdata/account.json',help='Persistent local PC profile JSON, created once if missing')
+    parser.add_argument('--account-profile',type=Path,default=data_root(PROJECT)/'userdata/account.json',help='Persistent local PC profile JSON, created once if missing')
     parser.add_argument('--language',choices=LANGUAGES,default='en-GB',help='Preferred language; falls back to supported English or first supported locale')
     args = parser.parse_args()
     if args.restrict:
@@ -376,7 +379,7 @@ def main():
     if args.optimize:
         # Shared list: native_build and nvn_build key their caches on it.
         from astral_chain.build import native_build
-        native_build.FLAGS[:]=['-target','native','-O2','-mcpu=x86_64_v3','-mcx16']
+        native_build.FLAGS[:] = target_flags(optimize=True)
     if args.nvn_backend and not args.nvn_hle:
         parser.error('--nvn-backend requires --nvn-hle')
     if args.build=='cached' and args.dispatch!='pages':
@@ -422,7 +425,7 @@ def main():
     output = args.output.resolve()
     memory = MemoryMap.from_image(image, process['stack_size'])
     targets = [m.base+r[0] for m in image.modules for r in m.nso.relocs if r[1]]
-    traces_dir = PROJECT/'debug'/'traces'
+    traces_dir = data_root(PROJECT)/'debug'/'traces'
     traces_dir.mkdir(parents=True, exist_ok=True)
     (traces_dir/'relocation-targets.bin').write_bytes(struct.pack(f'<{len(targets)}Q',*targets))
     constants = f'#define STACK_BASE {STACK_BASE}ull\n#define STACK_SIZE {process["stack_size"]}ull\n#define MAIN_PRIORITY {process["priority"]}\n#define MAIN_CORE {process["default_core"]}\n#define STOP_FIRST_SVC {int(args.stop_first_svc)}\n#define SYSTEM_RESOURCE_SIZE {process["system_resource_size"]}ull\n'
@@ -527,9 +530,9 @@ execute(c); return 0; }}
         folder = output/f'round-{iteration:02d}'
         folder.mkdir()
         vk_headers = PROJECT/'third_party/Vulkan-Headers/include' # [extra]
-        command = [str(args.compiler.resolve()), 'cc', '-target', 'native', '-O1','-mcx16', # [extra]
-                   '-I', str(SRC), '-I', str(vk_headers), *runtime_include_flags(SRC/'runtime', reference/'runtime'), str(folder/'trace.c'), *(str(o) for o in nvn_objects), *nvn_link, # [extra]
-                   '-lvulkan', '-lSDL3', '-lpthread', '-lm', '-ldl', '-Wl,-z,stack-size=67108864', '-o', str(folder/'trace')]
+        command = [str(args.compiler.resolve()), 'cc', *target_flags(optimize=args.optimize), # [extra]
+                   *sdl3_include_flags(PROJECT), '-I', str(SRC), '-I', str(vk_headers), *runtime_include_flags(SRC/'runtime', reference/'runtime'), str(folder/'trace.c'), *(str(o) for o in nvn_objects), *nvn_link, # [extra]
+                   *host_link_flags(PROJECT), '-Wl,-z,stack-size=67108864', '-o', str(folder/'trace')]
         compile_started=perf_counter()
         try:
             if units is not None:
@@ -549,6 +552,9 @@ execute(c); return 0; }}
         if compile_result.returncode:
             checkpoint('compile-failed',translation,compile_result.returncode)
         compile_result.check_returncode()
+        glslang_path = data_root(PROJECT)/'tools'/'glslang'/'bin'/'glslang'
+        if not glslang_path.is_file():
+            glslang_path = GLSLANG
         if args.build_only:
             if args.nvn_hle:  # build-specific run variables for run_guarded.sh (the SDK's base follows main's size)
                 hle=';'.join(f'{name}={image.symbols[name][0]:#x}' for name in HLE_SYMBOLS if name in image.symbols)
@@ -556,7 +562,7 @@ execute(c); return 0; }}
                 if args.nvn_backend:
                     env_text += f"AC_NVN_HLE_LINKED={args.nvn_backend}\n"
                 if args.nvn_backend == 'vulkan':
-                    env_text += f"AC_GLSLANG={GLSLANG}\n"
+                    env_text += f"AC_GLSLANG={glslang_path}\n"
                 (output/'run-env.txt').write_text(env_text, encoding='utf-8')
             print(f'Built {folder/"trace"} (compile {compile_seconds:.1f}s); not run',flush=True)
             checkpoint('built',translation)
@@ -577,9 +583,9 @@ execute(c); return 0; }}
                 if args.nvn_backend:
                     run_env['AC_NVN_HLE_LINKED']=args.nvn_backend
                 if args.nvn_backend=='vulkan':
-                    run_env['AC_GLSLANG']=str(GLSLANG)
+                    run_env['AC_GLSLANG']=str(glslang_path)
                 run_env['AC_HLE_SYMBOLS']=';'.join(f'{name}={image.symbols[name][0]:#x}' for name in HLE_SYMBOLS if name in image.symbols)
-                fonts=Path(__file__).resolve().parent.parent.parent/'userdata/fonts'
+                fonts=data_root(PROJECT)/'userdata/fonts'
                 for variable,stems in (('AC_FONT',('nintendo_udsg-r_std_003','nintendo_udsgr_std_003')),('AC_FONT_EXT',('nintendo_ext_003',))):
                     found=[fonts/f'{stem}{suffix}' for stem in stems for suffix in ('.bfttf','.ttf') if (fonts/f'{stem}{suffix}').is_file()]
                     if found:

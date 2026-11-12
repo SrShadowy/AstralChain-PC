@@ -4,6 +4,7 @@
 #include <QPushButton>
 #include <QPropertyAnimation>
 #include <QCursor>
+#include <QIcon>
 
 class QTimer;
 class QEnterEvent;
@@ -31,6 +32,7 @@ public:
 
     void setText(const QString& text) { m_button->setText(text); }
     QString text() const { return m_button->text(); }
+    void setIcon(const QIcon& icon);
 
     void setEnabled(bool enabled);
     bool isEnabled() const { return QWidget::isEnabled() && m_button->isEnabled(); }
@@ -63,11 +65,13 @@ private:
     QPropertyAnimation* m_animation{nullptr};
     QPropertyAnimation* m_pulseAnimation{nullptr};
     QTimer* m_leaveTimer{nullptr};
+    QIcon m_icon;
 
     qreal m_progress{0.0};
     qreal m_pulse{0.0};
     bool m_isPrimary{false};
     bool m_isDanger{false};
+    bool m_isHovered{false};
 
     int m_buttonW{0};
     int m_buttonH{0};

@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=Astral Chain PC
+GenericName=Static Recompilation Port
+Comment=Native Linux static recompilation port of Astral Chain (Vulkan 1.3, SDL3, Qt6)
+Exec=astral_chain_launcher
+Icon=io.github.srshadowy.AstralChainPC
+Categories=Game;ActionGame;
+Keywords=Astral Chain;Switch;Static Recompilation;Vulkan;PlatinumGames;
+Terminal=false
+StartupNotify=true
+StartupWMClass=astral_chain_launcher
+X-AppImage-Name=Astral Chain PC
+X-AppImage-Version=@VERSION@

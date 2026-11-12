@@ -1,13 +1,38 @@
-"""Optional cached Windows object build for generated diagnostic code pages."""
+"""Optional cached object build for generated code pages and host runtime."""
 from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import json
+import os
 from pathlib import Path
 import subprocess
 
 from astral_chain.shared.containers import FormatError
 
-FLAGS=['-target','native','-O1','-mcx16']
+PORTABLE_ZIG_TARGET = 'x86_64-linux-gnu.2.35'
+PORTABLE_CPU_TARGET = 'x86_64'
+
+
+def is_portable_build():
+    return os.environ.get('AC_PORTABLE_BUILD', '').strip().lower() in ('1', 'true', 'on', 'yes')
+
+
+def data_root(app_root):
+    override = os.environ.get('AC_DATA_DIR', '').strip()
+    return Path(override).resolve() if override else Path(app_root).resolve()
+
+
+def target_flags(optimize=False):
+    opt = '-O2' if optimize else '-O1'
+    if is_portable_build():
+        target = os.environ.get('AC_ZIG_TARGET', PORTABLE_ZIG_TARGET)
+        cpu = os.environ.get('AC_CPU_TARGET', PORTABLE_CPU_TARGET)
+        return ['-target', target, opt, f'-mcpu={cpu}', '-mcx16']
+    if optimize:
+        return ['-target', 'native', '-O2', '-mcpu=x86_64_v3', '-mcx16']
+    return ['-target', 'native', opt, '-mcx16']
+
+
+FLAGS = target_flags(optimize=False)
 SUPPORT='''#include "cpu.h"
 extern __thread uint64_t native_executed_steps;  /* per host thread (parallel mode: a shared counter bounced between cores) */
 extern const uint64_t native_instruction_limit;
@@ -79,6 +104,49 @@ def runtime_include_flags(astral=None,reference=None):
     return flags
 
 
+def sdl3_include_flags(app_root):
+    env_inc = os.environ.get('AC_SDL3_INCLUDE_DIR', '').strip()
+    candidates = [Path(env_inc)] if env_inc else []
+    candidates.append(Path(app_root) / 'usr' / 'include')
+    for inc in candidates:
+        if (inc / 'SDL3' / 'SDL.h').is_file():
+            return ['-isystem', str(inc)]
+    return []
+
+
+def host_link_flags(app_root):
+    flags = []
+    lib_search = ('/usr/lib/x86_64-linux-gnu', '/usr/lib64', '/usr/lib')
+    has_vk_dev = any((Path(d) / 'libvulkan.so').exists() for d in lib_search)
+    if has_vk_dev:
+        flags.append('-lvulkan')
+    else:
+        vk_dir = next((d for d in lib_search if (Path(d) / 'libvulkan.so.1').exists()), None)
+        if vk_dir:
+            flags += ['-L', vk_dir, '-l:libvulkan.so.1']
+        else:
+            flags.append('-lvulkan')
+
+    env_lib = os.environ.get('AC_SDL3_LIB_DIR', '').strip()
+    candidates = [Path(env_lib)] if env_lib else []
+    candidates.append(Path(app_root) / 'usr' / 'lib')
+    sdl_added = False
+    for lib_dir in candidates:
+        if (lib_dir / 'libSDL3.so').exists():
+            flags += ['-L', str(lib_dir), '-lSDL3', f'-Wl,-rpath,{lib_dir}']
+            sdl_added = True
+            break
+        if (lib_dir / 'libSDL3.so.0').exists():
+            flags += ['-L', str(lib_dir), '-l:libSDL3.so.0', f'-Wl,-rpath,{lib_dir}']
+            sdl_added = True
+            break
+    if not sdl_added:
+        flags.append('-lSDL3')
+
+    flags += ['-lpthread', '-lm', '-ldl']
+    return flags
+
+
 def build(compiler,reference,units,source,folder,cache,workers=4,extra_objects=()):
     """Cache only complete verified objects. Host runtime is rebuilt every round.
 
@@ -115,14 +183,14 @@ def build(compiler,reference,units,source,folder,cache,workers=4,extra_objects=(
     src_root=Path(__file__).resolve().parent.parent.parent
     root=src_root.parent
     vk_headers=root/'third_party/Vulkan-Headers/include'
-    command=[str(compiler),'cc',*FLAGS,'-I',str(src_root),'-I',str(vk_headers),*runtime_include_flags(src_root/'runtime', reference/'runtime'),str(src),
+    command=[str(compiler),'cc',*FLAGS,*sdl3_include_flags(root),'-I',str(src_root),'-I',str(vk_headers),*runtime_include_flags(src_root/'runtime', reference/'runtime'),str(src),
              *(str(obj) for _,obj,_ in compiled),*(str(obj) for obj in extra_objects),
-             '-lvulkan','-lSDL3','-lpthread','-lm','-ldl',
+             *host_link_flags(root),
              '-Wl,-z,stack-size=67108864',  # 64 MB main-thread stack: direct calls nest page functions along guest calls
              '-o',str(folder/'trace')]
     result=run_compiler(command)
     (folder/'compiler.log').write_text(result.stdout+result.stderr,encoding='utf-8')
-    traces_dir=root/'debug'/'traces';traces_dir.mkdir(parents=True,exist_ok=True)
+    traces_dir=data_root(root)/'debug'/'traces';traces_dir.mkdir(parents=True,exist_ok=True)
     (traces_dir/'trace.c').write_text(source,encoding='utf-8')
     (traces_dir/'compiler.log').write_text(result.stdout+result.stderr,encoding='utf-8')
     stats={'units':len(compiled),'reused':sum(hit for _,_,hit in compiled),'compiled':sum(not hit for _,_,hit in compiled)}
@@ -130,3 +198,4 @@ def build(compiler,reference,units,source,folder,cache,workers=4,extra_objects=(
     (folder/'unit_objects.json').write_text(json.dumps([str(obj.resolve()) for _,obj,_ in compiled],indent=2)+'\n',encoding='utf-8')
     result.check_returncode()
     return stats
+

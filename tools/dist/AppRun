@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+APPDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+if [ -z "${AC_DATA_DIR:-}" ]; then
+    if [ -n "${APPIMAGE:-}" ] && [ -d "${APPIMAGE}.home" ]; then
+        AC_DATA_DIR="${APPIMAGE}.home"
+    else
+        AC_DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/AstralChain-PC"
+    fi
+fi
+
+mkdir -p "$AC_DATA_DIR"
+cd "$AC_DATA_DIR"
+
+export AC_APP_DIR="$APPDIR"
+export AC_DATA_DIR="$AC_DATA_DIR"
+export AC_PORTABLE_BUILD="${AC_PORTABLE_BUILD:-1}"
+export AC_SDL3_INCLUDE_DIR="$APPDIR/usr/include"
+export AC_SDL3_LIB_DIR="$APPDIR/usr/lib"
+export LD_LIBRARY_PATH="$APPDIR/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export QT_PLUGIN_PATH="$APPDIR/usr/plugins"
+export QT_QPA_PLATFORM_PLUGIN_PATH="$APPDIR/usr/plugins/platforms"
+if [ -d "$APPDIR/usr/lib/python3.10" ]; then
+    export PYTHONHOME="$APPDIR/usr"
+fi
+if [ -x "$APPDIR/usr/bin/python3" ]; then
+    export AC_PYTHON="$APPDIR/usr/bin/python3"
+fi
+export PYTHONPATH="$APPDIR/src${PYTHONPATH:+:$PYTHONPATH}"
+
+exec "$APPDIR/usr/bin/astral_chain_launcher" "$@"

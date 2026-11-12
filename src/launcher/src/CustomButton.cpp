@@ -102,6 +102,19 @@ void CustomButton::setDangerMode(bool danger)
     }
 }
 
+void CustomButton::setIcon(const QIcon& icon)
+{
+    m_icon = icon;
+    if (m_icon.isNull()) {
+        m_button->setIcon(QIcon());
+        return;
+    }
+    constexpr int kButtonIconPx = 15;
+    m_button->setIconSize(QSize(kButtonIconPx, kButtonIconPx));
+    const QIcon::Mode mode = (m_isHovered && !m_isDanger) ? QIcon::Active : QIcon::Normal;
+    m_button->setIcon(QIcon(m_icon.pixmap(kButtonIconPx, mode)));
+}
+
 void CustomButton::setCursor(const QCursor& cursor)
 {
     QWidget::setCursor(cursor);
@@ -163,6 +176,11 @@ void CustomButton::updateButtonStyle()
 
 void CustomButton::animate(bool hovered)
 {
+    m_isHovered = hovered;
+    if (!m_icon.isNull()) {
+        setIcon(m_icon);
+    }
+
     m_button->setProperty("hovered", hovered);
     m_button->style()->unpolish(m_button);
     m_button->style()->polish(m_button);

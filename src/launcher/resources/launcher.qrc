@@ -1,0 +1,24 @@
+<RCC>
+    <qresource prefix="/">
+        <file alias="icons/astral-chain-pc.png">astral-chain-pc.png</file>
+        <file alias="icons/audio.svg">icons/audio.svg</file>
+        <file alias="icons/backend.svg">icons/backend.svg</file>
+        <file alias="icons/channels.svg">icons/channels.svg</file>
+        <file alias="icons/copy.svg">icons/copy.svg</file>
+        <file alias="icons/folder.svg">icons/folder.svg</file>
+        <file alias="icons/gpu.svg">icons/gpu.svg</file>
+        <file alias="icons/hourglass.svg">icons/hourglass.svg</file>
+        <file alias="icons/input.svg">icons/input.svg</file>
+        <file alias="icons/logic.svg">icons/logic.svg</file>
+        <file alias="icons/play.svg">icons/play.svg</file>
+        <file alias="icons/save.svg">icons/save.svg</file>
+        <file alias="icons/settings.svg">icons/settings.svg</file>
+        <file alias="icons/setup.svg">icons/setup.svg</file>
+        <file alias="icons/shaders.svg">icons/shaders.svg</file>
+        <file alias="icons/stop.svg">icons/stop.svg</file>
+        <file alias="icons/terminal.svg">icons/terminal.svg</file>
+        <file alias="icons/trash.svg">icons/trash.svg</file>
+        <file alias="icons/video.svg">icons/video.svg</file>
+        <file alias="icons/warning.svg">icons/warning.svg</file>
+    </qresource>
+</RCC>

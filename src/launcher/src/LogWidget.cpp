@@ -1,4 +1,5 @@
 #include "LogWidget.hpp"
+#include "LauncherIcons.hpp"
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -18,6 +19,10 @@
 #include <QDateTime>
 
 namespace ac::launcher {
+
+namespace {
+constexpr int kLogIconSizePx = 15;
+} // namespace
 
 LogWidget::LogWidget(QWidget* parent)
     : QWidget(parent)
@@ -44,7 +49,7 @@ void LogWidget::setupUi()
     topToolbar->setContentsMargins(0, 0, 0, 0);
     topToolbar->setSpacing(8);
 
-    m_statusBadge = new QLabel("○ Inativo", this);
+    m_statusBadge = new QLabel("STANDBY", this);
     m_statusBadge->setObjectName("logStatusBadge");
     m_statusBadge->setFixedHeight(28);
     topToolbar->addWidget(m_statusBadge);
@@ -56,16 +61,21 @@ void LogWidget::setupUi()
     m_searchEdit->setFixedHeight(28);
     topToolbar->addWidget(m_searchEdit);
 
+    const QColor iconColor("#7ee8ff");
+    const QColor warnColor("#ffb826");
+    const QColor btnColor("#d8eaf4");
+
     m_categoryCombo = new QComboBox(this);
-    m_categoryCombo->addItem("📋 Todos os canais", static_cast<int>(LogCategory::All));
-    m_categoryCombo->addItem("🔊 Audio ([audio])", static_cast<int>(LogCategory::Audio));
-    m_categoryCombo->addItem("🎮 GPU & Vulkan ([vk])", static_cast<int>(LogCategory::GpuVulkan));
-    m_categoryCombo->addItem("✨ Shaders ([shaders])", static_cast<int>(LogCategory::Shaders));
-    m_categoryCombo->addItem("📺 Vídeo & Tela ([video])", static_cast<int>(LogCategory::VideoPresent));
-    m_categoryCombo->addItem("⚙️ Backend & NvN ([nvn])", static_cast<int>(LogCategory::BackendHle));
-    m_categoryCombo->addItem("🧠 Lógica & App ([logic])", static_cast<int>(LogCategory::LogicApp));
-    m_categoryCombo->addItem("🕹️ Entrada ([input])", static_cast<int>(LogCategory::Input));
-    m_categoryCombo->addItem("⚠️ Erros & Avisos", static_cast<int>(LogCategory::ErrorsWarnings));
+    m_categoryCombo->setIconSize(QSize(kLogIconSizePx, kLogIconSizePx));
+    m_categoryCombo->addItem(makeLauncherIcon("channels", iconColor, iconColor, kLogIconSizePx), "Todos os canais", static_cast<int>(LogCategory::All));
+    m_categoryCombo->addItem(makeLauncherIcon("audio", iconColor, iconColor, kLogIconSizePx), "Audio ([audio])", static_cast<int>(LogCategory::Audio));
+    m_categoryCombo->addItem(makeLauncherIcon("gpu", iconColor, iconColor, kLogIconSizePx), "GPU & Vulkan ([vk])", static_cast<int>(LogCategory::GpuVulkan));
+    m_categoryCombo->addItem(makeLauncherIcon("shaders", iconColor, iconColor, kLogIconSizePx), "Shaders ([shaders])", static_cast<int>(LogCategory::Shaders));
+    m_categoryCombo->addItem(makeLauncherIcon("video", iconColor, iconColor, kLogIconSizePx), "Vídeo & Tela ([video])", static_cast<int>(LogCategory::VideoPresent));
+    m_categoryCombo->addItem(makeLauncherIcon("backend", iconColor, iconColor, kLogIconSizePx), "Backend & NvN ([nvn])", static_cast<int>(LogCategory::BackendHle));
+    m_categoryCombo->addItem(makeLauncherIcon("logic", iconColor, iconColor, kLogIconSizePx), "Lógica & App ([logic])", static_cast<int>(LogCategory::LogicApp));
+    m_categoryCombo->addItem(makeLauncherIcon("input", iconColor, iconColor, kLogIconSizePx), "Entrada ([input])", static_cast<int>(LogCategory::Input));
+    m_categoryCombo->addItem(makeLauncherIcon("warning", warnColor, warnColor, kLogIconSizePx), "Erros & Avisos", static_cast<int>(LogCategory::ErrorsWarnings));
     m_categoryCombo->setMinimumWidth(210);
     m_categoryCombo->setFixedHeight(28);
     topToolbar->addWidget(m_categoryCombo);
@@ -90,12 +100,13 @@ void LogWidget::setupUi()
     bottomToolbar->addWidget(m_autoScrollCheck);
     bottomToolbar->addStretch();
 
-    m_copyBtn = new QPushButton("📋 Copiar", this);
-    m_clearBtn = new QPushButton("🗑 Limpar", this);
-    m_openFolderBtn = new QPushButton("📁 Pasta de Logs", this);
-    m_exportBtn = new QPushButton("💾 Exportar...", this);
+    m_copyBtn = new QPushButton(makeLauncherIcon("copy", btnColor, iconColor, kLogIconSizePx), "Copiar", this);
+    m_clearBtn = new QPushButton(makeLauncherIcon("trash", btnColor, iconColor, kLogIconSizePx), "Limpar", this);
+    m_openFolderBtn = new QPushButton(makeLauncherIcon("folder", btnColor, iconColor, kLogIconSizePx), "Pasta de Logs", this);
+    m_exportBtn = new QPushButton(makeLauncherIcon("save", btnColor, iconColor, kLogIconSizePx), "Exportar...", this);
 
     for (auto* btn : {m_copyBtn, m_clearBtn, m_openFolderBtn, m_exportBtn}) {
+        btn->setIconSize(QSize(kLogIconSizePx, kLogIconSizePx));
         btn->setFixedHeight(28);
         btn->setCursor(Qt::PointingHandCursor);
         bottomToolbar->addWidget(btn);
@@ -256,12 +267,12 @@ void LogWidget::onOpenFolderClicked()
 void LogWidget::setRunningState(bool running, qint64 pid)
 {
     if (running) {
-        m_statusBadge->setText(QString("● ATIVO (PID %1)").arg(pid));
+        m_statusBadge->setText(QString("ATIVO (PID %1)").arg(pid));
         m_statusBadge->setStyleSheet(
             "color: #26eb8c; font-weight: 700; font-size: 11px; padding: 2px 10px; "
             "background: rgba(38, 235, 140, 0.12); border-radius: 2px; border: 1px solid rgba(38, 235, 140, 0.45);");
     } else {
-        m_statusBadge->setText("○ STANDBY");
+        m_statusBadge->setText("STANDBY");
         m_statusBadge->setStyleSheet(
             "color: #7d99b5; font-weight: 600; font-size: 11px; padding: 2px 10px; "
             "background: rgba(16, 28, 48, 0.85); border-radius: 2px; border: 1px solid rgba(0, 212, 255, 0.25);");

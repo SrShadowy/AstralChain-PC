@@ -15,7 +15,7 @@ import json
 from pathlib import Path
 import subprocess
 
-from astral_chain.build.native_build import FLAGS, digest_file, run_compiler, runtime_include_flags
+from astral_chain.build.native_build import FLAGS, digest_file, host_link_flags, run_compiler, runtime_include_flags, sdl3_include_flags
 from .shader_build import prepare_translator
 
 SRC = Path(__file__).resolve().parent.parent.parent
@@ -110,14 +110,15 @@ def build_nvn_objects(compiler, reference, cache, backend='null'):
             name = f'{tag}_{source.name}'.replace('/','_')
         return folder/(name+'.o')
     objects=[object_of(s) for s in sources]
-    link=['-lvulkan','-lc++'] if backend=='vulkan' else []
+    link=([*host_link_flags(PROJECT), '-lc++'] if backend=='vulkan' else [])
     if manifest.is_file():
         saved=json.loads(manifest.read_text(encoding='utf-8'))
         if saved.get('key')!=key or not all(o.is_file() and saved['objects'].get(o.name)==digest_file(o) for o in objects):
             raise ValueError('Cached NVN object integrity mismatch')
         return objects,link
     folder.mkdir(parents=True,exist_ok=True)
-    common=['-I',str(SRC),'-I',str(LAS),*runtime_include_flags(None, reference/'runtime'),'-I',str(IMGUI),'-I',str(IMGUI/'backends')]  # [extra] imgui
+    sdl3_inc = sdl3_include_flags(PROJECT)
+    common=[*sdl3_inc,'-I',str(SRC),'-I',str(LAS),*runtime_include_flags(None, reference/'runtime'),'-I',str(IMGUI),'-I',str(IMGUI/'backends')]  # [extra] imgui
     if backend=='vulkan':
         prepare_translator(reference,folder/'translator')
         common+=['-I',str(LAS/'shim'),'-I',str(VULKAN_HEADERS),'-I',str(VMA),
@@ -128,11 +129,11 @@ def build_nvn_objects(compiler, reference, cache, backend='null'):
         if source.suffix=='.cpp':
             inc = common
             if source.name in ('imgui_impl_sdl3.cpp','ac_overlay.cpp'):
-                # [extra] these need the real system SDL3; las/shim (-I) would win over -isystem, so demote it
+                # [extra] these need the real SDL3; las/shim (-I) would win over -isystem, so demote it
                 shim = str(LAS/'shim')
                 i = inc.index(shim)
                 inc = inc[:i-1] + inc[i+1:]
-                inc = ['-isystem','/usr/include','-isystem',shim] + inc
+                inc = [*sdl3_inc,'-isystem','/usr/include','-isystem',shim] + inc
             command=[str(compiler),'c++',*FLAGS,'-std=c++17',*inc,'-c',str(source),'-o',str(obj)]
         else:
             extra=['-include',str(LAS/'las_compat.h')] if backend_file else []

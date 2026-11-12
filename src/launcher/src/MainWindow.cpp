@@ -4,6 +4,7 @@
 #include "SetupDialog.hpp"
 #include "LogWidget.hpp"
 #include "CustomButton.hpp"
+#include "LauncherIcons.hpp"
 #include "Theme.hpp"
 
 #include <QVBoxLayout>
@@ -38,7 +39,7 @@ constexpr int kProgressMaxPct        = 100;
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
 {
-    setWindowTitle("Astral Chain PC Launcher (Linux)");
+    setWindowTitle(QStringLiteral("Astral Chain PC Launcher v%1 (Linux)").arg(AC_APP_VERSION));
     resize(kDefaultWinWidth, kDefaultWinHeight);
     setMinimumSize(kMinWinWidth, kMinWinHeight);
 
@@ -108,13 +109,39 @@ void MainWindow::applyTheme()
     setStyleSheet(getLauncherStyleSheet());
 }
 
+namespace {
+QString appRootDir()
+{
+    const QString envAppDir = qEnvironmentVariable("AC_APP_DIR").trimmed();
+    return envAppDir.isEmpty() ? QStringLiteral(".") : envAppDir;
+}
+
+QString appScriptPath(const QString& scriptName)
+{
+    return QDir(appRootDir()).filePath(scriptName);
+}
+
+QString resolvePythonExecutable()
+{
+    const QString envPy = qEnvironmentVariable("AC_PYTHON").trimmed();
+    if (!envPy.isEmpty() && QFile::exists(envPy)) {
+        return envPy;
+    }
+    const QString bundledPy = QDir(appRootDir()).filePath("usr/bin/python3");
+    if (QFile::exists(bundledPy)) {
+        return bundledPy;
+    }
+    return QFile::exists(".venv/bin/python") ? QStringLiteral(".venv/bin/python") : QStringLiteral("python3");
+}
+} // namespace
+
 QProcessEnvironment MainWindow::gameProcessEnvironment() const
 {
     QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
     const auto& g = m_config.graphics();
     const bool effUnlocked = g.fpsUnlocked || g.fpsLimit == 0 || g.fpsLimit > GraphicsSettings::kDefaultFpsLimit;
     env.insert("AC_FPS_UNLOCKED", effUnlocked ? "1" : "0");
-    env.insert("PYTHONPATH", "src");
+    env.insert("PYTHONPATH", QDir(appRootDir()).filePath("src"));
     return env;
 }
 
@@ -124,7 +151,7 @@ void MainWindow::refreshGameStatus()
     // matches the selected variant, or a correct build would be reported stale.
     QProcess proc;
     proc.setProcessEnvironment(gameProcessEnvironment());
-    const QString py = QFile::exists(".venv/bin/python") ? ".venv/bin/python" : "python3";
+    const QString py = resolvePythonExecutable();
     proc.start(py, {"-m", "astral_chain.build.setup_game", "--status"});
     if (proc.waitForFinished(kStatusProcTimeoutMs)) {
         const auto doc = QJsonDocument::fromJson(proc.readAllStandardOutput());
@@ -153,12 +180,14 @@ void MainWindow::refreshGameStatus()
 void MainWindow::setRunningUi(bool running, qint64 pid)
 {
     if (running) {
-        m_playBtn->setText("⏹  PARAR");
+        m_playBtn->setText(" PARAR");
+        m_playBtn->setIcon(makeLauncherIcon("stop", QColor("#ffeef2"), QColor("#ffffff"), kDefaultUiIconPx));
         m_playBtn->setDangerMode(true);
         m_playBtn->setEnabled(true);
         m_statusDot->setStyleSheet("font-size: 12px; color: #26eb8c;");
     } else {
-        m_playBtn->setText("▶  JOGAR");
+        m_playBtn->setText(" JOGAR");
+        m_playBtn->setIcon(makeLauncherIcon("play", QColor("#dff2fc"), QColor("#08101c"), kDefaultUiIconPx));
         m_playBtn->setDangerMode(false);
         m_playBtn->setEnabled(m_installed);
         m_statusDot->setStyleSheet("font-size: 12px; color: #00d4ff;");
@@ -190,7 +219,8 @@ void MainWindow::onPlay()
 {
     if (m_runner.isRunning() && m_isGameRunning) {
         m_statusLabel->setText("Encerrando jogo...");
-        m_playBtn->setText("⏳ ENCERRANDO...");
+        m_playBtn->setText(" ENCERRANDO...");
+        m_playBtn->setIcon(makeLauncherIcon("hourglass", QColor("#ffeef2"), QColor("#ffffff"), kDefaultUiIconPx));
         m_playBtn->setEnabled(false);
         m_runner.stop();
         return;
@@ -201,7 +231,7 @@ void MainWindow::onPlay()
     if (!m_config.game().commandWrapper.trimmed().isEmpty()) {
         args << "--wrapper" << m_config.game().commandWrapper.trimmed();
     }
-    runCommand("./play.sh", args, "Executando Astral Chain...", true);
+    runCommand(appScriptPath("play.sh"), args, "Executando Astral Chain...", true);
 }
 
 void MainWindow::onPlayDiagnostics()
@@ -216,7 +246,7 @@ void MainWindow::onPlayDiagnostics()
     if (!m_config.game().commandWrapper.trimmed().isEmpty()) {
         args << "--wrapper" << m_config.game().commandWrapper.trimmed();
     }
-    runCommand("./play-diagnostics.sh", args, "Executando com Diagnósticos...", true);
+    runCommand(appScriptPath("play-diagnostics.sh"), args, "Executando com Diagnósticos...", true);
 }
 
 void MainWindow::onSetupGame()
@@ -225,14 +255,14 @@ void MainWindow::onSetupGame()
     if (dlg.exec() != QDialog::Accepted) return;
     QStringList args = {"--keys", dlg.keysPath(), "--base", dlg.basePath(), "--update", dlg.updatePath()};
     if (!dlg.installDir().isEmpty()) args << "--install-dir" << dlg.installDir();
-    runCommand("./setup.sh", args, "Iniciando configuração do jogo...", false);
+    runCommand(appScriptPath("setup.sh"), args, "Iniciando configuração do jogo...", false);
 }
 
 void MainWindow::onCompileShaders()
 {
     QStringList args = {"-m", "astral_chain.build.setup_game", "--rebuild-if-stale"};
     if (m_config.game().forceShaders) args << "--force-shaders";
-    const QString py = QFile::exists(".venv/bin/python") ? ".venv/bin/python" : "python3";
+    const QString py = resolvePythonExecutable();
     runCommand(py, args, "Compilando shaders...", false);
 }
 
