@@ -4,11 +4,13 @@
 #include <SDL3/SDL.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "imgui.h"
 #include "imgui_impl_sdl3.h"
 #include "settings.h"
 
+#include "additions/config/ac_config_sync.h"
 #include "additions/overlay/ac_hud.h"
 #include "additions/overlay/ac_overlay.h"
 #include "additions/overlay/ac_overlay_rpc.h"
@@ -92,26 +94,32 @@ extern "C" void ac_overlay_toggle(void) {
 extern "C" int extra_get_guest_voice_language(void);
 extern "C" void extra_set_guest_voice_language(int voice_lang);
 
-static void apply_boot_voice_language(void) {
-    if (g_settings.voice_language <= 0) {
-        return;
-    }
-    static int attempts = 0;
-    if (attempts >= 600) {
-        return;
-    }
-    attempts++;
+static void sync_voice_language(void) {
+    static int s_last_desired = -1;
+    static int s_attempts = 0;
 
-    int desired = (g_settings.voice_language == 1) ? 0 : 1;
+    int setting = g_settings.voice_language;
+    int desired = (setting == 1) ? 0
+                : (setting == 2) ? 1
+                : (!strncmp(settings_language(), "ja", 2) ? 0 : 1);
+    if (desired != s_last_desired) {
+        s_last_desired = desired;
+        s_attempts = 0;
+    }
+    if (s_attempts >= 600) {
+        return;
+    }
     int current = extra_get_guest_voice_language();
     if (current != desired) {
+        s_attempts++;
         extra_set_guest_voice_language(desired);
     }
 }
 
 extern "C" void ac_overlay_pre_frame(void) {
+    ac_config_sync_poll();
     ac_menu_apply_pending();
-    apply_boot_voice_language();
+    sync_voice_language();
 }
 
 extern "C" void ac_overlay_frame(void) {

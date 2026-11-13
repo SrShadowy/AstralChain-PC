@@ -211,7 +211,7 @@ void section_slots(void) {
         {AcGameData::kSlotArea,        "area trigger",   "u32"},
         {AcGameData::kSlotSubArea,     "sub-area",       "u32"},
         {AcGameData::kSlotMission,     "mission",        "u32"},
-        {AcGameData::kSlotLegion,      "legion ativa",   "s32"},
+        {AcGameData::kSlotPlayerTable, "player table",   "ptr"},
         {AcGameData::kSlotBossId,      "boss id",        "u32"},
         {AcGameData::kSlotBossActive,  "boss ativo",     "u32"},
         {AcGameData::kSlotBossStage,   "fase do boss",   "u32"},

@@ -296,6 +296,7 @@ static const char *builtin_src(const char *name, int *stage) {
                "}\n";
     }
     if (!strcmp(name, "fsr3_mv.frag")) { *stage = STAGE_FRAGMENT; return fsr3_mv_frag_src; } // [extra]
+    if (!strcmp(name, "fsr3_mv_smooth.frag")) { *stage = STAGE_FRAGMENT; return fsr3_mv_smooth_frag_src; } // [extra]
     if (!strcmp(name, "fsr3_taa.frag")) { *stage = STAGE_FRAGMENT; return fsr3_taa_frag_src; }
     if (!strcmp(name, "fsr3_rcas.frag")) { *stage = STAGE_FRAGMENT; return fsr3_rcas_frag_src; }
     if (!strcmp(name, "fsr3_fg.frag")) { *stage = STAGE_FRAGMENT; return fsr3_fg_frag_src; } // [extra]

@@ -32,6 +32,7 @@ struct DiscordHeader {
 #pragma pack(pop)
 
 Settings g_settings;
+std::mutex g_client_id_mutex;
 std::thread g_worker;
 std::mutex g_mutex;
 std::condition_variable g_cv;
@@ -150,11 +151,13 @@ std::string BuildActivityJson(const AcGameData::PresenceSnapshot& snap) {
 
 void WorkerLoop() {
     int fd = -1;
+    std::string active_cid;
     while (!g_stop_flag.load(std::memory_order_relaxed)) {
         if (!g_settings.enabled.load(std::memory_order_relaxed)) {
             if (fd >= 0) {
                 close(fd);
                 fd = -1;
+                active_cid.clear();
                 g_connected.store(false, std::memory_order_relaxed);
             }
             std::unique_lock<std::mutex> lock(g_mutex);
@@ -162,14 +165,23 @@ void WorkerLoop() {
             continue;
         }
 
+        const std::string desired_cid = GetClientId();
+        if (fd >= 0 && desired_cid != active_cid) {
+            close(fd);
+            fd = -1;
+            active_cid.clear();
+            g_connected.store(false, std::memory_order_relaxed);
+        }
+
         if (fd < 0) {
             fd = ConnectSocket();
             if (fd >= 0) {
-                std::string hs = "{\"v\":1,\"client_id\":\"" + g_settings.client_id + "\"}";
+                std::string hs = "{\"v\":1,\"client_id\":\"" + desired_cid + "\"}";
                 if (!SendPacket(fd, 0, hs)) {
                     close(fd);
                     fd = -1;
                 } else {
+                    active_cid = desired_cid;
                     g_connected.store(true, std::memory_order_relaxed);
                 }
             }
@@ -181,6 +193,7 @@ void WorkerLoop() {
             if (!SendPacket(fd, 1, payload)) {
                 close(fd);
                 fd = -1;
+                active_cid.clear();
                 g_connected.store(false, std::memory_order_relaxed);
             }
         }
@@ -199,11 +212,27 @@ Settings& GetSettings() {
     return g_settings;
 }
 
+std::string GetClientId() {
+    std::lock_guard<std::mutex> lock(g_client_id_mutex);
+    return g_settings.client_id;
+}
+
+void SetClientId(const std::string& client_id) {
+    {
+        std::lock_guard<std::mutex> lock(g_client_id_mutex);
+        if (g_settings.client_id == client_id) {
+            return;
+        }
+        g_settings.client_id = client_id;
+    }
+    g_cv.notify_all();
+}
+
 void Init() {
     if (g_running.exchange(true)) return;
     const char* env_cid = std::getenv("AC_DISCORD_CLIENT_ID");
     if (env_cid && *env_cid) {
-        g_settings.client_id = env_cid;
+        SetClientId(env_cid);
     }
     AcGameData::Init();
     g_stop_flag.store(false);

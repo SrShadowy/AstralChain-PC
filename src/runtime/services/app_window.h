@@ -267,6 +267,7 @@ static void app_mouse_wheel_cb(int y) { // [extra]
     mouse_wheel_step(rt_ticks()); // [extra]
 } // [extra]
 static void app_pump(void) { // [extra]
+    extra_audio_sync_gain(); // [extra]
     extra_window_poll_events(app_key_cb, app_mouse_motion_cb, app_mouse_button_cb, app_mouse_wheel_cb); // [extra]
     extra_menu_detect_tick(rt_ticks(), g_sdl_window); // [extra]
     app_input_focus = g_sdl_input_focus; // [extra]
@@ -280,7 +281,8 @@ static void app_checkpoint(void) {
  /* AC_IGNORE_FOCUS=1: keep running while the window is unfocused or in the background (unattended runs). */
  static int ignore_focus=-1;
  if(ignore_focus<0) ignore_focus=GetEnvironmentVariableA("AC_IGNORE_FOCUS",NULL,0)!=0;
- if(ignore_focus) return;
+ if(g_extra_ignore_focus>=0) { if(g_extra_ignore_focus) return; } // [extra]
+ else if(ignore_focus) return; // [extra]
  uint64_t start=0;
  while((app_focus==3 && app_suspend_background) || (app_focus==2 && app_suspend_out_of_focus)) {
   if(!start) start=rt_ticks();

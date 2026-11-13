@@ -100,6 +100,33 @@ bool read_scenario_group_step(unsigned long long mgr, unsigned idx_off, int *out
     return true;
 }
 
+int read_active_legion(unsigned long long save_ptr) {
+    unsigned long long ptable = 0;
+    if (slot64(kSlotPlayerTable, &ptable) && ptable) {
+        unsigned long long pl = 0;
+        if (read_raw(ptable, &pl, sizeof pl) && pl) {
+            int32_t leg = -1;
+            if (read_raw(pl + kOffPlayerLegionActive, &leg, sizeof leg) &&
+                leg >= kMinLegionId && leg <= kMaxLegionId) {
+                return leg;
+            }
+            if (read_raw(pl + kOffPlayerLegionSelected, &leg, sizeof leg) &&
+                leg >= kMinLegionId && leg <= kMaxLegionId) {
+                return leg;
+            }
+        }
+    }
+    if (save_ptr) {
+        int32_t s_leg = -1;
+        if (read_raw(save_ptr + kOffSaveLegion, &s_leg, sizeof s_leg) &&
+            s_leg >= kMinLegionId && s_leg <= kMaxLegionId) {
+            return s_leg;
+        }
+    }
+    return -1;
+}
+
+
 unsigned map_trigger_area(unsigned raw_area, uint32_t phase_id, int file_num) {
     if (raw_area == 0 || raw_area >= 0x10000 || (phase_id >= 0x0a00u && phase_id < 0x0c00u)) {
         return 0;
@@ -257,11 +284,6 @@ PresenceSnapshot GetSnapshot() {
     (void)slot_val(kSlotBossId, &s.boss_id);
     (void)slot_val(kSlotPhase, &s.phase_id);
 
-    int32_t leg_raw = -1;
-    if (slot_val(kSlotLegion, &leg_raw) && leg_raw >= kMinLegionId && leg_raw <= kMaxLegionId) {
-        s.legion_id = static_cast<int>(leg_raw);
-    }
-
     unsigned b_act = 0;
     if (slot_val(kSlotBossActive, &b_act)) {
         s.boss_active = (b_act == 1);
@@ -305,6 +327,7 @@ PresenceSnapshot GetSnapshot() {
             (void)read_raw(save_ptr + kOffSaveScenStep, &s.scenario_hash, sizeof s.scenario_hash);
         }
     }
+    s.legion_id = read_active_legion(save_ptr);
 
     ResolveSnapshot(s);
     return s;

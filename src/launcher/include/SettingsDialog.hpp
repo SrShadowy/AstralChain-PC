@@ -1,7 +1,7 @@
 #pragma once
 
 #include <QDialog>
-#include <memory>
+#include "Config.hpp"
 
 class QCheckBox;
 class QComboBox;
@@ -10,33 +10,55 @@ class QDoubleSpinBox;
 class QSlider;
 class QLabel;
 class QLineEdit;
+class QTimer;
 
 namespace ac::launcher {
 
-class Config;
+class ConfigWatcher;
 class MouseSettingsWidget;
+class OverlayRpcSettingsWidget;
 
 class SettingsDialog : public QDialog {
     Q_OBJECT
 
 public:
-    explicit SettingsDialog(Config& config, QWidget* parent = nullptr);
+    explicit SettingsDialog(Config& config,
+                            ConfigWatcher* watcher = nullptr,
+                            bool gameRunning = false,
+                            QWidget* parent = nullptr);
     ~SettingsDialog() override = default;
 
+    void reject() override;
+
+public slots:
+    void reloadExternal();
+
 private slots:
+    void onApply();
     void onSave();
+    void onLiveControlModified();
+    void flushLiveSave();
 
 private:
-    void setupUi();
+    void setupUi(bool gameRunning);
+    void wireLiveSignals();
+    void saveConfigNow();
     void loadFromConfig();
     void writeToConfig();
 
     QWidget* createGameTab();
     QWidget* createGraphicsTab();
     QWidget* createAudioTab();
+    QWidget* createOverlayRpcTab();
     QWidget* createAdvancedTab();
 
     Config& m_config;
+    Config m_snapshot;
+    ConfigWatcher* m_watcher{nullptr};
+    QTimer* m_liveSaveTimer{nullptr};
+    QCheckBox* m_liveSyncCheck{nullptr};
+    bool m_loadingUi{false};
+    bool m_liveCommittedDirty{false};
 
     // Game
     QCheckBox* m_parallelCheck{nullptr};
@@ -56,6 +78,7 @@ private:
     QCheckBox* m_fpsUnlockedCheck{nullptr};
     QComboBox* m_scaleCombo{nullptr};
     QComboBox* m_upscalerCombo{nullptr};
+    QComboBox* m_antialiasCombo{nullptr};
     QCheckBox* m_frameGenCheck{nullptr};
     QCheckBox* m_fsrJitterCheck{nullptr};
     QDoubleSpinBox* m_fsrSharpnessSpin{nullptr};
@@ -67,6 +90,9 @@ private:
     QSlider* m_volumeSlider{nullptr};
     QLabel* m_volumeLabel{nullptr};
     QCheckBox* m_muteUnfocusCheck{nullptr};
+
+    // Overlay & Discord RPC
+    OverlayRpcSettingsWidget* m_overlayRpcWidget{nullptr};
 
     // Advanced
     QCheckBox* m_bc7Check{nullptr};

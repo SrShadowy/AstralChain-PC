@@ -143,6 +143,33 @@ static inline void extra_mouse_load_config(double *sens, int *invert) {
     }
 }
 
+__attribute__((weak)) uint32_t extra_sync_read_mouse(int *look, double *sens, double *yscale, double *curve_exp, int *invert) {
+    (void)look;
+    (void)sens;
+    (void)yscale;
+    (void)curve_exp;
+    (void)invert;
+    return 0;
+}
+
+static inline void extra_mouse_sync_runtime(int *look, double *sens, int *invert) {
+    static uint32_t seen_gen = 0;
+    int nlook = *look;
+    double nsens = *sens;
+    double nyscale = g_mouse_yscale;
+    double ncurve = g_mouse_curve_exp;
+    int ninvert = *invert;
+    uint32_t gen = extra_sync_read_mouse(&nlook, &nsens, &nyscale, &ncurve, &ninvert);
+    if (gen && gen != seen_gen) {
+        seen_gen = gen;
+        *look = nlook;
+        *sens = nsens;
+        g_mouse_yscale = nyscale;
+        g_mouse_curve_exp = ncurve;
+        *invert = ninvert;
+    }
+}
+
 /* Speed (counts/s) -> right stick deflection. Mag 0..1 is curved with pow() and
  * offset by a floor so slow movement still clears the game's stick dead zone;
  * direction is preserved. AC_MOUSE_SENS=100 + AC_MOUSE_CURVE=linear reproduces

@@ -52,19 +52,43 @@ static const Slot slots[] = {
 static uint8_t map[2][IB_ACTIONS];
 static int mouse_look = 1;
 
+static void sync_prompt_bindings(void) { // [extra]
+#ifndef _WIN32
+    static uint32_t synced_kgen = 0;
+    static uint32_t synced_mgen = 0;
+    if (!g_extra_key_override) {
+        if (synced_kgen != (uint32_t)-1) {
+            ib_load(map);
+            synced_kgen = (uint32_t)-1;
+        }
+    } else if (synced_kgen != g_extra_keys_gen) {
+        memcpy(map, g_extra_key_map, sizeof(map));
+        synced_kgen = g_extra_keys_gen;
+    }
+    if (g_extra_mouse_override && synced_mgen != g_extra_mouse_gen) {
+        mouse_look = g_extra_mouse_look;
+        synced_mgen = g_extra_mouse_gen;
+    } else if (!g_extra_mouse_override && !synced_mgen) {
+        const char *ml = getenv("AC_MOUSE_LOOK");
+        mouse_look = !(ml && *ml == '0');
+    }
+#endif
+} // [extra]
+
 static int enabled(void) {
     static int on = -1;
     if (on < 0) {
         const char *e = getenv("AC_PROMPTS");
 #if defined(_WIN32) // [extra]
         on = !(e && (!strcmp(e, "switch") || !strcmp(e, "0")));
-#else // [extra]
-        on = extra_prompts_enabled(e);
-#endif // [extra]
         ib_load(map);
         e = getenv("AC_MOUSE_LOOK");
         mouse_look = !(e && *e == '0');
+#else // [extra]
+        on = extra_prompts_enabled(e);
+#endif // [extra]
     }
+    sync_prompt_bindings(); // [extra]
     return on;
 }
 
@@ -370,6 +394,7 @@ void texpatch_apply(int id, uint32_t level, uint8_t *data, uint32_t w, uint32_t 
         extra_xbox_apply_atlas(data, row);
         return;
     } // [extra]
+    sync_prompt_bindings(); // [extra]
 #endif // [extra]
     for (unsigned i = 0; i < sizeof slots / sizeof slots[0]; i++) {
         const Slot *sl = &slots[i];

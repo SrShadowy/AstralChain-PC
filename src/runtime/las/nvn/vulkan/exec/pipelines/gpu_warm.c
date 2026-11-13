@@ -100,9 +100,9 @@ int vk_gpu_warm(const char *folder) {
     uint64_t t0 = SDL_GetTicksNS();
     vk_init_for_warm();
     char gpu[512], state[1024], old[1024] = {0};
-    snprintf(gpu, sizeof gpu, " | %s %u.%u.%u (%08x) | shader libraries %d", g_vk.props.deviceName,
+    snprintf(gpu, sizeof gpu, " | %s %u.%u.%u (%08x) | shader libraries %d | subgroup32 %#x", g_vk.props.deviceName, // [extra]
              VK_API_VERSION_MAJOR(g_vk.props.driverVersion), VK_API_VERSION_MINOR(g_vk.props.driverVersion),
-             VK_API_VERSION_PATCH(g_vk.props.driverVersion), g_vk.props.driverVersion, g_vk.gpl);
+             VK_API_VERSION_PATCH(g_vk.props.driverVersion), g_vk.props.driverVersion, g_vk.gpl, g_vk.subgroup32_stages); // [extra]
     snprintf(state, sizeof state, "%s%s", getenv("AC_GPU_WARM_STATE") ? getenv("AC_GPU_WARM_STATE") : "", gpu);
     {
         FILE *f = fopen("build/game/cache/gpu_warm.txt", "rb"); // [extra]

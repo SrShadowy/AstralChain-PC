@@ -1,4 +1,5 @@
 #include "MainWindow.hpp"
+#include "ConfigWatcher.hpp"
 #include "SettingsDialog.hpp"
 #include "ControlsDialog.hpp"
 #include "SetupDialog.hpp"
@@ -45,6 +46,7 @@ MainWindow::MainWindow(QWidget* parent)
 
     setupUi();
     applyTheme();
+    m_configWatcher = new ConfigWatcher(m_config, this);
 
     connect(&m_runner, &ProcessRunner::started, this, &MainWindow::onProcessStarted);
     connect(&m_runner, &ProcessRunner::lineReceived, this, &MainWindow::onProcessLine);
@@ -193,6 +195,9 @@ void MainWindow::setRunningUi(bool running, qint64 pid)
         m_statusDot->setStyleSheet("font-size: 12px; color: #00d4ff;");
     }
     m_logWidget->setRunningState(running, pid);
+    if (m_configWatcher) {
+        m_configWatcher->setFastPolling(running);
+    }
 }
 
 void MainWindow::runCommand(const QString& program, const QStringList& args, const QString& statusText, bool isGame)
@@ -225,6 +230,7 @@ void MainWindow::onPlay()
         m_runner.stop();
         return;
     }
+    m_config.load();
     QStringList args;
     const QString env = m_config.buildLaunchEnv();
     if (!env.isEmpty()) args << "--env" << env;
@@ -240,6 +246,7 @@ void MainWindow::onPlayDiagnostics()
         m_runner.stop();
         return;
     }
+    m_config.load();
     QStringList args;
     const QString env = m_config.buildLaunchEnv();
     if (!env.isEmpty()) args << "--env" << env;
@@ -268,13 +275,14 @@ void MainWindow::onCompileShaders()
 
 void MainWindow::onOpenSettings()
 {
-    SettingsDialog dlg(m_config, this);
+    const bool gameRunning = m_runner.isRunning() && m_isGameRunning;
+    SettingsDialog dlg(m_config, m_configWatcher, gameRunning, this);
     dlg.exec();
 }
 
 void MainWindow::onOpenControls()
 {
-    ControlsDialog dlg(m_config, this);
+    ControlsDialog dlg(m_config, m_configWatcher, this);
     dlg.exec();
 }
 

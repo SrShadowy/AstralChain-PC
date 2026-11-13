@@ -244,8 +244,8 @@ if "d->max_aniso > 1" not in samp_body:
 
 with open("src/hooks/gpu/fsr3_shaders.h") as fp:
     sh = fp.read()
-if "12.0 * texel" not in sh or "n_offs[4]" not in sh or "smoothstep(0.08, 0.25" in sh:
-    print("FAILED: fsr3_shaders.h missing hierarchical optical-flow search or contains legacy c_now snapback.")
+if "10.0 * texel" not in sh or "fsr3_mv_smooth_frag_src" not in sh or "smoothstep(0.08, 0.25" in sh:
+    print("FAILED: fsr3_shaders.h missing hierarchical optical-flow search/smoothing or contains legacy c_now snapback.")
     sys.exit(1)
 
 with open("src/runtime/las/nvn/objects.c") as fp:
@@ -261,5 +261,67 @@ if pres_body.find("nvn_present_pace") < pres_body.find("aq_push") or pres_body.f
 
 print("PASSED: NVN render-target/sampler safety & FSR 3.1 FG optical-flow/pacing invariants verified.")
 PYEOF
+
+echo "--- 11. UI / IRIS vs 3D Draw Classification Self-Test ---"
+DRAW_CC="${CC:-gcc}"
+if ! command -v "$DRAW_CC" > /dev/null 2>&1; then
+    echo "SKIPPED: no C compiler (draw classification self-test)."
+else
+    DRAW_BIN="$(mktemp -t ac-draw-test.XXXXXX)"
+    if "$DRAW_CC" -std=c11 -O1 -Wall -Wextra -Werror -Isrc -o "$DRAW_BIN" tools/qa/draw_classify_test.c > /dev/null 2>&1 \
+            && "$DRAW_BIN" > /dev/null; then
+        rm -f "$DRAW_BIN"
+        echo "PASSED: deterministic UI / IRIS vs 3D mesh classification verified."
+    else
+        "$DRAW_BIN" || true
+        rm -f "$DRAW_BIN"
+        echo "FAILED: draw classification self-test."
+        exit 1
+    fi
+fi
+
+echo "--- 12. Cutscene A/V Synchronization & Audio Debt Self-Test ---"
+CUT_CC="${CC:-gcc}"
+if ! command -v "$CUT_CC" > /dev/null 2>&1; then
+    echo "SKIPPED: no C compiler (cutscene sync self-test)."
+else
+    CUT_BIN="$(mktemp -t ac-cut-test.XXXXXX)"
+    if "$CUT_CC" -std=c11 -O1 -Wall -Wextra -Werror -o "$CUT_BIN" tools/qa/cutscene_sync_test.c -lm > /dev/null 2>&1 \
+            && "$CUT_BIN" > /dev/null; then
+        rm -f "$CUT_BIN"
+        echo "PASSED: cutscene A/V synchronization and starved audio compensation verified."
+    else
+        "$CUT_BIN" || true
+        rm -f "$CUT_BIN"
+        echo "FAILED: cutscene sync self-test."
+        exit 1
+    fi
+fi
+
+echo "--- 13. Resolution & Ultrawide Aspect Patch Invariants Self-Test ---"
+if "$PYTHON" tools/qa/aspect_patch_test.py > /dev/null 2>&1; then
+    echo "PASSED: resolution and ultrawide/16:10 aspect patch invariants verified."
+else
+    echo "FAILED: resolution & aspect patch self-test ($PYTHON tools/qa/aspect_patch_test.py)."
+    exit 1
+fi
+
+echo "--- 14. FSR 3.1 Camera Motion Vector Math Self-Test ---"
+MV_CC="${CC:-gcc}"
+if ! command -v "$MV_CC" > /dev/null 2>&1; then
+    echo "SKIPPED: no C compiler (FSR 3.1 camera motion vector math self-test)."
+else
+    MV_BIN="$(mktemp -t ac-mv-test.XXXXXX)"
+    if "$MV_CC" -std=c11 -O1 -Wall -Wextra -Werror -Isrc -o "$MV_BIN" tools/qa/fsr3_mv_math_test.c -lm > /dev/null 2>&1 \
+            && "$MV_BIN" > /dev/null; then
+        rm -f "$MV_BIN"
+        echo "PASSED: FSR 3.1 geometric camera motion vector math verified."
+    else
+        "$MV_BIN" || true
+        rm -f "$MV_BIN"
+        echo "FAILED: FSR 3.1 camera motion vector self-test."
+        exit 1
+    fi
+fi
 
 echo "=== All audits passed successfully! ==="

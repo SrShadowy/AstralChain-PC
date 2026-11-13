@@ -16,18 +16,27 @@ static uint8_t hid_keys[256];
 static uint8_t hid_key_map[2][IB_ACTIONS];
 static uint8_t hid_key_mapped[256];
 static unsigned hid_mouse_bound;  /* (a mouse button or the wheel is bound: clicking the window takes the mouse) */
-static void hid_keys_load(void) {
+static void hid_keys_load(void) { // [extra]
  static int loaded;
- if(loaded) return;
+ static uint32_t synced_gen; // [extra]
+ uint32_t cur_gen=g_extra_keys_gen;
+ if(loaded && (!g_extra_key_override || cur_gen==synced_gen)) return; // [extra]
  loaded=1;
+ memset(hid_key_mapped,0,sizeof(hid_key_mapped)); // [extra]
+ hid_mouse_bound=0; // [extra]
  int custom=ib_load(hid_key_map);
+ if(g_extra_key_override && cur_gen!=synced_gen) { // [extra]
+  memcpy(hid_key_map,g_extra_key_map,sizeof(hid_key_map));
+  synced_gen=cur_gen;
+  custom=1;
+ } // [extra]
  for(unsigned s=0;s<2;s++) for(unsigned i=0;i<IB_ACTIONS;i++) {
   unsigned vk=hid_key_map[s][i];
   if(vk) hid_key_mapped[vk]=1;
   if(vk && ib_is_mouse(vk)) hid_mouse_bound=1;
  }
- if(custom) printf("[input] key mapping from AC_KEYS / AC_KEYS2\n");
-}
+ if(custom) printf("[input] key mapping updated (gen=%u)\n",cur_gen); // [extra]
+} // [extra]
 static int hid_key(unsigned i) {
  return (hid_key_map[0][i] && hid_keys[hid_key_map[0][i]]) || (hid_key_map[1][i] && hid_keys[hid_key_map[1][i]]);
 }
@@ -203,8 +212,8 @@ static void hid_publish(uint64_t now,int focused) {
   boundary("hid-style-event",&state,state.pc);
  HidSample sample={0};sample.sample=++hid_sampling;sample.attributes=connected ? 3 : 0;
  mouse_wheel_step(now);
+ hid_keys_load(); // [extra]
  if(connected && focused) {
-  hid_keys_load();
   for(unsigned i=0;i<16;i++) if(hid_key(i)) sample.buttons|=1ull<<i;
   sample.lx=(hid_key(18)-hid_key(16))*32767;sample.ly=(hid_key(17)-hid_key(19))*32767;
   sample.rx=(hid_key(22)-hid_key(20))*32767;sample.ry=(hid_key(21)-hid_key(23))*32767;

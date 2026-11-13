@@ -8,7 +8,7 @@
 #include "additions/toggles/ac_toggles.h"
 
 #define EXTRA_VTX_MAX_COORD       50000.0f
-#define EXTRA_LIGHT_MAX_INTENSITY 1000.0f
+#define EXTRA_LIGHT_MAX_INTENSITY 50000.0f
 #define EXTRA_MAX_DIAG_WARNINGS   20
 
 /* Cached environment toggles for vertex validation and guard. */

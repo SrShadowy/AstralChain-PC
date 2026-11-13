@@ -47,6 +47,8 @@ void promote_worker_job(void *arg);
 void promote_translate_job(void *arg);
 bool skip_unbuilt(void);
 void wait_built(_Atomic int *state);
+void wait_built_sync(_Atomic int *state); // [extra]
+void build_notify(void); // [extra]
 extern uint64_t cum_built_ns;
 
 // Programs and pipelines

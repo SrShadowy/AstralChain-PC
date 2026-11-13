@@ -86,7 +86,7 @@ static inline void extra_nvn_present_pace(int interval) {
         logged_fps = target_fps;
     }
 
-    if (override >= 0) interval = override;
+    if (override >= 0 && !(override == 0 && g_extra_fps_override > 0)) interval = override;
     if (interval <= 0 || target_fps <= 0) return; /* unthrottled */
 
     extern int cutscene_mode;

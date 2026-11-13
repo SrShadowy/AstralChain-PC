@@ -10,6 +10,7 @@
 #include "hooks/input/mouse_mode.h"
 #include "hooks/sdl/win32_window_types.h"
 #include "hooks/sdl/gamepad_trampoline.h"
+#include "additions/toggles/ac_toggles.h"
 #include "additions/overlay/ac_overlay.h"
 #include "additions/overlay/ac_reinfo.h"
 
@@ -22,8 +23,6 @@
 #define EXTRA_VK_MAX_ASCII_KEY 256
 
 __attribute__((weak)) SDL_Window *g_sdl_window;
-__attribute__((weak)) int g_sdl_input_focus;
-__attribute__((weak)) int g_sdl_fullscreen;
 __attribute__((weak)) int g_sdl_exit_requested;
 
 static inline void *extra_window_ptr(void);
@@ -96,6 +95,9 @@ static inline uint8_t extra_sdl_to_vk(SDL_Keycode key) {
     if (key >= SDLK_0 && key <= SDLK_9) {
         return (uint8_t)('0' + (key - SDLK_0));
     }
+    if (key >= SDLK_F1 && key <= SDLK_F12) {
+        return (uint8_t)(VK_F1 + (key - SDLK_F1));
+    }
     switch (key) {
         case SDLK_RETURN:
             return VK_RETURN;
@@ -107,6 +109,20 @@ static inline uint8_t extra_sdl_to_vk(SDL_Keycode key) {
             return VK_TAB;
         case SDLK_SPACE:
             return VK_SPACE;
+        case SDLK_CAPSLOCK:
+            return VK_CAPITAL;
+        case SDLK_INSERT:
+            return VK_INSERT;
+        case SDLK_DELETE:
+            return VK_DELETE;
+        case SDLK_HOME:
+            return VK_HOME;
+        case SDLK_END:
+            return VK_END;
+        case SDLK_PAGEUP:
+            return VK_PRIOR;
+        case SDLK_PAGEDOWN:
+            return VK_NEXT;
         case SDLK_LSHIFT:
         case SDLK_RSHIFT:
             return VK_SHIFT;
@@ -124,8 +140,6 @@ static inline uint8_t extra_sdl_to_vk(SDL_Keycode key) {
             return VK_RIGHT;
         case SDLK_DOWN:
             return VK_DOWN;
-        case SDLK_F11:
-            return VK_F11;
         default:
             return key < EXTRA_VK_MAX_ASCII_KEY ? (uint8_t)key : 0;
     }
@@ -142,6 +156,12 @@ static inline void *extra_window_init(int w, int h, const char *title) {
     extra_open_initial_gamepad();
     const char *ew = getenv("AC_WIDTH");
     const char *eh = getenv("AC_HEIGHT");
+    if (g_extra_win_w > 0) {
+        w = g_extra_win_w;
+    }
+    if (g_extra_win_h > 0) {
+        h = g_extra_win_h;
+    }
     if (ew && atoi(ew) > 0) {
         w = atoi(ew);
     }
@@ -169,7 +189,12 @@ static inline void *extra_window_init(int w, int h, const char *title) {
     g_sdl_input_focus = 1; // [extra]
 
     const char *fs = getenv("AC_FULLSCREEN");
-    if (fs && fs[0] == '1') {
+    int want_fs = g_extra_fullscreen_pending >= 0 ? g_extra_fullscreen_pending : 0;
+    if (fs && *fs) {
+        want_fs = (fs[0] != '0' && strcmp(fs, "false") != 0 && strcmp(fs, "off") != 0) ? 1 : 0;
+    }
+    g_extra_fullscreen_pending = EXTRA_TOGGLE_UNSET;
+    if (want_fs) {
         SDL_SetWindowFullscreen(g_sdl_window, true);
         g_sdl_fullscreen = 1;
     }
@@ -188,7 +213,7 @@ static inline void extra_window_set_fullscreen(int on) {
     if (!g_sdl_window) {
         return;
     }
-    g_sdl_fullscreen = on;
+    g_sdl_fullscreen = on ? 1 : 0;
     SDL_SetWindowFullscreen(g_sdl_window, on ? true : false);
 }
 
@@ -228,6 +253,20 @@ static inline int extra_window_poll_events(
     if (!g_sdl_window) {
         return 0;
     }
+    if (g_extra_fullscreen_pending >= 0) {
+        int want = g_extra_fullscreen_pending ? 1 : 0;
+        g_extra_fullscreen_pending = EXTRA_TOGGLE_UNSET;
+        extra_window_set_fullscreen(want);
+        if (!want && g_extra_win_w > 0 && g_extra_win_h > 0) {
+            SDL_SetWindowSize(g_sdl_window, g_extra_win_w, g_extra_win_h);
+        }
+    }
+    if (g_extra_win_resize_pending) {
+        g_extra_win_resize_pending = 0;
+        if (!g_sdl_fullscreen && g_extra_win_w > 0 && g_extra_win_h > 0) {
+            SDL_SetWindowSize(g_sdl_window, g_extra_win_w, g_extra_win_h);
+        }
+    }
     SDL_Event e;
     while (SDL_PollEvent(&e)) {
         ac_overlay_process_event(&e);
@@ -260,6 +299,7 @@ static inline int extra_window_poll_events(
                     }
                 } else if (e.key.key == SDLK_F11 && !e.key.repeat) {
                     extra_window_set_fullscreen(!g_sdl_fullscreen);
+                    g_extra_config_dirty = 1;
                 } else if (e.key.key == SDLK_F10 && !e.key.repeat) {
                     extra_mouse_mode_toggle(g_sdl_window);
                 } else if ((e.key.key == SDLK_F4 && (e.key.mod & SDL_KMOD_ALT)) ||
@@ -366,6 +406,7 @@ static inline void extra_app_pump_inline(void) {
 static inline void *extra_app_open_window(HANDLE app_msg_ev, unsigned *app_foc, unsigned *msg_cnt, void (*enqueue_fn)(unsigned)) {
     (void)app_msg_ev;
     g_app_enqueue_fn = enqueue_fn;
+    ac_config_sync_init_hook();
     void *win = extra_window_ptr();
     if (win) {
         if (app_foc) {

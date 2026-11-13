@@ -146,12 +146,15 @@ EXT_REVIEWED = (
     '        }\n'
     '        sp(&s, "layout(set = %d, binding = %d) uniform %s t%d;\\n", set, 32 + i, glsl_sampler_type(t), i);',
 )
-S2R_ORIGINAL = '        default: sprintf(t, "0u /* sr %#x */", sr); set_reg(c, d, t);'
+S2R_ORIGINAL = ('        case 0x00: set_reg(c, d, "0u"); break;\n'
+                '        default: sprintf(t, "0u /* sr %#x */", sr); set_reg(c, d, t);')
 # WScaleFactorXY/Z (Ryujinx SReg 30/31): viewport W scaling factors. Astral Chain
 # never calls an NVN W-scaling or viewport-swizzle API (runs 294-296), so the
 # hardware factors are zero; in its shaders they only feed the culling vote above.
+# SR_LANEID (0x00): intra-warp thread index 0..31.
 # SR_EQMASK..SR_GEMASK (0x38-0x3c, nvdisasm): lane masks; 32-lane warps = the low word of the subgroup masks.
-S2R_REVIEWED = ('        case 0x1e: case 0x1f: set_reg(c, d, "0u"); break;  // W scaling disabled\n'
+S2R_REVIEWED = ('        case 0x00: set_reg(c, d, "(gl_SubgroupInvocationID & 31u)"); break;\n'
+                '        case 0x1e: case 0x1f: set_reg(c, d, "0u"); break;  // W scaling disabled\n'
                 '        case 0x38: set_reg(c, d, "gl_SubgroupEqMask.x"); break;\n'
                 '        case 0x39: set_reg(c, d, "gl_SubgroupLtMask.x"); break;\n'
                 '        case 0x3a: set_reg(c, d, "gl_SubgroupLeMask.x"); break;\n'

@@ -37,9 +37,10 @@ static uint64_t mouse_look_tick,mouse_move_tick,mouse_wheel_until[2],mouse_wheel
 static unsigned mouse_wheel_queue[2];
 static HWND mouse_window;
 static void mouse_config(void) {
- if(mouse_look_on>=0) return;
+ if(mouse_look_on>=0) { extra_mouse_sync_runtime(&mouse_look_on,&mouse_sens,&mouse_invert); return; } // [extra]
  const char *e=getenv("AC_MOUSE_LOOK");mouse_look_on=!(e && *e=='0');
  extra_mouse_load_config(&mouse_sens,&mouse_invert); // [extra]
+ extra_mouse_sync_runtime(&mouse_look_on,&mouse_sens,&mouse_invert); // [extra]
 }
 static void mouse_clip(void) {
  if(!mouse_captured || !mouse_window) return;

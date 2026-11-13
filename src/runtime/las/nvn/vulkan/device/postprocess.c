@@ -112,7 +112,7 @@ void backend_present(NvnTexture *t) {
         if (g_extra_fsr3.fg_ready) { // [extra]
             static uint64_t s_last_p1_ns;
             static uint64_t s_smoothed_cycle_ns = VK_FG_DEFAULT_CYCLE_NS;
-            vk_frame_end(NULL); // [extra]
+            vk_frame_end(shot ? "debug/frames/window_interp.png" : NULL); // [extra]
             uint64_t now_p1 = SDL_GetTicksNS();
             record_present_sample((double)now_p1 / VK_NS_PER_SEC_F); // [extra]
             if (s_last_p1_ns) {

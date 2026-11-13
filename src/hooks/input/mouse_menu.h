@@ -106,20 +106,43 @@ static uint64_t g_mouse_menu_dir_until[EXTRA_MOUSE_MENU_DIR_COUNT] = {0};
 static uint64_t g_mouse_menu_dir_gap[EXTRA_MOUSE_MENU_DIR_COUNT] = {0};
 static unsigned g_mouse_menu_dir_queue[EXTRA_MOUSE_MENU_DIR_COUNT] = {0};
 
-static inline void extra_mouse_menu_load_config(void) {
-    if (g_mouse_menu_config_loaded) return;
-    g_mouse_menu_config_loaded = 1;
-    const char *e = getenv("AC_MOUSE_MENUS");
-    if (e) g_mouse_menu_enabled = (*e != '0');
-    e = getenv("AC_MOUSE_MENU_MOTION");
-    if (e) g_mouse_menu_motion_steps = (*e != '0');
-    e = getenv("AC_MOUSE_MENU_TOUCH");
-    if (e) g_mouse_menu_touch_mode = (*e != '0');
-    e = getenv("AC_MOUSE_MENU_CELL");
-    if (e && *e) {
-        float c = (float)atof(e);
-        if (c >= AC_MOUSE_MENU_CELL_MIN && c <= AC_MOUSE_MENU_CELL_MAX) g_mouse_menu_cell_size = c;
+__attribute__((weak)) uint32_t extra_sync_read_menu_mouse(int *nav, int *motion, float *cell) {
+    (void)nav;
+    (void)motion;
+    (void)cell;
+    return 0;
+}
+
+static inline void extra_mouse_menu_sync(void) {
+    static uint32_t seen_gen = 0;
+    int nav = g_mouse_menu_enabled;
+    int motion = g_mouse_menu_motion_steps;
+    float cell = g_mouse_menu_cell_size;
+    uint32_t gen = extra_sync_read_menu_mouse(&nav, &motion, &cell);
+    if (gen && gen != seen_gen) {
+        seen_gen = gen;
+        g_mouse_menu_enabled = nav;
+        g_mouse_menu_motion_steps = motion;
+        g_mouse_menu_cell_size = cell;
     }
+}
+
+static inline void extra_mouse_menu_load_config(void) {
+    if (!g_mouse_menu_config_loaded) {
+        g_mouse_menu_config_loaded = 1;
+        const char *e = getenv("AC_MOUSE_MENUS");
+        if (e) g_mouse_menu_enabled = (*e != '0');
+        e = getenv("AC_MOUSE_MENU_MOTION");
+        if (e) g_mouse_menu_motion_steps = (*e != '0');
+        e = getenv("AC_MOUSE_MENU_TOUCH");
+        if (e) g_mouse_menu_touch_mode = (*e != '0');
+        e = getenv("AC_MOUSE_MENU_CELL");
+        if (e && *e) {
+            float c = (float)atof(e);
+            if (c >= AC_MOUSE_MENU_CELL_MIN && c <= AC_MOUSE_MENU_CELL_MAX) g_mouse_menu_cell_size = c;
+        }
+    }
+    extra_mouse_menu_sync();
 }
 
 static inline int extra_mouse_menu_is_enabled(void) {

@@ -96,12 +96,17 @@ O Nintendo Switch utiliza a API proprietária NVN para comunicação com a GPU M
 - O cache de shaders SPIR-V é gravado em `build/resources/spirv/` e reutilizado entre execuções.
 - As variantes de pipelines conhecidas são distribuídas em `src/resources/data/pipeline_variants.bin` e `src/resources/data/shader_variants.bin`, evitando engasgos por compilação durante o gameplay.
 - **Warm-up Antecipado (`AC_GPU_WARM=1`)**: Antes de iniciar a sessão principal, o launcher aciona uma rotina que pré-carrega todos os pipelines conhecidos na GPU.
-- **Shader Libraries (`VK_EXT_graphics_pipeline_library`)**: Em GPUs com suporte a essa extensão, os estágios de shader são compilados separadamente em background, reduzindo o stutter ao compilar pipelines novos.
+- **Shader Libraries (`VK_EXT_graphics_pipeline_library`)**: Em GPUs com suporte a essa extensão, os estágios de shader são compilados separadamente em background, reduzindo o stutter ao compilar pipelines novos (draws gráficos aguardam em background por padrão sem travar o frame).
+- **Subgroup Size Control (Vulkan 1.3 Wave32)**: Shaders Maxwell traduzidos assumem warp de 32 threads (`SR_LANEID` mapeado para `gl_SubgroupInvocationID & 31u`); quando suportado pelo driver (ex.: RADV GFX1201), o runtime fixa `requiredSubgroupSize = 32` nos estágios Compute e Fragment para evitar falhas de máscara/tiling em iluminação clustered.
 
 ### C. Decodificação de Texturas ASTC & BC7
 - O hardware de desktop não possui suporte nativo para amostragem de texturas no formato móvel ASTC.
 - **Decodificador GPU ASTC (`astc_gpu.c`)**: Um compute shader no Vulkan decodifica os blocos ASTC descompactados diretamente para texturas RGBA8 na memória de vídeo. O decodificador em CPU (`astc.c`) permanece disponível como fallback.
 - **Compressão BC7 (`bc7_gpu.c` / `bc7_cache.py`)**: Sob a flag `LARECOMP_BC7=1`, as texturas decodificadas podem ser recompactadas em formato BC7 (reduzindo em até 50% o consumo de VRAM em relação ao RGBA8 puro).
+
+### D. Otimização de Geometry Stream e Classificação Semântica de UI / 3D
+- **Classificação de Draws (`src/hooks/gpu/draw_classify.h`)**: Identifica semanticamente quads de interface (HUD, visão IRIS, menus, vídeos NVN) e isola cópias em CPU (`guest_copy_vtx`) exclusivamente para buffers dinâmicos $\le 64$ KB. Malhas 3D de geometria pesada fluem diretamente via VRAM sem overhead de `memcpy`, eliminando quedas de ~144 FPS para ~80 FPS.
+- **Projeção Ultrawide e Enquadramento de UI (`ui_box`)**: Resoluções customizadas (21:9, 32:9, 16:10 via `resolution-1.0.1.pchtxt` e SVC 0xB3) expandem o FOV da câmera 3D, enquanto draws de UI (matriz de projeção ortográfica $1280 \times 720$) são automaticamente enquadrados em caixa centralizada 16:9 (`src/runtime/las/nvn/vulkan/exec/commands/draw.c`), impedindo distorção de fontes e retículas.
 
 ---
 

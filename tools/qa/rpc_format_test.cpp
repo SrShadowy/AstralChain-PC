@@ -181,6 +181,24 @@ int main() {
         }
     }
 
+    // Case 11: Legion offsets & unsummoned/fallback behaviour
+    {
+        static_assert(AcGameData::kSlotPlayerTable == 0xdbb680, "kSlotPlayerTable mismatch");
+        static_assert(AcGameData::kOffPlayerLegionActive == 0xf48, "kOffPlayerLegionActive mismatch");
+        static_assert(AcGameData::kOffPlayerLegionSelected == 0xf38, "kOffPlayerLegionSelected mismatch");
+        static_assert(AcGameData::kOffSaveLegion == 0x74ef8, "kOffSaveLegion mismatch");
+
+        AcGameData::PresenceSnapshot s{};
+        s.phase_id = 0x0840;
+        s.scene_id = 0x1a03;
+        s.legion_id = 5; // Unsummoned / dismissed state from page_70005ec
+        AcGameData::ResolveSnapshot(s);
+
+        auto act = AcGameData::FormatActivity(s, true, true, true, true, false, false);
+        TEST_ASSERT(act.small_image == "file_03", "Unsummoned legion must fall back to file icon");
+        TEST_ASSERT(act.small_text == "File 03", "Unsummoned legion text mismatch");
+    }
+
     std::printf("[test] All RPC formatting tests PASSED!\n");
     return 0;
 }

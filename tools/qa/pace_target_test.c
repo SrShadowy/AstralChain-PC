@@ -19,7 +19,7 @@
 #include <math.h>
 #include "hooks/platform/pace_target.h"
 
-int g_extra_fps_override = 0;  /* ac_toggles.c */
+int g_extra_fps_override = -1;  /* EXTRA_TOGGLE_UNSET (ac_toggles.c) */
 
 #define OLD_OVER_MS 16.2
 #define OLD_CALM_MS 13.0
@@ -144,12 +144,11 @@ static void test_over_60_never_slows(void) {
         check(extra_pace_budget_ms() > 0.0, "budget still derives from the target");
         check(extra_pace_slow_ns() > 0, "counter floor still derives from the target");
     }
-    g_extra_fps_override = 0;
+    g_extra_fps_override = -1;
 }
 
-/* AC_FPS=0 (unthrottled): no budget, so no frame is "over" and the fallback is
- * not selectable. Selected by the environment: the overlay override only
- * accepts values > 0. audit.sh runs this file a second time with AC_FPS=0. */
+/* AC_FPS=0 or live g_extra_fps_override=0 (unthrottled): no budget, so no frame
+ * is "over" and the fallback is not selectable. */
 static void test_unthrottled(void) {
     ExtraPaceState st;
     memset(&st, 0, sizeof st);
@@ -160,6 +159,10 @@ static void test_unthrottled(void) {
     check(over == 0, "unthrottled: a 100 ms frame is not over budget");
     check(st.slow == 0 && events == 0, "unthrottled: never enters the 30 fps mode");
     check(extra_pace_slow_ns() == 0, "unthrottled: no counter floor");
+    g_extra_fps_override = 0;
+    check(extra_env_target_fps() == 0, "live override 0 unthrottles target fps");
+    check(extra_pace_budget_ms() == 0.0, "live override 0 clears budget");
+    g_extra_fps_override = -1;
 }
 
 /* Below the reference rate the fallback is still selectable, with thresholds

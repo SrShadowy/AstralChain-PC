@@ -59,7 +59,11 @@ static inline const char *extra_read_ini_language(const char *ini_path, char *ou
     while (fgets(line, sizeof(line), f)) {
         char k[EXTRA_INI_TOKEN_CAP];
         char v[EXTRA_INI_TOKEN_CAP];
-        if (sscanf(line, " %31[^= ] = %31[^\n]", k, v) == 2 && !strcmp(k, "language")) {
+        if (sscanf(line, " %31[^= \t\r\n] = %31[^\r\n]", k, v) == 2 && !strcmp(k, "language")) {
+            size_t len = strlen(v);
+            while (len > 0 && (v[len - 1] == ' ' || v[len - 1] == '\t')) {
+                v[--len] = '\0';
+            }
             strncpy(out_buf, v, out_cap - 1);
             out_buf[out_cap - 1] = '\0';
             found = out_buf;
@@ -77,10 +81,10 @@ static inline bool extra_is_pt_language(void) {
         lang = getenv("LARECOMP_LANG");
     }
     if (!lang || !*lang) {
-        lang = extra_read_ini_language("larecomp.ini", ini_lang, sizeof(ini_lang));
+        lang = extra_read_ini_language("userdata/launcher.ini", ini_lang, sizeof(ini_lang));
     }
     if (!lang || !*lang) {
-        lang = extra_read_ini_language("userdata/launcher.ini", ini_lang, sizeof(ini_lang));
+        lang = extra_read_ini_language("larecomp.ini", ini_lang, sizeof(ini_lang));
     }
     if (!lang || !*lang || !strcmp(lang, "auto")) {
         const char *loc = getenv("LC_ALL");

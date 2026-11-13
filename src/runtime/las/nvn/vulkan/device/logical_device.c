@@ -54,12 +54,20 @@ void dev_create_device(void) {
                dev_has_ext(ep, ne, VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME) && !(gpl_env && !atoi(gpl_env));
     free(ep);
 
+#define VK_WARP_SIZE 32u
+
     // features the backend relies on (all present on current desktop drivers)
     VkPhysicalDeviceRobustness2FeaturesEXT r2have = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_FEATURES_EXT};
     VkPhysicalDeviceVulkan13Features f13have = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
                                                 .pNext = robust2 ? &r2have : NULL};
     VkPhysicalDeviceFeatures2 have = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2, .pNext = &f13have};
     vkGetPhysicalDeviceFeatures2(g_vk.phys, &have);
+    VkPhysicalDeviceVulkan13Properties sp13 = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_PROPERTIES};
+    VkPhysicalDeviceProperties2 p13 = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2, .pNext = &sp13};
+    vkGetPhysicalDeviceProperties2(g_vk.phys, &p13);
+    bool ssz = f13have.subgroupSizeControl && sp13.minSubgroupSize <= VK_WARP_SIZE && sp13.maxSubgroupSize >= VK_WARP_SIZE;
+    g_vk.subgroup_size_control = ssz;
+    g_vk.subgroup32_stages = ssz ? sp13.requiredSubgroupSizeStages : 0u;
     if (gpl) {
         VkPhysicalDeviceGraphicsPipelineLibraryFeaturesEXT gf = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GRAPHICS_PIPELINE_LIBRARY_FEATURES_EXT};
         VkPhysicalDeviceFeatures2 h2 = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2, .pNext = &gf};
@@ -72,6 +80,8 @@ void dev_create_device(void) {
     if (gpl) { ext[n_ext++] = VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME; ext[n_ext++] = VK_EXT_GRAPHICS_PIPELINE_LIBRARY_EXTENSION_NAME; }
     g_vk.gpl = gpl;
     LOG("[vk] shader libraries (graphics pipeline library): %s\n", gpl ? "on" : "off");
+    LOG("[vk] subgroup32 (subgroupSizeControl): %s (min=%u max=%u stages=%#x)\n",
+        ssz ? "on" : "off", sp13.minSubgroupSize, sp13.maxSubgroupSize, g_vk.subgroup32_stages);
     VkPhysicalDeviceRobustness2FeaturesEXT r2 = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_FEATURES_EXT,
                                                  .robustBufferAccess2 = r2have.robustBufferAccess2 && have.features.robustBufferAccess,
                                                  .robustImageAccess2 = r2have.robustImageAccess2,
@@ -86,6 +96,7 @@ void dev_create_device(void) {
         .customBorderColorWithoutFormat = VK_TRUE, .pNext = g_vk.divisor ? &div : NULL};
     VkPhysicalDeviceVulkan13Features f13 = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
                                             .dynamicRendering = VK_TRUE, .synchronization2 = VK_TRUE,
+                                            .subgroupSizeControl = ssz ? VK_TRUE : VK_FALSE,
                                             .shaderDemoteToHelperInvocation = VK_TRUE, .shaderTerminateInvocation = VK_TRUE,
                                             .maintenance4 = VK_TRUE, .robustImageAccess = f13have.robustImageAccess,
                                             .pNext = g_vk.custom_border ? (void *)&cbc : g_vk.divisor ? (void *)&div : NULL};

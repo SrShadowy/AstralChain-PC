@@ -1,14 +1,15 @@
 #include "ControlsDialog.hpp"
 #include "Config.hpp"
+#include "ConfigWatcher.hpp"
 
-#include <QVBoxLayout>
-#include <QHBoxLayout>
-#include <QTableWidget>
+#include <QApplication>
 #include <QHeaderView>
-#include <QPushButton>
+#include <QHBoxLayout>
 #include <QLabel>
+#include <QPushButton>
+#include <QTableWidget>
+#include <QVBoxLayout>
 #include <QVector>
-#include <QPair>
 
 namespace ac::launcher {
 
@@ -45,23 +46,26 @@ const QVector<ActionDef> kDefaultActions = {
 
 } // namespace
 
-ControlsDialog::ControlsDialog(Config& config, QWidget* parent)
+ControlsDialog::ControlsDialog(Config& config, ConfigWatcher* watcher, QWidget* parent)
     : QDialog(parent)
     , m_config(config)
-{
+    , m_watcher(watcher) {
     setWindowTitle("IRIS // Mapeamento de Controles");
-    resize(540, 540);
+    resize(560, 580);
     setupUi();
     loadBindings();
+
+    if (m_watcher) {
+        connect(m_watcher, &ConfigWatcher::externalConfigChanged, this, &ControlsDialog::reloadExternal);
+    }
 }
 
-void ControlsDialog::setupUi()
-{
+void ControlsDialog::setupUi() {
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(16, 16, 16, 16);
     layout->setSpacing(10);
 
-    auto* header = new QLabel("Dê um duplo clique na célula em 'Tecla / Mouse' para editar o atalho:", this);
+    auto* header = new QLabel("Dê um duplo clique em 'Tecla / Mouse' para editar (Aplicar atualiza o jogo ao vivo):", this);
     header->setStyleSheet("color: #59e8ff; font-weight: 600;");
     layout->addWidget(header);
 
@@ -73,54 +77,89 @@ void ControlsDialog::setupUi()
     m_table->verticalHeader()->setVisible(false);
     layout->addWidget(m_table);
 
+    auto* hint = new QLabel(
+        "Teclas aceitas: A-Z, 0-9, F1-F12, Space, Tab, Escape, Return, LeftShift, LCtrl, LAlt, Backspace, "
+        "Insert, Delete, Home, End, PageUp, PageDown, Mouse_Left, Mouse_Right, Mouse_Middle, Mouse_X1, Mouse_X2, Wheel_Up, Wheel_Down",
+        this);
+    hint->setWordWrap(true);
+    hint->setStyleSheet("color: #88a4c0; font-size: 11px;");
+    layout->addWidget(hint);
+
     auto* btnLayout = new QHBoxLayout();
     m_resetButton = new QPushButton("Restaurar Padrões", this);
     m_cancelButton = new QPushButton("Cancelar", this);
+    m_applyButton = new QPushButton("Aplicar", this);
     m_saveButton = new QPushButton("Salvar Controles", this);
     m_saveButton->setObjectName("primaryBtn");
 
     btnLayout->addWidget(m_resetButton);
     btnLayout->addStretch();
     btnLayout->addWidget(m_cancelButton);
+    btnLayout->addWidget(m_applyButton);
     btnLayout->addWidget(m_saveButton);
-
     layout->addLayout(btnLayout);
 
     connect(m_resetButton, &QPushButton::clicked, this, &ControlsDialog::onResetDefaults);
+    connect(m_applyButton, &QPushButton::clicked, this, &ControlsDialog::onApply);
     connect(m_saveButton, &QPushButton::clicked, this, &ControlsDialog::onSave);
     connect(m_cancelButton, &QPushButton::clicked, this, &QDialog::reject);
 }
 
-void ControlsDialog::loadBindings()
-{
+void ControlsDialog::loadBindings() {
     for (int i = 0; i < kDefaultActions.size(); ++i) {
         const auto& act = kDefaultActions[i];
-        auto* actionItem = new QTableWidgetItem(act.label);
-        actionItem->setData(Qt::UserRole, act.key);
-        actionItem->setFlags(actionItem->flags() & ~Qt::ItemIsEditable);
-        m_table->setItem(i, 0, actionItem);
+        QTableWidgetItem* actionItem = m_table->item(i, 0);
+        if (!actionItem) {
+            actionItem = new QTableWidgetItem(act.label);
+            actionItem->setData(Qt::UserRole, act.key);
+            actionItem->setFlags(actionItem->flags() & ~Qt::ItemIsEditable);
+            m_table->setItem(i, 0, actionItem);
+        }
 
         const QString key = m_config.getBinding(act.key, act.defaultKey);
-        auto* keyItem = new QTableWidgetItem(key);
-        m_table->setItem(i, 1, keyItem);
+        QTableWidgetItem* keyItem = m_table->item(i, 1);
+        if (!keyItem) {
+            keyItem = new QTableWidgetItem(key);
+            m_table->setItem(i, 1, keyItem);
+        } else {
+            keyItem->setText(key);
+        }
     }
 }
 
-void ControlsDialog::onResetDefaults()
-{
+void ControlsDialog::reloadExternal() {
+    QWidget* fw = QApplication::focusWidget();
+    if (m_table && fw && fw != m_table && m_table->isAncestorOf(fw)) {
+        return;
+    }
+    loadBindings();
+}
+
+void ControlsDialog::onResetDefaults() {
     for (int i = 0; i < kDefaultActions.size(); ++i) {
         m_table->item(i, 1)->setText(kDefaultActions[i].defaultKey);
     }
 }
 
-void ControlsDialog::onSave()
-{
+void ControlsDialog::writeBindingsAndSave() {
     for (int i = 0; i < m_table->rowCount(); ++i) {
         const QString action = m_table->item(i, 0)->data(Qt::UserRole).toString();
-        const QString key = m_table->item(i, 1)->text();
+        const QString key = m_table->item(i, 1)->text().trimmed();
         m_config.setBinding(action, key);
     }
-    m_config.save();
+    if (m_watcher) {
+        m_watcher->saveAndTrack();
+    } else {
+        m_config.save();
+    }
+}
+
+void ControlsDialog::onApply() {
+    writeBindingsAndSave();
+}
+
+void ControlsDialog::onSave() {
+    writeBindingsAndSave();
     accept();
 }
 

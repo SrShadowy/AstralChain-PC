@@ -3,7 +3,116 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdatomic.h>
 #include "hooks/platform/sync_trampoline.h"
+#include "additions/toggles/ac_toggles.h"
+
+#define EXTRA_AUDIO_MAX_STREAMS 16
+#define EXTRA_AUDIO_GAIN_PERCENT_DIV 100.0f
+
+static atomic_flag s_extra_audio_lock = ATOMIC_FLAG_INIT;
+static SDL_AudioStream *s_extra_audio_streams[EXTRA_AUDIO_MAX_STREAMS] = {NULL};
+
+static inline void extra_audio_lock_acq(void) {
+    while (atomic_flag_test_and_set_explicit(&s_extra_audio_lock, memory_order_acquire)) {
+    }
+}
+
+static inline void extra_audio_lock_rel(void) {
+    atomic_flag_clear_explicit(&s_extra_audio_lock, memory_order_release);
+}
+
+static inline float extra_audio_effective_gain(void) {
+    int vol = g_extra_audio_volume;
+    if (vol < 0) {
+        const char *ev = getenv("AC_MASTER_VOLUME");
+        vol = (ev && *ev) ? atoi(ev) : EXTRA_AUDIO_VOL_MAX;
+    }
+    if (vol < 0) {
+        vol = 0;
+    }
+    if (vol > EXTRA_AUDIO_VOL_MAX) {
+        vol = EXTRA_AUDIO_VOL_MAX;
+    }
+    int mute_unfocus = g_extra_audio_mute_unfocus;
+    if (mute_unfocus < 0) {
+        const char *em = getenv("AC_MUTE_ON_UNFOCUS");
+        mute_unfocus = (em && *em && strcmp(em, "0") != 0 && strcmp(em, "false") != 0) ? 1 : 0;
+    }
+    if (mute_unfocus && !g_sdl_input_focus) {
+        return 0.0f;
+    }
+    return (float)vol / EXTRA_AUDIO_GAIN_PERCENT_DIV;
+}
+
+static inline void extra_audio_sync_gain(void) {
+    static uint32_t s_last_gen = 0;
+    static int s_last_focus = -1;
+    uint32_t cur_gen = g_extra_audio_gen;
+    int cur_focus = g_sdl_input_focus;
+    if (cur_gen == s_last_gen && cur_focus == s_last_focus) {
+        return;
+    }
+    s_last_gen = cur_gen;
+    s_last_focus = cur_focus;
+    float gain = extra_audio_effective_gain();
+    extra_audio_lock_acq();
+    for (int i = 0; i < EXTRA_AUDIO_MAX_STREAMS; i++) {
+        if (s_extra_audio_streams[i]) {
+            SDL_SetAudioStreamGain(s_extra_audio_streams[i], gain);
+        }
+    }
+    extra_audio_lock_rel();
+}
+
+static inline void extra_audio_register_stream(SDL_AudioStream *stream) {
+    if (!stream) {
+        return;
+    }
+    float gain = extra_audio_effective_gain();
+    extra_audio_lock_acq();
+    for (int i = 0; i < EXTRA_AUDIO_MAX_STREAMS; i++) {
+        if (!s_extra_audio_streams[i]) {
+            s_extra_audio_streams[i] = stream;
+            break;
+        }
+    }
+    SDL_SetAudioStreamGain(stream, gain);
+    extra_audio_lock_rel();
+}
+
+static inline void extra_audio_unregister_stream(SDL_AudioStream *stream) {
+    if (!stream) {
+        return;
+    }
+    extra_audio_lock_acq();
+    for (int i = 0; i < EXTRA_AUDIO_MAX_STREAMS; i++) {
+        if (s_extra_audio_streams[i] == stream) {
+            s_extra_audio_streams[i] = NULL;
+        }
+    }
+    extra_audio_lock_rel();
+}
+
+static _Atomic double g_extra_audio_starved_sec = 0.0;
+
+static inline void extra_audio_add_starved(double gap) {
+    if (gap > 0.0) {
+        double cur = atomic_load_explicit(&g_extra_audio_starved_sec, memory_order_relaxed);
+        while (!atomic_compare_exchange_weak_explicit(
+            &g_extra_audio_starved_sec,
+            &cur,
+            cur + gap,
+            memory_order_release,
+            memory_order_relaxed
+        ));
+    }
+}
+
+static inline double extra_audio_consume_starved_ms(void) {
+    double prev = atomic_exchange_explicit(&g_extra_audio_starved_sec, 0.0, memory_order_acq_rel);
+    return prev * 1000.0;
+}
 
 typedef struct AudioHookBuffer {
     uint64_t tag;
@@ -83,6 +192,7 @@ static inline int extra_audio_open(AudioHookOutput *out, unsigned rate, unsigned
         return 0;
     }
     SDL_SetAudioStreamGetCallback(out->stream, extra_audio_stream_cb, out);
+    extra_audio_register_stream(out->stream);
     out->ready = 1;
     const char *ev = getenv("AC_AUDIO_RESYNC");
     int resync = !(ev && (ev[0] == '0' || ev[0] == 'n' || ev[0] == 'N'));
@@ -107,6 +217,7 @@ static inline int extra_audio_pause(AudioHookOutput *out) {
 
 static inline int extra_audio_append(AudioHookOutput *out, uint64_t tag, const void *pcm, size_t size) {
     if (!out || !out->stream || !out->ready || out->count >= 32) return 0;
+    extra_audio_sync_gain();
     size_t align = out->channels * 2u;
     if (!align || (size % align) != 0) return 0;
 
@@ -127,6 +238,7 @@ static inline int extra_audio_append(AudioHookOutput *out, uint64_t tag, const v
         if (out->play_end > 0 && now > out->play_end) {
             double gap = now - out->play_end;
             out->starved += gap;
+            extra_audio_add_starved(gap);
             if (resync && gap < 0.5) {
                 out->owed += gap;
                 if (out->owed > 0.3) out->owed = 0.3;
@@ -194,6 +306,7 @@ static inline unsigned extra_audio_collect(AudioHookOutput *out, uint64_t *tags,
 static inline void extra_audio_close(AudioHookOutput *out) {
     if (!out) return;
     if (out->stream) {
+        extra_audio_unregister_stream(out->stream);
         SDL_DestroyAudioStream(out->stream);
         out->stream = NULL;
     }

@@ -21,9 +21,13 @@ public:
     void loadFrom(const MouseSettings& settings);
     void writeTo(MouseSettings& settings) const;
 
+signals:
+    void modified();
+
 private:
     void setupUi();
 
+    QCheckBox* m_mouseLookCheck{nullptr};
     QSlider* m_sensSlider{nullptr};
     QSpinBox* m_sensSpin{nullptr};
     QDoubleSpinBox* m_yScaleSpin{nullptr};
@@ -32,6 +36,7 @@ private:
     QCheckBox* m_menuNavCheck{nullptr};
     QCheckBox* m_menuMotionCheck{nullptr};
     QSpinBox* m_menuCellSpin{nullptr};
+    bool m_loading{false};
 };
 
 } // namespace ac::launcher

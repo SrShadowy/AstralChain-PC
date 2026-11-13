@@ -170,6 +170,8 @@ O runtime suporta uma série de variáveis de ambiente para controle de performa
 | `LARECOMP_SKIP_FSHASH` | `<hash>,...` | Ignora a execução de draw calls que utilizem o fragment shader especificado |
 | `LARECOMP_WATCH_FS` | `<hash>` | Registra em log todas as submissões do fragment shader especificado |
 | `LARECOMP_GPL` | `0` / `1` | `0` desativa `VK_EXT_graphics_pipeline_library` e força compilação monolítica |
+| `LARECOMP_SKIP_UNBUILT` | `1` (padrão) / `0` | Pula draws gráficos enquanto o pipeline compila em background (evita stalls mid-play); `0` bloqueia até concluir |
+| `LARECOMP_SYNC_SHADERS` | `0` (padrão) / `1` | `1` força compilação síncrona bloqueante de shaders/pipelines gráficos |
 | `LARECOMP_GUARD_VTX` | `1` / `0` | `1` detecta e previne explosão de vértices (NaN/Inf/>50k) e iluminação anômala |
 | `AC_GPU_WARM` | `0` / `1` | `0` pula o warm-up antecipado de pipelines na inicialização |
 
@@ -199,7 +201,14 @@ Configuráveis ao vivo no menu ImGui (**Insert**) e persistidos em `larecomp.ini
 | `AC_RENDER_SCALE` | `1.00` (padrão) / `0.50..2.00` | Escala de resolução interna / preset de qualidade FSR (`0.50` Performance, `0.58` Balanced, `0.67` Quality, `0.77` Ultra Quality, `1.00` Native AA / FSRAA) |
 | `AC_FSR_JITTER` | `1` (padrão) / `0` | Ativa o Camera Jitter Sub-Pixel **Halton(2,3)** nos passes 3D com depth test e Negative MIP LOD Bias automático nos samplers |
 | `AC_FSR_SHARPNESS` | `0.80` (padrão) / `0.00..1.00` | Intensidade do estágio **RCAS** (Robust Contrast-Adaptive Sharpening) do FSR 3.1 |
-| `AC_FRAMEGEN` | `0` (padrão) / `1` | Ativa o **FSR 3.1 Frame Generation (2x FPS)** com interpolação óptica bidirecional ($U_{t-0.5}$), proteção de HUD/UI e dupla apresentação cadenciada na Swapchain Vulkan |
+| `AC_FRAMEGEN` | `0` (padrão) / `1` | Ativa o **FSR 3.1 Frame Generation (2x FPS)** com vetores de movimento float16 suavizados (`fsr3_mv_smooth`), dilatação de máscara de HUD/texto translúcido e dupla apresentação cadenciada na Swapchain Vulkan |
+
+### C.3 Resolução Customizada, Ultrawide e Aspect Ratio
+Controla a geometria de projeção de tela e viewport via patch `resolution-1.0.1.pchtxt` e trampolim Vulkan:
+| Variável | Valores / Padrão | Efeito |
+|---|---|---|
+| `AC_RESOLUTION` | `<width>x<height>` | Define a resolução interna/janela customizada (ex: `2560x1080`, `3440x1440`, `1280x800`). Emite resolução docked e níveis dinâmicos. |
+| `AC_ASPECT` | `auto` / `21:9` / `32:9` / `16:10` / `16:9` / `<float>` | Força aspect ratio da câmera 3D. Em `auto`, calcula `width/height`. Aplica `ui_box` centralizado 16:9 para HUD, menus e legendas. |
 
 ### D. Input Determinístico e Controles
 - **`AC_INPUT_SCRIPT="t0-t1:mask[@period/duty];..."`**:
@@ -234,7 +243,15 @@ Configuráveis ao vivo no menu ImGui (**Insert**) e persistidos em `larecomp.ini
   - `./tools/qa/audit.sh` roda `tools/qa/mouse_pointer_test.c` (mapeamento de painel, passos, pulsos, clique/roda e política de modo) e reprova a auditoria se a tradução do ponteiro quebrar.
   - `AC_PROMPTS=auto|xbox|switch|keyboard`: Define o layout de ícones de botões no HUD e menus (`auto` alterna dinamicamente entre **Controle Xbox** para gamepads padrão/Xbox, **Nintendo Switch** para Pro Controller/Joy-Con e **Teclado & Mouse** ao usar teclado/mouse; também configurável ao vivo no menu IRIS via tecla `Insert`).
   - `AC_XBOX_CONFIRM_A=1|0`: Quando ativo (`1`, padrão), troca o botão de **Confirmar / Ação / Interagir** de `B` para `A` no controle (mapeando o botão físico inferior `A` para `IB_A` e o direito `B` para `IB_B`, exibindo `(A)` nas ações/confirmações e ajustando o losango de 4 botões sem alterar `X`, `Y`, `LB`, `RB`, `LT`, `RT`, `View` ou `Menu`). Configurável no Launcher Qt6 e ao vivo no menu IRIS (`Insert`).
-  - **Insert ou Segurar `L3 + R3` por 2 segundos no Controle (menu ImGui in-game)**: abre o overlay de Performance/Graphics/Debug/About (`src/additions/overlay/`). Com o menu aberto, teclado/mouse/gamepad deixam de chegar ao jogo, a navegação por controle fica ativa (`D-Pad`/Analógico para mover, `A` para selecionar, `B` para fechar combos, `LB`/`RB` para trocar de aba) e o mouse sai do modo relativo; `Insert` ou segurar `L3 + R3` por 2s fecha e restaura o modo conforme o foco. Antialiasing, Upscaler, Limite de FPS, Prompts de Botões, Confirmar com A e flags de debug valem no frame seguinte; VSync recria a swapchain no pré-frame; Async submit é kill switch one-way (religar exige relaunch).
+  - `AC_MASTER_VOLUME=<0..100>` / `AC_MUTE_ON_UNFOCUS=1|0`: Volume mestre do áudio SDL3 e silenciamento automático quando a janela perde o foco (sincronizados ao vivo via `extra_audio_sync_gain()`).
+  - `AC_ANTIALIAS=off|smaa`: Modo de antialiasing de pós-processamento (`off` ou `smaa`, sincronizável ao vivo entre Qt6 Launcher e ImGui).
+  - `AC_PERF_HUD=1|0`, `AC_PERF_HUD_CORNER=0..3`, `AC_PERF_HUD_OPACITY=<0.15..1.0>`, `AC_PERF_HUD_WITH_MENU=1|0`: Estado, canto, opacidade e visibilidade do Perf HUD compacto durante o menu IRIS.
+  - `AC_DISCORD_RPC=1|0`, `AC_DISCORD_CLIENT_ID=<id>`: Ativa/desativa o Discord Rich Presence e opcionalmente sobrescreve o Client ID da aplicação.
+  - **Insert ou Segurar `L3 + R3` por 2 segundos no Controle (menu ImGui in-game) + Sincronização Bidirecional (`userdata/launcher.ini`)**: abre o overlay IRIS (`src/additions/overlay/`) em 5 abas (`Desempenho`, `Gráficos`, `Áudio & Mouse`, `Jogo & RPC`, `Diagnóstico`). Com o menu aberto, teclado/mouse/gamepad deixam de chegar ao jogo, a navegação por controle fica ativa (`D-Pad`/Analógico para mover, `A` para selecionar, `B` para fechar combos, `LB`/`RB` para trocar de aba) e o mouse sai do modo relativo. Tanto o menu ImGui (`ac_config_sync`, polling ~150 ms) quanto o Launcher Qt6 (`ConfigWatcher`, `QFileSystemWatcher` + polling rápido `400 ms` durante execução e modo **Live Sync**) leem e gravam em `userdata/launcher.ini` (com fallback de boot para `larecomp.ini`), propagando alterações nos dois sentidos sem reiniciar: janela/tela cheia, modo de apresentação/VSync, FPS (`0` = ilimitado), escala interna/SSAA, FSR 3.1/1.0/FrameGen/nitidez, `antialias`, áudio, 8 parâmetros de mouse (`mouse_look` inclusive), cutscenes 30 FPS, ignore-focus, `[Controls]`, idioma da voz, Perf HUD e Discord RPC.
+  - **Limites explícitos de sincronização ao vivo**:
+    - `(Reinício)`: `language` (texto do sistema), `fps_unlocked` (`frame_limit`), `parallel_threads`, `bc7_precompute`, `verbose_log`, `command_wrapper` e `custom_env` aplicam apenas na inicialização.
+    - `(novos samplers)`: `lod_bias`, `lod_min` e `no_shadow` atualizam apenas samplers Vulkan recém-criados.
+    - `(One-way)`: `async_submit` pode ser desligado em tempo de execução para fallback síncrono, mas religar exige reiniciar o processo.
 
 ---
 

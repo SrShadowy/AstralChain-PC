@@ -26,6 +26,8 @@ VkBool32 game_depth_clamp(void) {
     return on ? VK_TRUE : VK_FALSE;
 }
 
+#define VK_WARP_SIZE 32u
+
 static VkPipeline gpl_build_stage(int stage, const uint32_t *spv, size_t n) {
     VkBindingInfo binds[MAX_BIND];
     int nb = vk_reflect(spv, n, binds, MAX_BIND);
@@ -37,7 +39,11 @@ static VkPipeline gpl_build_stage(int stage, const uint32_t *spv, size_t n) {
     if (vkCreatePipelineLayout(g_vk.dev, &lci, NULL, &layout) != VK_SUCCESS) return VK_NULL_HANDLE;
     VkShaderModule m = vk_module(spv, n);
     if (!m) return VK_NULL_HANDLE;
+    VkPipelineShaderStageRequiredSubgroupSizeCreateInfo rsz = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_REQUIRED_SUBGROUP_SIZE_CREATE_INFO,
+        .requiredSubgroupSize = VK_WARP_SIZE};
     VkPipelineShaderStageCreateInfo ss = {.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                                          .pNext = (stage && (g_vk.subgroup32_stages & VK_SHADER_STAGE_FRAGMENT_BIT)) ? &rsz : NULL,
                                           .stage = stage ? VK_SHADER_STAGE_FRAGMENT_BIT : VK_SHADER_STAGE_VERTEX_BIT, .module = m,
                                           .pName = "main"};
     VkGraphicsPipelineLibraryCreateInfoEXT li = {.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_LIBRARY_CREATE_INFO_EXT,
@@ -93,9 +99,10 @@ StageLib *gpl_stage(int stage, const uint32_t *spv, size_t n) {
     if (build) {
         sl->lib = gpl_build_stage(stage, spv, n);
         atomic_store(&sl->state, sl->lib ? 1 : 2);
+        build_notify();
     } else {
         atomic_fetch_add(&gpl_stage_hits, 1);
-        for (uint64_t t0 = SDL_GetTicksNS(); atomic_load(&sl->state) == 0 && SDL_GetTicksNS() - t0 < 3000000000ull;) SDL_Delay(1);
+        wait_built_sync(&sl->state);
     }
     return atomic_load(&sl->state) == 1 ? sl : NULL;
 }

@@ -4,23 +4,37 @@
 #include <stdlib.h>
 #include <pthread.h>
 #include <sched.h>
+#include <time.h>
 #include <SDL3/SDL_cpuinfo.h>
 #include <SDL3/SDL_timer.h>
 #include "../../exec_internal.h"
 
+#define BUILD_WAIT_TIMEOUT_NS 3000000000ull
+#define BUILD_WAIT_SLICE_NS   50000000L
+#define NS_PER_SEC            1000000000L
+
 // ================================================================== worker threads (shader / pipeline builds)
 // First-use compiles run off the render thread; draws needing them are skipped until ready (as on Metal).
-// LARECOMP_SYNC_SHADERS=1 builds on first use, blocking (deterministic tests).
+// LARECOMP_SYNC_SHADERS=1 or LARECOMP_SKIP_UNBUILT=0 builds synchronously/blocking on first use.
 typedef struct Job { void (*fn)(void *); void *arg; struct Job *next; } Job;
 static Job *jobs_head, *jobs_tail;
 static pthread_mutex_t jobs_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t jobs_cond = PTHREAD_COND_INITIALIZER;
+static pthread_mutex_t build_wait_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t build_wait_cond = PTHREAD_COND_INITIALIZER;
 // Low priority (pipeline warm-up): taken only when no other job waits, by at most half of the workers at a time.
 static Job *ljobs_head, *ljobs_tail;
 static int ljobs_running, ljobs_max = 2;
 
+void build_notify(void) {
+    pthread_mutex_lock(&build_wait_lock);
+    pthread_cond_broadcast(&build_wait_cond);
+    pthread_mutex_unlock(&build_wait_lock);
+}
+
 static void *worker(void *a) {
     (void)a;
+    plat_thread_background();
     for (;;) {
         pthread_mutex_lock(&jobs_lock);
         while (!jobs_head && !(ljobs_head && ljobs_running < ljobs_max)) pthread_cond_wait(&jobs_cond, &jobs_lock);
@@ -39,6 +53,7 @@ static void *worker(void *a) {
         pthread_mutex_unlock(&jobs_lock);
         j->fn(j->arg);
         free(j);
+        build_notify();
         if (low) {
             pthread_mutex_lock(&jobs_lock);
             ljobs_running--;
@@ -64,6 +79,7 @@ static pthread_cond_t tjobs_cond = PTHREAD_COND_INITIALIZER;
 
 static void *translator(void *a) {
     (void)a;
+    plat_thread_background();
     for (;;) {
         pthread_mutex_lock(&tjobs_lock);
         while (!tjobs_head) pthread_cond_wait(&tjobs_cond, &tjobs_lock);
@@ -73,6 +89,7 @@ static void *translator(void *a) {
         pthread_mutex_unlock(&tjobs_lock);
         j->fn(j->arg);
         free(j);
+        build_notify();
     }
     return NULL;
 }
@@ -177,17 +194,30 @@ void promote_translate_job(void *arg) {
 
 bool skip_unbuilt(void) {
     static int skip = -1;
-    if (skip < 0) skip = getenv("LARECOMP_SKIP_UNBUILT") != NULL;
+    if (skip < 0) {
+        const char *e = getenv("LARECOMP_SKIP_UNBUILT");
+        skip = !sync_shaders() && !(e && !atoi(e));
+    }
     return skip;
+}
+
+void wait_built_sync(_Atomic int *state) {
+    if (atomic_load(state) != 0) return;
+    uint64_t t0 = SDL_GetTicksNS();
+    pthread_mutex_lock(&build_wait_lock);
+    while (atomic_load(state) == 0 && SDL_GetTicksNS() - t0 < BUILD_WAIT_TIMEOUT_NS) {
+        struct timespec ts;
+        clock_gettime(CLOCK_REALTIME, &ts);
+        ts.tv_nsec += BUILD_WAIT_SLICE_NS;
+        if (ts.tv_nsec >= NS_PER_SEC) { ts.tv_sec++; ts.tv_nsec -= NS_PER_SEC; }
+        pthread_cond_timedwait(&build_wait_cond, &build_wait_lock, &ts);
+    }
+    pthread_mutex_unlock(&build_wait_lock);
+    cum_built_ns += SDL_GetTicksNS() - t0;
 }
 
 void wait_built(_Atomic int *state) {
     if (skip_unbuilt() || atomic_load(state) != 0) return;
-    uint64_t t0 = SDL_GetTicksNS(), now = t0;
-    while (atomic_load(state) == 0 && now - t0 < 3000000000ull) {
-        if (now - t0 < 20000000ull) sched_yield(); else SDL_Delay(1);
-        now = SDL_GetTicksNS();
-    }
-    cum_built_ns += SDL_GetTicksNS() - t0;
+    wait_built_sync(state);
 }
 // [extra]

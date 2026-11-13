@@ -38,6 +38,8 @@ typedef struct {
     bool occ_precise;  // occlusionQueryPrecise: samples-passed counters count samples, not just visible / not (exec.c oq_*)
     bool depth_clamp;  // depthClamp feature: game pipelines clamp depth instead of clipping it (exec.c game_depth_clamp)
     bool gpl;  // VK_EXT_graphics_pipeline_library with fast linking (exec.c: shader libraries)
+    bool subgroup_size_control; // [extra]
+    uint32_t subgroup32_stages; // [extra]
     // window
     VkSurfaceKHR surface;
     VkSwapchainKHR swapchain;

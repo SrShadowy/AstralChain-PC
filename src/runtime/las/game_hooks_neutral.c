@@ -19,7 +19,12 @@ int texpatch_heart_kind(int id) { (void)id; return 0; }
 void texpatch_heart_tint(int kind, float tint[8]) { (void)kind; (void)tint; }
 void escape_bottle_tint(int kind, const float *ui, uint32_t ui_size, float tint[8]) { (void)kind; (void)ui; (void)ui_size; (void)tint; }
 void widescreen_backdrop_seen(uint64_t hash) { (void)hash; }
-void widescreen_scene_ubo(const float *u, uint64_t size) { (void)u; (void)size; }
+// [extra]
+#include "hooks/gpu/velocity_pass.h"
+void widescreen_scene_ubo(const float *u, uint64_t size) {
+    extra_velocity_scene_ubo(u, size);
+}
+// [extra]
 float widescreen_effect_stretch(uint64_t fs_hash) { (void)fs_hash; return 1.0f; }
 /* kernel.c in LASRecomp: per-thread time blocked in waits (frame pacing, off). */
 __thread uint64_t g_blocked_ns;

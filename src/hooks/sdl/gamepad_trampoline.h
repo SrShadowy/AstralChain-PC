@@ -2,19 +2,13 @@
 #include <SDL3/SDL.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include "additions/toggles/ac_toggles.h"
 #include "additions/overlay/ac_overlay.h"
 
 #define EXTRA_GAMEPAD_DEADZONE 8000
 #define EXTRA_OVERLAY_HOLD_MS 2000
 #define EXTRA_DEVICE_GAMEPAD 0
 #define EXTRA_DEVICE_KBM 1
-
-enum {
-    EXTRA_PROMPT_MODE_SWITCH = 0,
-    EXTRA_PROMPT_MODE_KBM = 1,
-    EXTRA_PROMPT_MODE_XBOX = 2,
-    EXTRA_PROMPT_MODE_AUTO = 3
-};
 
 enum {
     EXTRA_HID_BIT_A = 0,
@@ -37,9 +31,6 @@ enum {
 
 __attribute__((weak)) SDL_Gamepad *g_sdl_gamepad;
 __attribute__((weak)) int g_sdl_active_device = EXTRA_DEVICE_KBM;
-__attribute__((weak)) uint32_t g_sdl_prompt_generation = 1;
-__attribute__((weak)) int g_extra_prompts_override = -1;
-__attribute__((weak)) int g_extra_gamepad_confirm_a = -1;
 __attribute__((weak)) uint64_t g_sdl_l3r3_start_ms = 0;
 __attribute__((weak)) int g_sdl_l3r3_latched = 0;
 

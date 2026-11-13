@@ -35,11 +35,9 @@ float s_hud_opacity = 0.86f;
 bool  s_hud_show_with_menu = true;
 
 int effective_target_fps(void) {
-    if (g_extra_fps_override > 0) return g_extra_fps_override;
-    if (g_extra_fps_override == 0) {
-        const char *e = getenv("AC_FPS");
-        if (e && *e) return atoi(e);
-    }
+    if (g_extra_fps_override >= 0) return g_extra_fps_override;
+    const char *e = getenv("AC_FPS");
+    if (e && *e) return atoi(e);
     return 60;
 }
 
@@ -315,14 +313,38 @@ void ac_perf_hud_dashboard_section(const char *present_mode) {
                      "Tempo de Quadro em ms (menor = mais estável)", 0.0f, 40.0f, ImVec2(-1.0f, 46.0f));
 
     ac_ui_section_header("OVERLAY DE PERFORMANCE (MENU ESCONDIDO)", "// HUD.IRIS");
-    ImGui::Checkbox("Ativar Overlay de Performance em Jogo (Menu Oculto)", &s_hud_enabled);
+    bool changed = false;
+    changed |= ImGui::Checkbox("Ativar Overlay de Performance em Jogo (Menu Oculto)", &s_hud_enabled);
     ImGui::BeginDisabled(!s_hud_enabled);
-    ImGui::Combo("Estilo do HUD", &s_hud_mode,
-                 "Compacto (Barra Tática IRIS)\0Detalhado (Telemetria + Gráfico)\0Mínimo (Pílula FPS)\0");
-    ImGui::Combo("Posição na Tela", &s_hud_corner,
-                 "Superior Esquerdo\0Superior Direito\0Inferior Esquerdo\0Inferior Direito\0");
-    ImGui::SliderFloat("Opacidade do HUD", &s_hud_opacity, 0.30f, 1.00f, "%.2f", ImGuiSliderFlags_AlwaysClamp);
-    ImGui::Checkbox("Manter visível enquanto este menu estiver aberto (Prévia)", &s_hud_show_with_menu);
+    changed |= ImGui::Combo("Estilo do HUD", &s_hud_mode,
+                            "Compacto (Barra Tática IRIS)\0Detalhado (Telemetria + Gráfico)\0Mínimo (Pílula FPS)\0");
+    changed |= ImGui::Combo("Posição na Tela", &s_hud_corner,
+                            "Superior Esquerdo\0Superior Direito\0Inferior Esquerdo\0Inferior Direito\0");
+    changed |= ImGui::SliderFloat("Opacidade do HUD", &s_hud_opacity, 0.30f, 1.00f, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+    changed |= ImGui::Checkbox("Manter visível enquanto este menu estiver aberto (Prévia)", &s_hud_show_with_menu);
     ImGui::EndDisabled();
+    if (changed) {
+        s_hud_booted = true;
+        ac_config_sync_save_hook();
+    }
     ImGui::TextDisabled("Dica: Feche este painel com [Insert] para jogar com o HUD ativo sem bloquear o controle.");
+}
+
+void ac_perf_hud_get_config(AcPerfHudConfig *out) {
+    if (!out) return;
+    out->enabled = s_hud_enabled;
+    out->mode = s_hud_mode;
+    out->corner = s_hud_corner;
+    out->opacity = s_hud_opacity;
+    out->show_with_menu = s_hud_show_with_menu;
+}
+
+void ac_perf_hud_set_config(const AcPerfHudConfig *cfg) {
+    if (!cfg) return;
+    s_hud_booted = true;
+    s_hud_enabled = cfg->enabled;
+    s_hud_mode = cfg->mode < 0 ? 0 : (cfg->mode > 2 ? 2 : cfg->mode);
+    s_hud_corner = cfg->corner < 0 ? 0 : (cfg->corner > 3 ? 3 : cfg->corner);
+    s_hud_opacity = cfg->opacity < 0.30f ? 0.30f : (cfg->opacity > 1.00f ? 1.00f : cfg->opacity);
+    s_hud_show_with_menu = cfg->show_with_menu;
 }

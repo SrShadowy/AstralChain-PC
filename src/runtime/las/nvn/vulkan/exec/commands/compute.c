@@ -5,6 +5,8 @@
 
 typedef struct { Prog p; ShaderInfo *si; VkPipeline pipe; uint32_t local[3]; } CsProg;
 
+#define VK_WARP_SIZE 32u // [extra]
+
 static void build_compute(void *arg) {
     CsProg *cp = arg;
     size_t n = 0;
@@ -16,8 +18,12 @@ static void build_compute(void *arg) {
     cp->p.layout = make_layout(&cp->p, 1, VK_SHADER_STAGE_COMPUTE_BIT, 0);
     VkSpecializationMapEntry me[3] = {{0, 0, 4}, {1, 4, 4}, {2, 8, 4}};
     VkSpecializationInfo spec = {3, me, 12, cp->local};
+    VkPipelineShaderStageRequiredSubgroupSizeCreateInfo rsz = { // [extra]
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_REQUIRED_SUBGROUP_SIZE_CREATE_INFO,
+        .requiredSubgroupSize = VK_WARP_SIZE}; // [extra]
     VkComputePipelineCreateInfo ci = {.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
                                       .stage = {.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                                                .pNext = (g_vk.subgroup32_stages & VK_SHADER_STAGE_COMPUTE_BIT) ? &rsz : NULL, // [extra]
                                                 .stage = VK_SHADER_STAGE_COMPUTE_BIT, .module = m, .pName = "main",
                                                 .pSpecializationInfo = &spec},
                                       .layout = cp->p.layout};
@@ -71,7 +77,7 @@ void dispatch_compute(uint32_t gx, uint32_t gy, uint32_t gz) {
     snap_reason = "compute"; snapshots_invalidate(NULL);
     if (!st.program || !gx || !gy || !gz) return;
     CsProg *cp = compute_program(st.program);
-    if (cp) wait_built(&cp->p.state);
+    if (cp) wait_built_sync(&cp->p.state); // [extra]
     if (!cp || atomic_load(&cp->p.state) != 1) { SKIPPED(); return; }
     {   // LARECOMP_SKIP_CS=<code address hex> (debug): skip that compute shader's dispatches, to see what it does
         static uint64_t skip = ~0ull;

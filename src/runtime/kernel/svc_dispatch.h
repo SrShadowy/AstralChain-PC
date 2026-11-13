@@ -1,6 +1,8 @@
 #pragma once // [extra]
 /* Horizon OS supervisor call (SVC) dispatcher and cutscene frame pacing. */
 #include "horizon_defs.h"
+#include "hooks/gpu/aspect_extra.h" // [extra]
+#include "additions/toggles/ac_toggles.h" // [extra]
 
 static void rt_svc_body(Cpu *c, uint32_t imm, uint64_t pc);
 static unsigned test_stall_ms;  /* (AC_CUTSCENE_STALL) slept after the kernel lock is released */
@@ -81,6 +83,7 @@ void rt_svc(Cpu *c, uint32_t imm, uint64_t pc) {
 int cutscene_mode;  /* (presented at 30 FPS) */
 static unsigned cut_ends;
 static double cut_carried;  /* (svc #0xB2, reported at a cutscene's end) */
+extern double extra_audio_consume_starved_ms(void); // [extra]
 
 /* Handles cutscene pacing (SVC 0xB1 injected by Dynamic-FPS patch).
  * Reports cutscene status, monitors A/V desync hitches, and compensates delta debt. */
@@ -96,7 +99,8 @@ static void handle_cutscene_pace(Cpu *c) {
     }
 
     int cutscene = !(c->x[21] & 1);
-    cutscene_mode = cutscene && at30;
+    int effective_at30 = (g_extra_cutscene_30fps >= 0) ? g_extra_cutscene_30fps : at30; // [extra]
+    cutscene_mode = cutscene && effective_at30; // [extra]
 
     /* Monitor cutscene transitions and debug stalls */
     {
@@ -184,7 +188,22 @@ static void handle_cutscene_pace(Cpu *c) {
         }
     }
 
+    // [extra]
+    double starved_ms = extra_audio_consume_starved_ms();
+    float starved_frames = (float)(starved_ms / (double)CUTSCENE_FRAME_MS_BASE);
+
     if (!cutscene_mode) {
+        if (cutscene && !at30 && starved_frames > 0.0f) {
+            float measured_f;
+            uint32_t raw_bits = (uint32_t)c->v[8];
+            memcpy(&measured_f, &raw_bits, sizeof(float));
+            measured_f -= starved_frames;
+            if (measured_f < 0.5f) {
+                measured_f = 0.5f;
+            }
+            memcpy(&raw_bits, &measured_f, sizeof(float));
+            c->v[8] = raw_bits;
+        }
         debt = 0.0f;
         was = 0;
         return;
@@ -200,7 +219,13 @@ static void handle_cutscene_pace(Cpu *c) {
     }
     was = 1;
 
-    debt += measured - CUTSCENE_DEFAULT_STEP;
+    debt += (measured - CUTSCENE_DEFAULT_STEP) - starved_frames;
+    if (debt < 0.0f) {
+        debt = 0.0f;
+    }
+    if (debt > CUTSCENE_MAX_TOTAL_DEBT_FRAMES) {
+        debt = CUTSCENE_MAX_TOTAL_DEBT_FRAMES;
+    }
     float step = CUTSCENE_DEFAULT_STEP;
 
     if (debt >= CUTSCENE_DEFAULT_STEP) {
@@ -211,6 +236,7 @@ static void handle_cutscene_pace(Cpu *c) {
         step += extra;
         debt -= extra;
     }
+    // [extra]
 
     if (debt < CUTSCENE_MIN_DEBT_LIMIT) {
         debt = CUTSCENE_MIN_DEBT_LIMIT;
@@ -310,6 +336,90 @@ static void handle_cutscene_carry(Cpu *c) {
     }
 }
 
+// [extra]
+/* Handles custom resolution and aspect ratio injection (SVC 0xB3). */
+static void handle_resolution_aspect(Cpu *c, uint64_t pc) {
+    AcResolutionConfig cfg;
+    extra_aspect_query_config(&cfg);
+    int custom = cfg.is_custom ? 1 : 0;
+    int32_t w = cfg.width;
+    int32_t h = cfg.height;
+    int32_t l1w = custom ? w : AC_RES_DEFAULT_L1_WIDTH;
+    int32_t l1h = custom ? h : AC_RES_DEFAULT_L1_HEIGHT;
+    int32_t l2w = custom ? w : AC_RES_DEFAULT_L2_WIDTH;
+    uint64_t at = pc - HORIZON_MAIN_MODULE_BASE;
+    int32_t tw = (w < AC_RES_DEFAULT_WIDTH) ? AC_RES_DEFAULT_WIDTH : w;
+    int32_t th = (w < AC_RES_DEFAULT_WIDTH) ? AC_RES_DEFAULT_HEIGHT : h;
+    int docked = ((uint32_t)c->x[0] == (uint32_t)tw);
+
+    switch (at) {
+        case AC_SVC_B3_SITE_DISPLAY_W:
+            c->x[8] = (uint32_t)tw;
+            return;
+        case AC_SVC_B3_SITE_DISPLAY_H:
+            c->x[8] = (uint32_t)th;
+            return;
+        case AC_SVC_B3_SITE_STARTUP_W:
+        case AC_SVC_B3_SITE_RECREATE_W:
+            c->x[9] = (uint32_t)tw;
+            return;
+        case AC_SVC_B3_SITE_STARTUP_H:
+        case AC_SVC_B3_SITE_RECREATE_H:
+            c->x[9] = (uint32_t)th;
+            return;
+        case AC_SVC_B3_SITE_LEVEL_0:
+            c->x[1] = docked ? (uint32_t)w : (uint32_t)c->x[19];
+            c->x[2] = docked ? (uint32_t)h : (uint32_t)c->x[20];
+            return;
+        case AC_SVC_B3_SITE_LEVEL_1:
+            c->x[20] = 630;
+            c->x[22] = (uint32_t)l1h;
+            c->x[1] = docked ? (uint32_t)l1w : 1024;
+            c->x[2] = docked ? (uint32_t)l1h : 630;
+            return;
+        case AC_SVC_B3_SITE_LEVEL_2:
+            c->x[1] = docked ? (uint32_t)l2w : 800;
+            c->x[2] = docked ? (uint32_t)l1h : 630;
+            return;
+        case AC_SVC_B3_SITE_POOL_SIZE:
+            c->x[8] = cfg.pool_size;
+            return;
+        case AC_SVC_B3_SITE_CAMERA_ASPECT: {
+            float fw, fh;
+            uint32_t bw = (uint32_t)c->v[3];
+            uint32_t bh = (uint32_t)c->v[1];
+            memcpy(&fw, &bw, sizeof(float));
+            memcpy(&fh, &bh, sizeof(float));
+            float a = fw / fh;
+            if (custom && fw * 9.0f == fh * 16.0f) {
+                a = cfg.aspect;
+            }
+            uint32_t ba;
+            memcpy(&ba, &a, sizeof(uint32_t));
+            c->v[1] = ba;
+            return;
+        }
+        case AC_SVC_B3_SITE_CAMERA_RECT: {
+            int32_t cw = (int32_t)c->x[1];
+            int32_t ch = (int32_t)c->x[2];
+            int32_t rx = 0;
+            int32_t ry = 0;
+            if (custom && ch > 0 && (int64_t)cw * 9 == (int64_t)ch * 16 && cfg.aspect > AC_ASPECT_RATIO_16_9) {
+                int32_t ww = (int32_t)((float)ch * cfg.aspect);
+                rx = (cw - ww) / 2;
+                c->x[1] = (uint32_t)ww;
+            }
+            memcpy((void*)(uintptr_t)(c->x[8] + 0x260), &rx, sizeof(int32_t));
+            memcpy((void*)(uintptr_t)(c->x[8] + 0x264), &ry, sizeof(int32_t));
+            return;
+        }
+        default:
+            boundary("svc-b3-site", c, pc);
+            return;
+    }
+}
+// [extra]
+
 static void rt_svc_body(Cpu *c, uint32_t imm, uint64_t pc) {
     if (imm == SVC_CUSTOM_CUTSCENE_PACE) {
         handle_cutscene_pace(c);
@@ -320,6 +430,11 @@ static void rt_svc_body(Cpu *c, uint32_t imm, uint64_t pc) {
         handle_cutscene_carry(c);
         return;
     }
+
+    if (imm == SVC_CUSTOM_RESOLUTION_ASPECT) { // [extra]
+        handle_resolution_aspect(c, pc);
+        return;
+    } // [extra]
 
     app_pump();
     if (++syscalls > SYSCALL_LIMIT) {

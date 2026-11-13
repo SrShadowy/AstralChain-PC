@@ -71,7 +71,7 @@ static inline int extra_env_fps(const char *name) {
 /* AC_FPS, falling back to the legacy AC_TARGET_FPS spelling, then to 60.
  * 0 means unthrottled. The overlay (g_extra_fps_override) wins while set. */
 static inline int extra_env_target_fps(void) {
-    if (g_extra_fps_override > 0) return g_extra_fps_override; /* [extra] overlay override */
+    if (g_extra_fps_override >= 0) return g_extra_fps_override; /* [extra] overlay/INI override */
     static int cached = EXTRA_ENV_UNREAD;
     if (cached == EXTRA_ENV_UNREAD) {
         cached = extra_env_fps("AC_FPS");

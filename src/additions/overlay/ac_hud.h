@@ -59,6 +59,8 @@ inline void ac_ui_section_header(const char *title, const char *sys_tag = nullpt
     ImGui::SetCursorScreenPos(ImVec2(p.x, p.y + h + 4.0f));
 }
 
+#include "additions/overlay/ac_hud_config.h"
+
 void ac_perf_hud_tick(void);
 void ac_perf_hud_render(bool menu_visible);
 void ac_perf_hud_dashboard_section(const char *present_mode);

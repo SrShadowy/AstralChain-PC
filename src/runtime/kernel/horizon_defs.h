@@ -38,9 +38,10 @@ enum HorizonSvc {
     SVC_WAIT_FOR_ADDRESS            = 0x34,
     SVC_SIGNAL_TO_ADDRESS           = 0x35,
 
-    /* Custom runtime patches (Dynamic-FPS / Cutscene frame pacing) */
+    /* Custom runtime patches (Dynamic-FPS / Cutscene frame pacing / Resolution & Aspect) */
     SVC_CUSTOM_CUTSCENE_PACE        = 0xB1,
     SVC_CUSTOM_CUTSCENE_CARRY       = 0xB2,
+    SVC_CUSTOM_RESOLUTION_ASPECT    = 0xB3,
 };
 
 /* Horizon OS Handle allocation partitions & pseudo-handles */
@@ -205,6 +206,7 @@ static inline double horizon_ticks_to_seconds(uint64_t ticks) {
 #define CUTSCENE_MAX_SANITY_STEPS       9000.0f /* 9000 frames at 30 FPS (~300 s / 5 min: filters loadings/pauses) */
 #define CUTSCENE_MAX_CATCHUP_PER_FRAME  7.0f    /* Maximum extra frames compensated per tick during lag recovery */
 #define CUTSCENE_MIN_DEBT_LIMIT         (-2.0f) /* Minimum pacing debt before clamping */
+#define CUTSCENE_MAX_TOTAL_DEBT_FRAMES  150.0f  /* 150 frames (~5.0 s): holds debt across sequential hitches without desync */
 #define CUTSCENE_TRACK_SLOT_COUNT       64      /* Table size for audio/animation track state */
 
 /* Kernel diagnostics */

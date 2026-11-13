@@ -314,14 +314,17 @@ bool guest_direct(uint64_t addr, uint64_t size, VkBuffer *buf, VkDeviceSize *off
     }
     if (copy || addr < HEAP_BASE) return false;
 #ifndef _WIN32 // [extra]
-    // Small dynamic buffers (UI, HUD, IRIS visor quads, text) are rewritten by the CPU before // [extra]
-    // the GPU reads gmem_buf/vcache, so buffers below min_direct are snapshotted per submission.
+    // Small dynamic buffers (UI, HUD, IRIS visor quads, text) are snapshotted in draw.c
+    // via extra_should_copy_draw. When page tracking (userfaultfd) is active, meshes
+    // take the direct VRAM / vcache pathway without artificial minimum size rejections.
     static uint64_t min_direct = 0;
-    if (!min_direct) {
+    static int min_direct_init = 0;
+    if (!min_direct_init) {
         const char *m = getenv("LARECOMP_VK_DIRECT_MIN_SIZE");
-        min_direct = m ? (uint64_t)strtoull(m, NULL, 0) : (512ull * 1024);
+        min_direct = m ? (uint64_t)strtoull(m, NULL, 0) : (pt_init() ? 0 : (512ull * 1024));
+        min_direct_init = 1;
     }
-    if (size < min_direct) {
+    if (min_direct > 0 && size < min_direct) {
         return false;
     } // [extra]
 #endif // [extra]

@@ -22,6 +22,8 @@ struct Settings {
 };
 
 Settings& GetSettings();
+std::string GetClientId();
+void SetClientId(const std::string& client_id);
 void Init();
 void Shutdown();
 bool IsConnected();

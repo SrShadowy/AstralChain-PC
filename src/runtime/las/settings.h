@@ -4,6 +4,7 @@
 #include <stdio.h> // [extra]
 #include <stdlib.h> // [extra]
 #include <string.h> // [extra]
+#include "additions/toggles/ac_toggles.h" // [extra]
 enum { UPSCALE_BILINEAR = 0, UPSCALE_METALFX = 1, UPSCALE_FSR1 = 2, UPSCALE_FSR3 = 3 }; // [extra]
 enum { AA_OFF = 0, AA_SMAA = 1 };
 // [extra] Language definitions and Settings struct // [extra]
@@ -53,26 +54,11 @@ static inline const char *settings_language_name(void) {
     return "Inglês";
 }
 
-static inline void settings_save(void) {
-    FILE *f = fopen("larecomp.ini", "w");
-    if (!f) return;
-    fprintf(f, "# Astral Chain settings\n");
-    int idx = g_settings.language >= 0 && g_settings.language < N_LANGUAGES ? g_settings.language : 0;
-    fprintf(f, "language = %s\n", g_language_codes[idx]);
-    // [extra]
-    static const char *const vlangs[] = {"auto", "ja", "en"};
-    int vidx = g_settings.voice_language >= 0 && g_settings.voice_language <= 2 ? g_settings.voice_language : 0;
-    fprintf(f, "voice_language = %s\n", vlangs[vidx]);
-    // [extra]
-    const char *ustr = g_settings.upscaler == UPSCALE_FSR3 ? "fsr3" : g_settings.upscaler == UPSCALE_FSR1 ? "fsr1" : "bilinear"; // [extra]
-    fprintf(f, "upscaler = %s\n", ustr);
-    fprintf(f, "antialias = %s\n", g_settings.antialias == AA_SMAA ? "smaa" : "off"); // [extra]
-    fprintf(f, "framegen = %d\n", g_settings.framegen ? 1 : 0);
-    fprintf(f, "fsr_jitter = %d\n", g_settings.fsr_jitter ? 1 : 0);
-    fprintf(f, "fsr_sharpness = %.2f\n", g_settings.fsr_sharpness);
-    fprintf(f, "render_scale = %.2f\n", g_settings.render_scale > 0.0f ? g_settings.render_scale : 1.0f);
-    // [extra]
-    fclose(f);
+static inline int extra_settings_bool(const char *val) { // [extra]
+    return !strcmp(val, "true") || !strcmp(val, "on") || !strcmp(val, "yes") || atoi(val) != 0; // [extra]
+} // [extra]
+static inline void settings_save(void) { // [extra]
+    ac_config_sync_save_hook(); // [extra]
 } // [extra]
 static inline void settings_load(void) { // [extra]
     g_settings.antialias = AA_SMAA; // [extra]
@@ -90,44 +76,39 @@ static inline void settings_load(void) { // [extra]
     const char *aa = getenv("AC_ANTIALIAS");
     if (aa) {
         if (!strcmp(aa, "smaa") || !strcmp(aa, "1")) g_settings.antialias = AA_SMAA;
-        else if (!strcmp(aa, "off") || !strcmp(aa, "0")) g_settings.antialias = AA_OFF;
+        else if (!strcmp(aa, "off") || !strcmp(aa, "none") || !strcmp(aa, "0")) g_settings.antialias = AA_OFF; // [extra]
     }
-    // [extra] Language persistence in larecomp.ini // [extra]
-    FILE *f = fopen("larecomp.ini", "r");
+    FILE *f = fopen("userdata/launcher.ini", "r"); // [extra]
+    if (!f) f = fopen("larecomp.ini", "r"); // [extra]
     if (f) {
         char line[128];
         while (fgets(line, sizeof(line), f)) {
             char key[32], val[64];
-            if (sscanf(line, " %31[^= ] = %63[^\n]", key, val) == 2 && !strcmp(key, "language")) {
+            if (sscanf(line, " %31[^= \t\r\n] = %63[^\r\n]", key, val) != 2) continue; // [extra]
+            size_t vlen = strlen(val);
+            while (vlen > 0 && (val[vlen - 1] == ' ' || val[vlen - 1] == '\t')) val[--vlen] = '\0';
+            if (!strcmp(key, "language")) { // [extra]
                 for (int i = 0; i < N_LANGUAGES; i++) {
                     if (!strcmp(val, g_language_codes[i])) { g_settings.language = i; break; }
                 }
-            }
-            // [extra]
-            else if (sscanf(line, " %31[^= ] = %63[^\n]", key, val) == 2 && !strcmp(key, "voice_language")) {
+            } else if (!strcmp(key, "voice_language")) { // [extra]
                 g_settings.voice_language = !strcmp(val, "ja") ? 1 : !strcmp(val, "en") ? 2 : 0;
-            } // [extra]
-            else if (sscanf(line, " %31[^= ] = %63[^\n]", key, val) == 2 && !strcmp(key, "upscaler") && !u) { // [extra]
+            } else if (!strcmp(key, "upscaler") && !u) { // [extra]
                 g_settings.upscaler = !strcmp(val, "fsr3") ? UPSCALE_FSR3 : !strcmp(val, "fsr1") ? UPSCALE_FSR1 : UPSCALE_BILINEAR;
-            }
-            else if (sscanf(line, " %31[^= ] = %63[^\n]", key, val) == 2 && !strcmp(key, "antialias") && !aa) { // [extra]
-                g_settings.antialias = (!strcmp(val, "off") || !strcmp(val, "0")) ? AA_OFF : AA_SMAA;
-            } // [extra]
-            else if (sscanf(line, " %31[^= ] = %63[^\n]", key, val) == 2 && !strcmp(key, "framegen")) {
-                g_settings.framegen = atoi(val) != 0;
-            }
-            else if (sscanf(line, " %31[^= ] = %63[^\n]", key, val) == 2 && !strcmp(key, "fsr_jitter")) {
-                g_settings.fsr_jitter = atoi(val) != 0;
-            }
-            else if (sscanf(line, " %31[^= ] = %63[^\n]", key, val) == 2 && !strcmp(key, "fsr_sharpness")) {
+            } else if (!strcmp(key, "antialias") && !aa) { // [extra]
+                g_settings.antialias = (!strcmp(val, "off") || !strcmp(val, "none") || !strcmp(val, "0")) ? AA_OFF : AA_SMAA;
+            } else if (!strcmp(key, "framegen") || !strcmp(key, "frame_gen")) { // [extra]
+                g_settings.framegen = extra_settings_bool(val);
+            } else if (!strcmp(key, "fsr_jitter")) {
+                g_settings.fsr_jitter = extra_settings_bool(val);
+            } else if (!strcmp(key, "fsr_sharpness")) { // [extra]
                 g_settings.fsr_sharpness = (float)atof(val);
-            }
-            else if (sscanf(line, " %31[^= ] = %63[^\n]", key, val) == 2 && !strcmp(key, "render_scale")) {
+            } else if (!strcmp(key, "render_scale")) { // [extra]
                 g_settings.render_scale = (float)atof(val);
             } // [extra]
         }
         fclose(f);
-    }
+    } // [extra]
     const char *lang = getenv("AC_LANGUAGE");
     if (!lang || !*lang) lang = getenv("LARECOMP_LANG");
     if (lang && *lang) {
@@ -135,7 +116,6 @@ static inline void settings_load(void) { // [extra]
             if (!strcmp(lang, g_language_codes[i])) { g_settings.language = i; break; }
         }
     } // [extra]
-    // [extra]
     const char *vlang = getenv("AC_VOICE_LANGUAGE");
     if (!vlang || !*vlang) vlang = getenv("LARECOMP_VOICE_LANG");
     if (vlang && *vlang) {
@@ -144,9 +124,9 @@ static inline void settings_load(void) { // [extra]
         else g_settings.voice_language = 0;
     }
     const char *fg = getenv("AC_FRAMEGEN"); // [extra]
-    if (fg && *fg) g_settings.framegen = (atoi(fg) != 0 || !strcmp(fg, "true") || !strcmp(fg, "on"));
+    if (fg && *fg) g_settings.framegen = extra_settings_bool(fg); // [extra]
     const char *jit = getenv("AC_FSR_JITTER");
-    if (jit && *jit) g_settings.fsr_jitter = (atoi(jit) != 0 || !strcmp(jit, "true") || !strcmp(jit, "on"));
+    if (jit && *jit) g_settings.fsr_jitter = extra_settings_bool(jit); // [extra]
     const char *shp = getenv("AC_FSR_SHARPNESS");
     if (shp && *shp) g_settings.fsr_sharpness = (float)atof(shp);
     const char *rsc = getenv("AC_RENDER_SCALE");
@@ -154,5 +134,5 @@ static inline void settings_load(void) { // [extra]
     if (g_settings.fsr_sharpness < 0.0f) g_settings.fsr_sharpness = 0.0f;
     if (g_settings.fsr_sharpness > 1.0f) g_settings.fsr_sharpness = 1.0f;
     if (g_settings.render_scale < 0.5f || g_settings.render_scale > 2.0f) g_settings.render_scale = 1.0f; // [extra]
-    // [extra]
+    ac_config_sync_init_hook(); // [extra]
 } // [extra]

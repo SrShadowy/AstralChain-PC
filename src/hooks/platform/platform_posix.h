@@ -11,12 +11,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/resource.h>
 #include <time.h>
 #include <unistd.h>
 #include <wchar.h>
 
-#define EXTRA_MS_PER_SEC 1000
-#define EXTRA_NS_PER_MS 1000000L
+#define EXTRA_BG_THREAD_NICE 10
 #define EXTRA_DUMMY_PROCESS_HANDLE ((HANDLE)(uintptr_t)1)
 #define EXTRA_DUMMY_THREAD_HANDLE ((HANDLE)(uintptr_t)2)
 
@@ -212,9 +212,20 @@ static inline FARPROC GetProcAddress(HMODULE mod, const char *name) {
     return (FARPROC)dlsym(RTLD_DEFAULT, name);
 }
 
+static inline BOOL extra_set_thread_priority(HANDLE t, int prio) {
+    (void)t;
+    if (prio < 0) {
+        setpriority(PRIO_PROCESS, 0, EXTRA_BG_THREAD_NICE);
+    }
+    return TRUE;
+}
+
 #define GetCurrentThread() EXTRA_DUMMY_THREAD_HANDLE
-#define SetThreadPriority(t, p) (1)
+#define SetThreadPriority(t, p) extra_set_thread_priority((t), (p))
 #define THREAD_PRIORITY_BELOW_NORMAL (-1)
+#define THREAD_PRIORITY_NORMAL 0
+#define THREAD_PRIORITY_ABOVE_NORMAL 1
+#define THREAD_PRIORITY_HIGHEST 2
 #define InterlockedExchange(t, v) __atomic_exchange_n((int32_t *)(t), (int32_t)(v), __ATOMIC_SEQ_CST)
 #define InterlockedCompareExchange(dest, exch, comp) __sync_val_compare_and_swap((int32_t *)(dest), (int32_t)(comp), (int32_t)(exch))
 

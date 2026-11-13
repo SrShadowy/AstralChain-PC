@@ -26,10 +26,12 @@ find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Svg)
 
 add_executable(astral_chain_launcher
     include/Config.hpp
+    include/ConfigWatcher.hpp
     include/ProcessRunner.hpp
     include/ControlsDialog.hpp
     include/SettingsDialog.hpp
     include/MouseSettingsWidget.hpp
+    include/OverlayRpcSettingsWidget.hpp
     include/SetupDialog.hpp
     include/MainWindow.hpp
     include/LogWidget.hpp
@@ -38,10 +40,13 @@ add_executable(astral_chain_launcher
     include/CustomButton.hpp
     src/main.cpp
     src/Config.cpp
+    src/ConfigWatcher.cpp
     src/ProcessRunner.cpp
     src/ControlsDialog.cpp
     src/SettingsDialog.cpp
+    src/SettingsDialogTabs.cpp
     src/MouseSettingsWidget.cpp
+    src/OverlayRpcSettingsWidget.cpp
     src/SetupDialog.cpp
     src/MainWindow.cpp
     src/MainWindowUi.cpp

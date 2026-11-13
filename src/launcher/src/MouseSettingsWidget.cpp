@@ -27,18 +27,18 @@ constexpr const char* kCurveAggressiveId = "aggressive";
 }
 
 MouseSettingsWidget::MouseSettingsWidget(QWidget* parent)
-    : QWidget(parent)
-{
+    : QWidget(parent) {
     setupUi();
 }
 
-void MouseSettingsWidget::setupUi()
-{
+void MouseSettingsWidget::setupUi() {
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
 
     auto* group = new QGroupBox("Mouse & Câmera (PC)", this);
     auto* form = new QFormLayout(group);
+
+    m_mouseLookCheck = new QCheckBox("Controlar Câmera com Mouse (F10 Alterna Captura)", group);
 
     auto* sensLayout = new QHBoxLayout();
     m_sensSlider = new QSlider(Qt::Horizontal, group);
@@ -73,6 +73,21 @@ void MouseSettingsWidget::setupUi()
     connect(m_menuNavCheck, &QCheckBox::toggled, m_menuMotionCheck, &QCheckBox::setEnabled);
     connect(m_menuNavCheck, &QCheckBox::toggled, m_menuCellSpin, &QSpinBox::setEnabled);
 
+    auto notify = [this]() {
+        if (!m_loading) {
+            emit modified();
+        }
+    };
+    connect(m_mouseLookCheck, &QCheckBox::toggled, this, notify);
+    connect(m_sensSpin, &QSpinBox::valueChanged, this, notify);
+    connect(m_yScaleSpin, &QDoubleSpinBox::valueChanged, this, notify);
+    connect(m_curveCombo, &QComboBox::currentIndexChanged, this, notify);
+    connect(m_invertCheck, &QCheckBox::toggled, this, notify);
+    connect(m_menuNavCheck, &QCheckBox::toggled, this, notify);
+    connect(m_menuMotionCheck, &QCheckBox::toggled, this, notify);
+    connect(m_menuCellSpin, &QSpinBox::valueChanged, this, notify);
+
+    form->addRow("", m_mouseLookCheck);
     form->addRow("Sensibilidade:", sensLayout);
     form->addRow("Escala Vertical (Y):", m_yScaleSpin);
     form->addRow("Curva de Resposta:", m_curveCombo);
@@ -84,23 +99,33 @@ void MouseSettingsWidget::setupUi()
     layout->addWidget(group);
 }
 
-void MouseSettingsWidget::loadFrom(const MouseSettings& settings)
-{
-    m_sensSlider->setValue((int)settings.sensitivity);
-    m_sensSpin->setValue((int)settings.sensitivity);
-    m_yScaleSpin->setValue(settings.yScale);
+void MouseSettingsWidget::loadFrom(const MouseSettings& settings) {
+    m_loading = true;
+    m_mouseLookCheck->setChecked(settings.mouseLook);
+    if (!m_sensSpin->hasFocus()) {
+        m_sensSlider->setValue(static_cast<int>(settings.sensitivity));
+        m_sensSpin->setValue(static_cast<int>(settings.sensitivity));
+    }
+    if (!m_yScaleSpin->hasFocus()) {
+        m_yScaleSpin->setValue(settings.yScale);
+    }
     int cIdx = m_curveCombo->findData(settings.curve);
-    if (cIdx >= 0) m_curveCombo->setCurrentIndex(cIdx);
+    if (cIdx >= 0) {
+        m_curveCombo->setCurrentIndex(cIdx);
+    }
     m_invertCheck->setChecked(settings.invertY);
     m_menuNavCheck->setChecked(settings.menuNav);
     m_menuMotionCheck->setChecked(settings.menuMotion);
     m_menuMotionCheck->setEnabled(settings.menuNav);
-    m_menuCellSpin->setValue(settings.menuCell);
+    if (!m_menuCellSpin->hasFocus()) {
+        m_menuCellSpin->setValue(settings.menuCell);
+    }
     m_menuCellSpin->setEnabled(settings.menuNav);
+    m_loading = false;
 }
 
-void MouseSettingsWidget::writeTo(MouseSettings& settings) const
-{
+void MouseSettingsWidget::writeTo(MouseSettings& settings) const {
+    settings.mouseLook = m_mouseLookCheck->isChecked();
     settings.sensitivity = m_sensSpin->value();
     settings.yScale = m_yScaleSpin->value();
     settings.curve = m_curveCombo->currentData().toString();

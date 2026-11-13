@@ -15,19 +15,22 @@ static inline uint64_t resolve_system_language(uint64_t fallback) {
     const char *env_lang = getenv("AC_LANGUAGE");
     if (!env_lang || !*env_lang) env_lang = getenv("LARECOMP_LANG");
     if (!env_lang || !*env_lang || !strcmp(env_lang, "auto")) {
-        FILE *f = fopen("larecomp.ini", "r");
+        FILE *f = fopen("userdata/launcher.ini", "r"); // [extra]
+        if (!f) f = fopen("larecomp.ini", "r");
         static char ini_val[32] = {0};
         if (f) {
             char line[128];
             while (fgets(line, sizeof(line), f)) {
                 char k[32], v[32];
-                if (sscanf(line, " %31[^= ] = %31[^\n]", k, v) == 2 && !strcmp(k, "language")) {
+                if (sscanf(line, " %31[^= \t\r\n] = %31[^\r\n]", k, v) == 2 && !strcmp(k, "language")) {
+                    size_t n = strlen(v);
+                    while (n > 0 && (v[n - 1] == ' ' || v[n - 1] == '\t')) v[--n] = '\0';
                     strncpy(ini_val, v, sizeof(ini_val) - 1);
                     break;
                 }
             }
             fclose(f);
-        }
+        } // [extra]
         if (ini_val[0] && strcmp(ini_val, "auto") != 0) {
             env_lang = ini_val;
         } else {

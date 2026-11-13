@@ -15,6 +15,7 @@ namespace ac::launcher {
 
 class LogWidget;
 class CustomButton;
+class ConfigWatcher;
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -47,6 +48,7 @@ private:
     void runCommand(const QString& program, const QStringList& args, const QString& statusText, bool isGame = false);
 
     Config m_config;
+    ConfigWatcher* m_configWatcher{nullptr};
     ProcessRunner m_runner;
 
     CustomButton* m_playBtn{nullptr};

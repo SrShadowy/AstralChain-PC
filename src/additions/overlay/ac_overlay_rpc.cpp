@@ -7,15 +7,19 @@
 #include "additions/rpc/ac_discord_rpc.h"
 #include "additions/rpc/ac_game_data.h"
 #include "additions/overlay/ac_hud.h"
+#include "additions/toggles/ac_toggles.h"
 
 namespace AcOverlayRpc {
 namespace {
 
-void CheckboxAtomic(const char* label, std::atomic<bool>& val) {
+bool CheckboxAtomic(const char* label, std::atomic<bool>& val) {
     bool v = val.load(std::memory_order_relaxed);
     if (ImGui::Checkbox(label, &v)) {
         val.store(v, std::memory_order_relaxed);
+        ac_config_sync_save_hook();
+        return true;
     }
+    return false;
 }
 
 void Hint(const char* text) {
@@ -112,15 +116,18 @@ void RenderWindow() {
     Hint("Mostra o cronômetro com tempo decorrido desde o início da sessão.");
 
     char cid_buf[64];
-    std::strncpy(cid_buf, s.client_id.c_str(), sizeof(cid_buf) - 1);
+    const std::string cur_cid = AcDiscordRpc::GetClientId();
+    std::strncpy(cid_buf, cur_cid.c_str(), sizeof(cid_buf) - 1);
     cid_buf[sizeof(cid_buf) - 1] = '\0';
     ImGui::SetNextItemWidth(200.0f);
     if (ImGui::InputText("##ac_discord_cid", cid_buf, sizeof(cid_buf))) {
-        s.client_id = cid_buf;
+        AcDiscordRpc::SetClientId(cid_buf);
+        ac_config_sync_save_hook();
     }
     ImGui::SameLine();
     if (ImGui::Button("Padrão (Astral Chain)")) {
-        s.client_id = "1568955734606086196";
+        AcDiscordRpc::SetClientId("1568955734606086196");
+        ac_config_sync_save_hook();
     }
     Hint("ID da aplicação Discord. Permite apontar para sua própria aplicação de Rich Presence no Developer Portal.");
 

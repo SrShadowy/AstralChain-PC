@@ -8,6 +8,7 @@
 #include "../../exec_internal.h"
 #include "../../../renderer.h"
 #include "hooks/gpu/vtx_debug_extra.h" // [extra]
+#include "hooks/gpu/draw_classify.h" // [extra]
 
 static uint64_t g_cur_fs_hash;
 
@@ -397,11 +398,41 @@ static void draw_(CmdRec *r, bool indexed) {
             vp_oy = (ph - st.rt.color[0]->height * u) * 0.5f;
         }
     }
+    // [extra]
+    bool ui_box = false;
+    if (st.rt.ncolor && st.rt.color[0] &&
+        (uint64_t)st.rt.color[0]->width * 9 > (uint64_t)st.rt.color[0]->height * 16 * 101 / 100 &&
+        stage_hash(st.program, 0) == AC_UI_BASE_VS_HASH && st.ubuf[0][0].addr && st.ubuf[0][0].size >= 40 * 4) {
+        const float *p = (const float *)(uintptr_t)st.ubuf[0][0].addr;
+        ui_box = fabsf(p[32] - 2.0f / 1280.0f) < 1e-6f && p[33] == 0 && p[35] == -1.0f &&
+                 fabsf(p[37] + 2.0f / 720.0f) < 1e-6f && p[39] == 1.0f;
+        if (ui_box && r->x[2] <= 6 && k.stride[0] >= 16 && st.vbuf[0].addr && st.vbuf[0].size >= 4 * k.stride[0] &&
+            st.ubuf[0][1].addr && st.ubuf[0][1].size >= 16) {
+            const float *m = (const float *)(uintptr_t)st.ubuf[0][1].addr;
+            float lo = 1e30f;
+            float hi = -1e30f;
+            for (int i = 0; i < 4; i++) {
+                const float *v = (const float *)(uintptr_t)(st.vbuf[0].addr + (uint64_t)i * k.stride[0]);
+                float x = m[0] * v[0] + m[1] * v[1] + m[2] * v[2] + m[3] * v[3];
+                lo = fminf(lo, x);
+                hi = fmaxf(hi, x);
+            }
+            if (lo <= 0.5f && hi >= 1279.5f) {
+                ui_box = false;
+            }
+        }
+    }
+    // [extra]
     {   // camera-attached effects sized for 16:9 are widened with the view (runtime/hle/widescreen.c)
         extern float widescreen_effect_stretch(uint64_t fs_hash);
         float k = widescreen_effect_stretch(g_cur_fs_hash);
         float vx = vp[0] * vp_sx + vp_ox, vw = vp[2] * vp_sx;
         if (k > 1.0f) { vx -= vw * (k - 1) / 2; vw *= k; }
+        if (ui_box) { // [extra]
+            float bw = vp[3] * vp_sy * 16.0f / 9.0f;
+            vx += (vw - bw) * 0.5f;
+            vw = bw;
+        } // [extra]
         set_viewport(vx, vp[1] * vp_sy + vp_oy, vw, vp[3] * vp_sy, zn, zf);
         if (g_debug_frame) {
             VkRect2D sr = scissor_rect();
@@ -433,9 +464,11 @@ static void draw_(CmdRec *r, bool indexed) {
     // (in place or through the vertex cache): the game rewrites such data before the GPU got to it. Title screen:
     // the background movie's quad drawn with the logo movie's vertices for a frame (squashed between black bars),
     // 1-12 frames in 25 s uncapped; none with copies, at the same frame rate. LARECOMP_VK_COPY_SMALL=<count>: limit.
-    static int64_t small_max = -1;
-    if (small_max < 0) { const char *e = getenv("LARECOMP_VK_COPY_SMALL"); small_max = e ? atoll(e) : 1024; } // [extra]
-    bool small = r->x[2] <= (uint64_t)small_max && (indexed ? r->x[6] : r->x[4]) <= 4;  // (instanced: their per-instance data too) // [extra]
+    // [extra]
+    uint64_t vs_hash = stage_hash(st.program, 0);
+    uint32_t inst_count = indexed ? (uint32_t)r->x[6] : (uint32_t)r->x[4];
+    bool small = extra_should_copy_draw(vs_hash, g_cur_fs_hash, dt, count, inst_count);
+    // [extra]
     const void *scan_src = NULL;  // deferred index scan (direct index buffer)
     uint32_t scan_isz = 0, scan_restart = 0;
     if (!indexed) {
@@ -532,7 +565,7 @@ static void draw_(CmdRec *r, bool indexed) {
 #undef STREAM_NEED // [extra]
             if (v.size && need > v.size) need = v.size;
             if (!v.addr) { static const uint8_t zero[256]; sp = vk_transient_copy(zero, 256, 16); }
-            else sp = guest_copy_vtx(v.addr, (v.size && v.size <= 524288) ? v.size : (need ? need : 16)); // [extra]
+            else sp = guest_copy_vtx(v.addr, (v.size && v.size <= AC_STREAM_COPY_CAP_BYTES) ? v.size : (need ? need : 16)); // [extra]
         }
         VkDeviceSize off = sp.off;
         if (ss_on && (ss.vb_known >> s & 1) && ss.vb[s] == sp.buf && ss.vo[s] == off) continue;
