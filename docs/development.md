@@ -54,10 +54,13 @@ O projeto prioriza a melhor experiência de execução, estabilidade e desempenh
 
 A integração entre o código herdado e a camada Linux é feita de maneira pragmática:
 
-### A. Princípio dos Hooks, Zero Números Mágicos e Zero Código Comprimido
+### A. Princípio dos Hooks, Zero Números Mágicos e Legibilidade (Sem Compactação Prejudicial)
 - Sempre que uma funcionalidade de plataforma no Linux substituir uma rotina Win32 herdada, a lógica é implementada no módulo adequado sob `src/hooks/` ou `src/additions/` e acionada por uma chamada pontual em `src/runtime/`.
-- **Zero números mágicos**: qualquer constante de tempo, tamanho de buffer, alinhamento, limite de pool ou dimensão de UI deve ser declarada com `#define`, `enum` ou `constexpr` com nome descritivo e unidade explícita.
-- **Zero código comprimido**: nunca comprima múltiplas instruções em uma única linha (ex.: `if (cond) { SetLastError(...); return FALSE; }`) para reduzir artificialmente a contagem de linhas. Cada statement deve estar em sua própria linha com indentação clara. Se um arquivo crescer além do limite ideal, refatore e divida-o em cabeçalhos/arquivos coesos.
+- **Zero números mágicos**: qualquer constante de tempo, tamanho de buffer, alinhamento, limite de pool, offset ou dimensão de UI deve ser declarada com `#define`, `enum` ou `constexpr` com nome descritivo e unidade explícita (constantes triviais e autoexplicativas como `0`, `1`, `-1`, `true/false` e `nullptr` são aceitas normalmente).
+- **Sem compactação que atrapalhe a leitura (regra prática das > 4 linhas)**:
+  - **Permitido**: formas curtas e triviais de 1 linha que aumentam a clareza sem sacrificar leitura, como *guard clauses* (`if (cond) return;`, `if (!ptr) return nullptr;`, `if (cond) continue;`, `if (cond) break;`) ou ternário binário curto e direto (`cond ? a : b`).
+  - **Proibido**: compactar em poucas linhas blocos que naturalmente deveriam ocupar **mais de ~4 linhas**, tais como `switch`/`case` condensado em linha única, cadeias `if / else if / else`, múltiplos `if`s sequenciais condensados, múltiplos statements no mesmo bloco (`if (...) { SetLastError(...); return FALSE; }`), ou ternários grandes/aninhados.
+  - **Critério direto**: *atrapalha a leitura? então não compacte.* Se um arquivo crescer além do limite ideal com formatação limpa, refatore e divida-o em cabeçalhos/arquivos coesos.
 
 ### B. Uso dos Marcadores `// [extra]`
 - O marcador `// [extra]` serve para **demarcar claramente onde `src/runtime/` foi editado**, facilitando revisões e auditorias estáticas (`tools/qa/audit.sh`).

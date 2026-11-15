@@ -236,10 +236,10 @@ FILE_NAMES = {
 
 LEGION_NAMES = {
     "legion_style_thumb_00a0": "Legion_Sword",
-    "legion_style_thumb_00c0": "Legion_Arrow",
-    "legion_style_thumb_02a0": "Legion_Arm",
-    "legion_style_thumb_03a0": "Legion_Beast",
-    "legion_style_thumb_05a0": "Legion_Axe",
+    "legion_style_thumb_02a0": "Legion_Arrow",
+    "legion_style_thumb_03a0": "Legion_Arm",
+    "legion_style_thumb_05a0": "Legion_Beast",
+    "legion_style_thumb_00c0": "Legion_Axe",
 }
 
 CHARA_NAMES = {

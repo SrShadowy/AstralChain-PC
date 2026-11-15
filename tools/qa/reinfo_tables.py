@@ -373,8 +373,8 @@ def main():
         '9': 'Salvation', 'a': 'Madness', 'b': 'Reckoning', 'c': 'Rebirth',
     }
     legions = {
-        '0': 'Sword Legion', '1': 'Arm Legion', '2': 'Beast Legion',
-        '3': 'Axe Legion', '4': 'Arrow Legion',
+        '0': 'Sword Legion', '1': 'Arrow Legion', '2': 'Arm Legion',
+        '3': 'Beast Legion', '4': 'Axe Legion',
     }
     steps, scene_areas = extract_scenario_steps()
     scene_list = [(sid, aid, areas.get(f'{aid:04x}', '')) for sid, aid in sorted(scene_areas.items())]

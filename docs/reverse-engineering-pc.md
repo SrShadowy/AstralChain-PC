@@ -457,11 +457,12 @@ Resultado:
 - **292 missões** (`FILE_MISSION_*` em `GameWord` + `MENU_MISSION_NAME_*` em `menu_text`)
 - **82 ids de boss** (`EVENT_BOSS_NAME_*` em `GameWord`)
 - **12 Files da história** (`k_ac_files`: Startup, Awake, Link, Siege, Accord, Complicit, Wild, Peace, Salvation, Madness, Reckoning, Rebirth)
-- **5 Legions** (`k_ac_legions`: Sword, Arrow, Arm, Beast, Axe)
+- **5 Legions** (`k_ac_legions`: `0=Sword [0x00a0]`, `1=Arrow [0x02a0]`, `2=Arm [0x03a0]`, `3=Beast [0x05a0]`, `4=Axe [0x00c0]`; em runtime via `player_ptr+0xf48`/`0xf38` `[*(0xdbb680)][0]`, tabela `0xbee150` em `0x5edaa0`, switch `0x5d2910..0x5d2ae8` e fallback `save+0x74ef8` escrito em `0x297f08..0x297fc4`)
 
 > **Armadilhas registradas.**
 > 1. `*(0xdbcf10)` (`0x56c240`) armazena IDs de trigger de `AreaName.csv` (`0x1000..0x9900`, onde o nibble alto `1..9` corresponde à família da fase `p100..p900`), e **não** IDs `0x5000..0x5230` de `MENU_DATA_AREA_NAME_`. Em particular, `0x5000` em `*(0xdbcf10)` na fase `p500` é `Ark Sewer Management (Canal Control Room)` (`0x5230`), e ao entrar no Astral Plane (`scene_id = 0x6xxx`, `phase_id = 0x0a00..0x0bff`) `*(0xdbcf10)` retém o último trigger terrestre visitado (ex.: `0x8404` Maison Forest). Por isso, `AcGameData::ResolveSnapshot` verifica primeiro `scene_id`/`phase_id` do Astral Plane e valida se `(raw_area >> 12)` pertence à fase atual antes de mapear para `0x5010..0x5230`.
 > 2. No buffer de save (`*(0xdb83d8)`), o File atual é um `uint16_t` little-endian em `+0x16` (`0x6f573c`); ler `+0x17` retorna sempre `0` (byte alto do `u16`).
+> 3. Os IDs hexadecimais de estilo em `CORE_LEGION_SKILL_HELP_%04x` (`Core_text_USen.bin`) e `legion_style_thumb_%04x` seguem ordem não crescente para o Axe (`0x00c0` = Axe, `0x02a0` = Arrow, `0x03a0` = Arm, `0x05a0` = Beast), enquanto o índice de slot `0..4` (`0xbee150` / `save+0x74f00`) segue exatamente a ordem de desbloqueio (`Sword, Arrow, Arm, Beast, Axe`).
 
 
 

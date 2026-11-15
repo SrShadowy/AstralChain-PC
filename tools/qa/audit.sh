@@ -102,14 +102,19 @@ for f in sorted(files):
             if s.startswith("//") or s.startswith("#") or s.startswith("\"") or s.startswith("QPushButton") or s.startswith("QLabel"):
                 continue
             s_nostr = re.sub(r"\"(?:\\.|[^\"\\])*\"", "\"\"", s)
+            s_nostr = re.sub(r"'\''(?:\\.|[^'\''\\])*'\''", "'\'''\''", s_nostr)
             s_nostr = re.sub(r"//.*$", "", s_nostr).strip()
-            if re.search(r"\{[^}]*;[^}]*;[^}]*\}", s_nostr):
+            has_multi_brace = re.search(r"\{[^}]*;[^}]*;[^}]*\}", s_nostr)
+            has_inline_switch = re.search(r"\bswitch\s*\([^)]*\)\s*\{.*\bcase\b", s_nostr)
+            has_inline_if_else = re.search(r"\bif\s*\([^;]*\)\s*(?:\{[^}]*\}|[^;]+;)\s*else\b", s_nostr)
+            has_multi_if = re.search(r";\s*if\s*\(", s_nostr)
+            if has_multi_brace or has_inline_switch or has_inline_if_else or has_multi_if:
                 bad.append(f"{f}:{idx}: {s}")
 if bad:
+    print("FAILED: Compressed blocks hurting readability found (short 1-line guards like '\''if (cond) return;'\'' are allowed; do not compress switch/if-else/multi-statement blocks):")
     print("\n".join(bad))
 ')
 if [ -n "$COMPRESSED" ]; then
-    echo "FAILED: Compressed multi-statement blocks found:"
     echo "$COMPRESSED"
     exit 1
 fi

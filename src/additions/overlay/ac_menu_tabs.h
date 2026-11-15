@@ -2,4 +2,5 @@
 // [extra] Audio & Mouse tab renderer for the in-game IRIS terminal.
 #pragma once
 
+void ac_menu_tab_graphics(void);
 void ac_menu_tab_audio_mouse(void);

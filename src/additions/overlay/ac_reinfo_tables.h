@@ -154,7 +154,7 @@ static const AcNameEntry k_ac_files[] = {  // 12 story files
 };
 
 static const AcNameEntry k_ac_legions[] = {  // 5 legion types
-    {0x0, "Sword Legion"}, {0x1, "Arm Legion"}, {0x2, "Beast Legion"}, {0x3, "Axe Legion"}, {0x4, "Arrow Legion"},
+    {0x0, "Sword Legion"}, {0x1, "Arrow Legion"}, {0x2, "Arm Legion"}, {0x3, "Beast Legion"}, {0x4, "Axe Legion"},
 };
 
 static const AcNameEntry k_ac_purposes[] = {  // 118 case objectives

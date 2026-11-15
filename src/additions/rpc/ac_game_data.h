@@ -77,10 +77,10 @@ struct LegionKeyEntry {
 
 constexpr LegionKeyEntry kLegionKeys[] = {
     {0, "legion_sword", "Sword Legion"},
-    {1, "legion_arm",   "Arm Legion"},
-    {2, "legion_beast", "Beast Legion"},
-    {3, "legion_axe",   "Axe Legion"},
-    {4, "legion_arrow", "Arrow Legion"},
+    {1, "legion_arrow", "Arrow Legion"},
+    {2, "legion_arm",   "Arm Legion"},
+    {3, "legion_beast", "Beast Legion"},
+    {4, "legion_axe",   "Axe Legion"},
 };
 
 constexpr const char* LegionToIconKey(int id) {
@@ -269,7 +269,7 @@ struct PresenceSnapshot {
     int file_num = 0;            // 1..12 (0 = title screen / unknown)
     std::string file_name;       // e.g. "Startup", "Link", "Reckoning"
     std::string mission_name;    // Active mission or current story case objective
-    int legion_id = -1;          // 0..4 (Sword, Arm, Beast, Axe, Arrow; -1 = unknown)
+    int legion_id = -1;          // 0..4 (Sword, Arrow, Arm, Beast, Axe; -1 = unknown)
     std::string legion_name;     // e.g. "Sword Legion"
     unsigned boss_id = 0;
     std::string boss_name;       // e.g. "HOMUNCULUS alpha"

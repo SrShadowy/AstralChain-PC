@@ -156,17 +156,17 @@ int main() {
     {
         const char* expected_keys[5] = {
             "legion_sword",
+            "legion_arrow",
             "legion_arm",
             "legion_beast",
             "legion_axe",
-            "legion_arrow",
         };
         const char* expected_names[5] = {
             "Sword Legion | File 03",
+            "Arrow Legion | File 03",
             "Arm Legion | File 03",
             "Beast Legion | File 03",
             "Axe Legion | File 03",
-            "Arrow Legion | File 03",
         };
         for (int lid = 0; lid < 5; ++lid) {
             AcGameData::PresenceSnapshot s{};
