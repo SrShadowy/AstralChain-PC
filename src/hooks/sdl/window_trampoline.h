@@ -14,13 +14,13 @@
 #include "additions/overlay/ac_overlay.h"
 #include "additions/overlay/ac_reinfo.h"
 
+#include "hooks/sdl/sdl_vk_map.h"
+#include "hooks/sdl/window_exit.h"
+
 #define EXTRA_DEFAULT_WIN_WIDTH 1600
 #define EXTRA_DEFAULT_WIN_HEIGHT 900
-#define EXTRA_EXIT_WATCHDOG_US 400000
-#define EXTRA_APP_MSG_EXIT 4
 #define EXTRA_APP_MSG_FOCUS 15
 #define EXTRA_MOUSE_ACTIVITY_REL_SQ 2.0f
-#define EXTRA_VK_MAX_ASCII_KEY 256
 
 __attribute__((weak)) SDL_Window *g_sdl_window;
 __attribute__((weak)) int g_sdl_exit_requested;
@@ -86,63 +86,6 @@ static inline BOOL extra_show_window(HWND w, int s) {
         }
     }
     return 1;
-}
-
-static inline uint8_t extra_sdl_to_vk(SDL_Keycode key) {
-    if (key >= SDLK_A && key <= SDLK_Z) {
-        return (uint8_t)('A' + (key - SDLK_A));
-    }
-    if (key >= SDLK_0 && key <= SDLK_9) {
-        return (uint8_t)('0' + (key - SDLK_0));
-    }
-    if (key >= SDLK_F1 && key <= SDLK_F12) {
-        return (uint8_t)(VK_F1 + (key - SDLK_F1));
-    }
-    switch (key) {
-        case SDLK_RETURN:
-            return VK_RETURN;
-        case SDLK_ESCAPE:
-            return VK_ESCAPE;
-        case SDLK_BACKSPACE:
-            return VK_BACK;
-        case SDLK_TAB:
-            return VK_TAB;
-        case SDLK_SPACE:
-            return VK_SPACE;
-        case SDLK_CAPSLOCK:
-            return VK_CAPITAL;
-        case SDLK_INSERT:
-            return VK_INSERT;
-        case SDLK_DELETE:
-            return VK_DELETE;
-        case SDLK_HOME:
-            return VK_HOME;
-        case SDLK_END:
-            return VK_END;
-        case SDLK_PAGEUP:
-            return VK_PRIOR;
-        case SDLK_PAGEDOWN:
-            return VK_NEXT;
-        case SDLK_LSHIFT:
-        case SDLK_RSHIFT:
-            return VK_SHIFT;
-        case SDLK_LCTRL:
-        case SDLK_RCTRL:
-            return VK_CONTROL;
-        case SDLK_LALT:
-        case SDLK_RALT:
-            return VK_MENU;
-        case SDLK_LEFT:
-            return VK_LEFT;
-        case SDLK_UP:
-            return VK_UP;
-        case SDLK_RIGHT:
-            return VK_RIGHT;
-        case SDLK_DOWN:
-            return VK_DOWN;
-        default:
-            return key < EXTRA_VK_MAX_ASCII_KEY ? (uint8_t)key : 0;
-    }
 }
 
 static inline void *extra_window_init(int w, int h, const char *title) {
@@ -215,33 +158,6 @@ static inline void extra_window_set_fullscreen(int on) {
     }
     g_sdl_fullscreen = on ? 1 : 0;
     SDL_SetWindowFullscreen(g_sdl_window, on ? true : false);
-}
-
-static void (*g_app_enqueue_fn)(unsigned) = NULL;
-
-static void *extra_exit_watchdog_thread(void *unused) {
-    (void)unused;
-    usleep(EXTRA_EXIT_WATCHDOG_US);
-    fflush(stdout);
-    fflush(stderr);
-    _exit(0);
-    return NULL;
-}
-
-static inline void extra_trigger_exit(void) {
-    if (g_sdl_exit_requested) {
-        return;
-    }
-    g_sdl_exit_requested = 1;
-    if (g_sdl_window) {
-        SDL_HideWindow(g_sdl_window);
-    }
-    if (g_app_enqueue_fn) {
-        g_app_enqueue_fn(EXTRA_APP_MSG_EXIT);
-    }
-    pthread_t th;
-    pthread_create(&th, NULL, extra_exit_watchdog_thread, NULL);
-    pthread_detach(th);
 }
 
 static inline int extra_window_poll_events(

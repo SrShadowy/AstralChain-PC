@@ -26,6 +26,7 @@ find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Svg)
 
 add_executable(astral_chain_launcher
     include/Config.hpp
+    include/ConfigKeyMap.hpp
     include/ConfigWatcher.hpp
     include/ProcessRunner.hpp
     include/ControlsDialog.hpp

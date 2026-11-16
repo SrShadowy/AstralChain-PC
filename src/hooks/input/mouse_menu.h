@@ -37,6 +37,8 @@ extern "C" {
  *   wheel     -> d-pad up / down
  *   optional  -> a real touch contact at the cursor (AC_MOUSE_MENU_TOUCH=1) */
 
+#include "hooks/input/mouse_touch.h"
+
 #define AC_MOUSE_MENU_PULSE_TICKS 1152000ULL  /* ~0.06 s @ 19.2 MHz: one press */
 #define AC_MOUSE_MENU_GAP_TICKS   960000ULL   /* ~0.05 s @ 19.2 MHz: release between presses */
 #define AC_MOUSE_MENU_CELL_DEFAULT 40.0f
@@ -44,11 +46,9 @@ extern "C" {
 #define AC_MOUSE_MENU_CELL_MAX     200.0f
 #define AC_MOUSE_MENU_QUEUE_MAX    4
 
-/* Switch touch panel: nn::hid::TouchScreenState<16> contacts, panel pixels. */
-#define SWITCH_TOUCH_WIDTH  1280
-#define SWITCH_TOUCH_HEIGHT 720
-#define SWITCH_TOUCH_DIAMETER 15
-#define AC_TOUCH_ASPECT (16.0f / 9.0f) /* the game presents a 16:9 image */
+#define AC_MOUSE_MENU_BTN_SLOTS    2
+#define AC_MOUSE_MENU_BTN_A_SLOT   0
+#define AC_MOUSE_MENU_BTN_B_SLOT   1
 
 /* SDL button numbers (extra_window_poll_events passes e.button.button). */
 #define MOUSE_BTN_LEFT_CLICK  1
@@ -60,18 +60,6 @@ extern "C" {
 #define SWITCH_BTN_BIT_DUP    13
 #define SWITCH_BTN_BIT_DRIGHT 14
 #define SWITCH_BTN_BIT_DDOWN  15
-
-typedef struct {
-    uint64_t delta_time;
-    uint32_t attributes;
-    uint32_t finger_id;
-    int32_t x;
-    int32_t y;
-    int32_t diameter_x;
-    int32_t diameter_y;
-    int32_t angle;
-    uint32_t reserved;
-} ExtraTouchContact;
 
 enum ExtraMouseMenuDir {
     EXTRA_MOUSE_MENU_DIR_UP    = 0,
@@ -98,9 +86,9 @@ static uint64_t g_mouse_touch_until;
  * large delta: it must move the cursor, not the selection. */
 static int g_mouse_menu_ignore_motion;
 
-static uint64_t g_mouse_menu_btn_until[2] = {0, 0};  /* (A: click, B: right click) */
-static uint64_t g_mouse_menu_btn_gap[2] = {0, 0};
-static unsigned g_mouse_menu_btn_queue[2] = {0, 0};
+static uint64_t g_mouse_menu_btn_until[AC_MOUSE_MENU_BTN_SLOTS] = {0, 0};  /* (A: click, B: right click) */
+static uint64_t g_mouse_menu_btn_gap[AC_MOUSE_MENU_BTN_SLOTS] = {0, 0};
+static unsigned g_mouse_menu_btn_queue[AC_MOUSE_MENU_BTN_SLOTS] = {0, 0};
 
 static uint64_t g_mouse_menu_dir_until[EXTRA_MOUSE_MENU_DIR_COUNT] = {0};
 static uint64_t g_mouse_menu_dir_gap[EXTRA_MOUSE_MENU_DIR_COUNT] = {0};
@@ -161,72 +149,25 @@ static inline void extra_mouse_menu_skip_motion(void) {
     g_mouse_menu_ignore_motion = 1;
 }
 
-/* Window size in points: the space SDL events use, so an event cursor maps
- * without a HiDPI conversion. */
-static inline void extra_mouse_menu_window_size(void *sdl_win, int *w, int *h) {
-    int ww = 0, hh = 0;
-    if (sdl_win) SDL_GetWindowSize((SDL_Window*)sdl_win, &ww, &hh);
-    if (ww <= 0 || hh <= 0) {
-        const char *ew = getenv("AC_WIDTH"), *eh = getenv("AC_HEIGHT");
-        ww = (ew && atoi(ew) > 0) ? atoi(ew) : 1600;
-        hh = (eh && atoi(eh) > 0) ? atoi(eh) : 900;
-    }
-    *w = ww;
-    *h = hh;
-}
-
-/* Window point -> touch panel point. The game presents a 16:9 image, so the
- * mapping is a centred 16:9 rectangle inside the window (letterbox on the odd
- * axis), with no knowledge of the game's render crop. */
-#define SWITCH_TOUCH_MAX_CONTACTS 16
-#define SWITCH_TOUCH_CONTACT_STRIDE 40
-
 static inline void extra_mouse_menu_panel_point(int win_w, int win_h, int32_t *px, int32_t *py) {
-    if (win_w <= 0 || win_h <= 0) {
-        *px = 0;
-        *py = 0;
-        return;
-    }
-    float vw = (float)win_w;
-    float vh = (float)win_h;
-    float ox = 0.0f;
-    float oy = 0.0f;
-    if ((float)win_w > (float)win_h * AC_TOUCH_ASPECT) {
-        vw = (float)win_h * AC_TOUCH_ASPECT;
-        ox = ((float)win_w - vw) * 0.5f;
-    } else {
-        vh = (float)win_w / AC_TOUCH_ASPECT;
-        oy = ((float)win_h - vh) * 0.5f;
-    }
-    float nx = (g_mouse_cursor_x - ox) / vw;
-    float ny = (g_mouse_cursor_y - oy) / vh;
-    if (nx < 0.0f) {
-        nx = 0.0f;
-    } else if (nx > 1.0f) {
-        nx = 1.0f;
-    }
-    if (ny < 0.0f) {
-        ny = 0.0f;
-    } else if (ny > 1.0f) {
-        ny = 1.0f;
-    }
-    *px = (int32_t)(nx * (float)SWITCH_TOUCH_WIDTH);
-    *py = (int32_t)(ny * (float)SWITCH_TOUCH_HEIGHT);
+    extra_mouse_menu_panel_point_coords(g_mouse_cursor_x, g_mouse_cursor_y, win_w, win_h, px, py);
 }
 
-/* A contact is down while the button is held and for AC_MOUSE_MENU_PULSE_TICKS
- * after it is released: a click shorter than one 60 Hz frame would otherwise be
- * published and cleared before the game read it. */
 static inline int extra_mouse_menu_touch_active(uint64_t now) {
     extra_mouse_menu_load_config();
-    if (!g_mouse_menu_touch_mode) return 0;
-    if (!g_mouse_touch_held && g_mouse_touch_until && now >= g_mouse_touch_until) g_mouse_touch_until = 0;
+    if (!g_mouse_menu_touch_mode) {
+        return 0;
+    }
+    if (!g_mouse_touch_held && g_mouse_touch_until && now >= g_mouse_touch_until) {
+        g_mouse_touch_until = 0;
+    }
     return g_mouse_touch_held || g_mouse_touch_until;
 }
 
-/* Fills one HidTouchSample (hid_service.h) with a single contact. */
 static inline void extra_mouse_menu_fill_touch(void *touch_sample_ptr, int win_w, int win_h, uint64_t now) {
-    if (!touch_sample_ptr) return;
+    if (!touch_sample_ptr) {
+        return;
+    }
     typedef struct {
         uint64_t sample;
         uint32_t count;
@@ -249,34 +190,45 @@ static inline void extra_mouse_menu_fill_touch(void *touch_sample_ptr, int win_w
 }
 
 static inline int extra_mouse_menu_has_click(void) {
-    return g_mouse_touch_held || g_mouse_menu_btn_until[0] || g_mouse_menu_btn_queue[0];
+    return g_mouse_touch_held || g_mouse_menu_btn_until[AC_MOUSE_MENU_BTN_A_SLOT] ||
+           g_mouse_menu_btn_queue[AC_MOUSE_MENU_BTN_A_SLOT];
 }
 
 static inline void extra_mouse_menu_reset(void) {
-    g_mouse_menu_accum_x = g_mouse_menu_accum_y = 0.0f;
+    g_mouse_menu_accum_x = 0.0f;
+    g_mouse_menu_accum_y = 0.0f;
     g_mouse_touch_held = 0;
     g_mouse_touch_until = 0;
-    for (int i = 0; i < 2; i++) g_mouse_menu_btn_until[i] = g_mouse_menu_btn_gap[i] = g_mouse_menu_btn_queue[i] = 0;
-    for (int i = 0; i < EXTRA_MOUSE_MENU_DIR_COUNT; i++)
-        g_mouse_menu_dir_until[i] = g_mouse_menu_dir_gap[i] = g_mouse_menu_dir_queue[i] = 0;
+    for (int i = 0; i < AC_MOUSE_MENU_BTN_SLOTS; i++) {
+        g_mouse_menu_btn_until[i] = 0;
+        g_mouse_menu_btn_gap[i] = 0;
+        g_mouse_menu_btn_queue[i] = 0;
+    }
+    for (int i = 0; i < EXTRA_MOUSE_MENU_DIR_COUNT; i++) {
+        g_mouse_menu_dir_until[i] = 0;
+        g_mouse_menu_dir_gap[i] = 0;
+        g_mouse_menu_dir_queue[i] = 0;
+    }
 }
 
 static inline void extra_mouse_menu_queue_dir(int dir) {
-    if (dir < 0 || dir >= EXTRA_MOUSE_MENU_DIR_COUNT) return;
-    if (g_mouse_menu_dir_queue[dir] < AC_MOUSE_MENU_QUEUE_MAX) g_mouse_menu_dir_queue[dir]++;
+    if (dir < 0 || dir >= EXTRA_MOUSE_MENU_DIR_COUNT) {
+        return;
+    }
+    if (g_mouse_menu_dir_queue[dir] < AC_MOUSE_MENU_QUEUE_MAX) {
+        g_mouse_menu_dir_queue[dir]++;
+    }
 }
 
-/* Movement -> discrete d-pad steps, one per AC_MOUSE_MENU_CELL points travelled:
- * the list follows the mouse the way a wheel-driven list does, in any menu.
- * Absolute aim is not possible: §4.4 shows the game exposes neither item
- * geometry nor the selected index, so a cell->item mapping would be invented. */
 static inline void extra_mouse_menu_on_motion(float dx, float dy) {
     extra_mouse_menu_load_config();
     if (g_mouse_menu_ignore_motion) {
         g_mouse_menu_ignore_motion = 0;
         return;
     }
-    if (!g_mouse_menu_enabled || !g_mouse_menu_motion_steps) return;
+    if (!g_mouse_menu_enabled || !g_mouse_menu_motion_steps) {
+        return;
+    }
     float cell = g_mouse_menu_cell_size;
     g_mouse_menu_accum_x += dx;
     g_mouse_menu_accum_y += dy;
@@ -298,33 +250,37 @@ static inline void extra_mouse_menu_on_motion(float dx, float dy) {
     }
 }
 
-/* in_menu: the cursor is free. Outside it a click is a game button (ZL) and
- * must not queue a confirmation. */
 static inline void extra_mouse_menu_on_button(uint8_t btn, int down, int in_menu, uint64_t now) {
     extra_mouse_menu_load_config();
-    if (!g_mouse_menu_enabled || !in_menu) return;
+    if (!g_mouse_menu_enabled || !in_menu) {
+        return;
+    }
     if (btn == MOUSE_BTN_LEFT_CLICK) {
         g_mouse_touch_held = down;
         if (down) {
             g_mouse_touch_until = now + AC_MOUSE_MENU_PULSE_TICKS;
-            if (g_mouse_menu_btn_queue[0] < AC_MOUSE_MENU_QUEUE_MAX) g_mouse_menu_btn_queue[0]++;
+            if (g_mouse_menu_btn_queue[AC_MOUSE_MENU_BTN_A_SLOT] < AC_MOUSE_MENU_QUEUE_MAX) {
+                g_mouse_menu_btn_queue[AC_MOUSE_MENU_BTN_A_SLOT]++;
+            }
         }
-    } else if (btn == MOUSE_BTN_RIGHT_CLICK && down && g_mouse_menu_btn_queue[1] < AC_MOUSE_MENU_QUEUE_MAX) {
-        g_mouse_menu_btn_queue[1]++;
+    } else if (btn == MOUSE_BTN_RIGHT_CLICK && down) {
+        if (g_mouse_menu_btn_queue[AC_MOUSE_MENU_BTN_B_SLOT] < AC_MOUSE_MENU_QUEUE_MAX) {
+            g_mouse_menu_btn_queue[AC_MOUSE_MENU_BTN_B_SLOT]++;
+        }
     }
 }
 
 static inline void extra_mouse_menu_on_wheel(int y, int in_menu) {
     extra_mouse_menu_load_config();
-    if (!g_mouse_menu_enabled || !in_menu || !y) return;
+    if (!g_mouse_menu_enabled || !in_menu || !y) {
+        return;
+    }
     extra_mouse_menu_queue_dir(y > 0 ? EXTRA_MOUSE_MENU_DIR_UP : EXTRA_MOUSE_MENU_DIR_DOWN);
 }
 
 #define AC_MOUSE_MENU_BTN_A_BIT (1ull << SWITCH_BTN_BIT_A)
 #define AC_MOUSE_MENU_BTN_B_BIT (1ull << SWITCH_BTN_BIT_B)
 
-/* One button tap: held AC_MOUSE_MENU_PULSE_TICKS, then AC_MOUSE_MENU_GAP_TICKS
- * before the next. The pad is read once a frame, so a shorter press is lost. */
 static inline void extra_mouse_menu_apply_tap(int slot, uint64_t bit, uint64_t *buttons, uint64_t now) {
     if (g_mouse_menu_btn_until[slot]) {
         if (now < g_mouse_menu_btn_until[slot]) {
@@ -342,19 +298,27 @@ static inline void extra_mouse_menu_apply_tap(int slot, uint64_t bit, uint64_t *
 }
 
 static inline int extra_mouse_menu_dirs_idle(void) {
-    for (int i = 0; i < EXTRA_MOUSE_MENU_DIR_COUNT; i++)
-        if (g_mouse_menu_dir_until[i] || g_mouse_menu_dir_queue[i]) return 0;
+    for (int i = 0; i < EXTRA_MOUSE_MENU_DIR_COUNT; i++) {
+        if (g_mouse_menu_dir_until[i] || g_mouse_menu_dir_queue[i]) {
+            return 0;
+        }
+    }
     return 1;
 }
 
-/* Adds the queued menu presses to the pad sample the game reads. */
 static inline void extra_mouse_menu_apply(uint64_t *buttons, uint64_t now) {
-    if (!buttons) return;
+    if (!buttons) {
+        return;
+    }
     extra_mouse_menu_load_config();
-    if (!g_mouse_menu_enabled) return;
-    if (g_mouse_menu_btn_queue[0] && !extra_mouse_menu_dirs_idle()) return; /* (confirm after the list settles) */
-    extra_mouse_menu_apply_tap(0, AC_MOUSE_MENU_BTN_A_BIT, buttons, now);
-    extra_mouse_menu_apply_tap(1, AC_MOUSE_MENU_BTN_B_BIT, buttons, now);
+    if (!g_mouse_menu_enabled) {
+        return;
+    }
+    if (g_mouse_menu_btn_queue[AC_MOUSE_MENU_BTN_A_SLOT] && !extra_mouse_menu_dirs_idle()) {
+        return;
+    }
+    extra_mouse_menu_apply_tap(AC_MOUSE_MENU_BTN_A_SLOT, AC_MOUSE_MENU_BTN_A_BIT, buttons, now);
+    extra_mouse_menu_apply_tap(AC_MOUSE_MENU_BTN_B_SLOT, AC_MOUSE_MENU_BTN_B_BIT, buttons, now);
     for (int i = 0; i < EXTRA_MOUSE_MENU_DIR_COUNT; i++) {
         if (g_mouse_menu_dir_until[i] && now >= g_mouse_menu_dir_until[i]) {
             g_mouse_menu_dir_until[i] = 0;
@@ -365,10 +329,18 @@ static inline void extra_mouse_menu_apply(uint64_t *buttons, uint64_t now) {
             g_mouse_menu_dir_until[i] = now + AC_MOUSE_MENU_PULSE_TICKS;
         }
     }
-    if (g_mouse_menu_dir_until[EXTRA_MOUSE_MENU_DIR_UP]) *buttons |= 1ull << SWITCH_BTN_BIT_DUP;
-    if (g_mouse_menu_dir_until[EXTRA_MOUSE_MENU_DIR_DOWN]) *buttons |= 1ull << SWITCH_BTN_BIT_DDOWN;
-    if (g_mouse_menu_dir_until[EXTRA_MOUSE_MENU_DIR_LEFT]) *buttons |= 1ull << SWITCH_BTN_BIT_DLEFT;
-    if (g_mouse_menu_dir_until[EXTRA_MOUSE_MENU_DIR_RIGHT]) *buttons |= 1ull << SWITCH_BTN_BIT_DRIGHT;
+    if (g_mouse_menu_dir_until[EXTRA_MOUSE_MENU_DIR_UP]) {
+        *buttons |= 1ull << SWITCH_BTN_BIT_DUP;
+    }
+    if (g_mouse_menu_dir_until[EXTRA_MOUSE_MENU_DIR_DOWN]) {
+        *buttons |= 1ull << SWITCH_BTN_BIT_DDOWN;
+    }
+    if (g_mouse_menu_dir_until[EXTRA_MOUSE_MENU_DIR_LEFT]) {
+        *buttons |= 1ull << SWITCH_BTN_BIT_DLEFT;
+    }
+    if (g_mouse_menu_dir_until[EXTRA_MOUSE_MENU_DIR_RIGHT]) {
+        *buttons |= 1ull << SWITCH_BTN_BIT_DRIGHT;
+    }
 }
 
 #ifdef __cplusplus

@@ -851,3 +851,25 @@ O repositório foi reorganizado em pastas por domínio/módulo, sem alteração 
   - Movida a aba Gráficos para `ac_menu_tab_graphics()` em `ac_menu_tabs.{h,cpp}` (reduzindo `ac_menu.cpp` para `292` linhas e mantendo `ac_menu_tabs.cpp` em `384` linhas, dentro dos limites de modularidade).
   - Substituída a string `\0`-delimitada e o ternário aninhado por tabelas nomeadas (`kScaleValues`, `kScaleTags`, `kUpscalerLabels`, `kAntialiasLabels`), `find_nearest_scale_index()` e sobrecarga `ImGui::Combo(label, &sc_idx, scale_items, kScalePresetCount)` com os 9 presets intactos (`0.50x` a `2.00x`).
 
+#### 37. Modularização e Refatoração de Arquivos Grandes Downstream (`src/hooks/`, `src/additions/`, `src/launcher/`)
+- **Objetivo**: Reduzir a complexidade ciclomática e linhas de arquivos downstream de grande porte, eliminando números mágicos, descompactando código comprimido prejudicial à legibilidade e trazendo os arquivos para a meta ideal de `≤ 350 linhas` conforme `AGENTS.md`, com zero regressão.
+- **Modificações**:
+  - `src/hooks/sdl/window_trampoline.h` (reduzido de 421 para 336 linhas):
+    - Extraída a conversão de `SDL_Keycode` para virtual keys (`extra_sdl_to_vk`) para `src/hooks/sdl/sdl_vk_map.h`.
+    - Extraído o watchdog e disparo de término assíncrono (`extra_trigger_exit`) para `src/hooks/sdl/window_exit.h`.
+  - `src/hooks/sdl/audio_trampoline.h` (reduzido de 368 para 281 linhas):
+    - Extraído o gerenciamento de lista de streams e sincronização de ganho para `src/hooks/sdl/audio_stream_mgr.h`.
+    - Extraído o shim de compatibilidade Win32 WaveOut (`WaveOutput`, `wave_output_*`) para `src/hooks/sdl/audio_waveout_shim.h`.
+    - Substituídos todos os números mágicos (`32` da fila de buffers, `2u` de alinhamento de canais, `0.5`, `0.3`, `0.0005`, frações `3/4` de skip e limite de logs) por constantes descritivas (`EXTRA_AUDIO_*`).
+    - Descompactadas impressões de log e declarações de retorno inline.
+  - `src/hooks/input/mouse_menu.h` (reduzido de 378 para 349 linhas):
+    - Extraída a emulação do touch panel do Nintendo Switch e mapeamento 16:9 para `src/hooks/input/mouse_touch.h`.
+    - Definidas constantes para slots de botões (`AC_MOUSE_MENU_BTN_SLOTS`, `AC_MOUSE_MENU_BTN_A_SLOT`, `AC_MOUSE_MENU_BTN_B_SLOT`) e descompactados laços de reset e verificação.
+  - `src/additions/config/ac_config_sections.h` (reduzido de 404 para 272 linhas):
+    - Extraídos os utilitários puros de parsing e formatação INI/Env (`EnvNonEmpty`, `EnvStr`, `FindKey`, `ParseBoolVal`, `ParseIntVal`, `ParseDoubleVal`, `CanonicalPresentMode`, `FormatCompactDouble`, `FormatBoolVal`, `ParseMouseCurve`) e constantes de configuração para `src/additions/config/ac_config_helpers.h`.
+    - Descompactada a cadeia de ternários aninhados de seleção de upscaler em `ApplyGraphicsSection`.
+  - `src/launcher/src/Config.cpp` (reduzido de 365 para 276 linhas):
+    - Extraído o mapeamento de teclas e botões (`keyToVk`, `actionToAc` e constantes `kVk*`) para `src/launcher/include/ConfigKeyMap.hpp`.
+    - Atualizado `src/launcher/CMakeLists.txt` para incluir o novo cabeçalho.
+
+

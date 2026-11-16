@@ -7,92 +7,18 @@
 #include "hooks/platform/sync_trampoline.h"
 #include "additions/toggles/ac_toggles.h"
 
-#define EXTRA_AUDIO_MAX_STREAMS 16
-#define EXTRA_AUDIO_GAIN_PERCENT_DIV 100.0f
+#include "hooks/sdl/audio_stream_mgr.h"
 
-static atomic_flag s_extra_audio_lock = ATOMIC_FLAG_INIT;
-static SDL_AudioStream *s_extra_audio_streams[EXTRA_AUDIO_MAX_STREAMS] = {NULL};
-
-static inline void extra_audio_lock_acq(void) {
-    while (atomic_flag_test_and_set_explicit(&s_extra_audio_lock, memory_order_acquire)) {
-    }
-}
-
-static inline void extra_audio_lock_rel(void) {
-    atomic_flag_clear_explicit(&s_extra_audio_lock, memory_order_release);
-}
-
-static inline float extra_audio_effective_gain(void) {
-    int vol = g_extra_audio_volume;
-    if (vol < 0) {
-        const char *ev = getenv("AC_MASTER_VOLUME");
-        vol = (ev && *ev) ? atoi(ev) : EXTRA_AUDIO_VOL_MAX;
-    }
-    if (vol < 0) {
-        vol = 0;
-    }
-    if (vol > EXTRA_AUDIO_VOL_MAX) {
-        vol = EXTRA_AUDIO_VOL_MAX;
-    }
-    int mute_unfocus = g_extra_audio_mute_unfocus;
-    if (mute_unfocus < 0) {
-        const char *em = getenv("AC_MUTE_ON_UNFOCUS");
-        mute_unfocus = (em && *em && strcmp(em, "0") != 0 && strcmp(em, "false") != 0) ? 1 : 0;
-    }
-    if (mute_unfocus && !g_sdl_input_focus) {
-        return 0.0f;
-    }
-    return (float)vol / EXTRA_AUDIO_GAIN_PERCENT_DIV;
-}
-
-static inline void extra_audio_sync_gain(void) {
-    static uint32_t s_last_gen = 0;
-    static int s_last_focus = -1;
-    uint32_t cur_gen = g_extra_audio_gen;
-    int cur_focus = g_sdl_input_focus;
-    if (cur_gen == s_last_gen && cur_focus == s_last_focus) {
-        return;
-    }
-    s_last_gen = cur_gen;
-    s_last_focus = cur_focus;
-    float gain = extra_audio_effective_gain();
-    extra_audio_lock_acq();
-    for (int i = 0; i < EXTRA_AUDIO_MAX_STREAMS; i++) {
-        if (s_extra_audio_streams[i]) {
-            SDL_SetAudioStreamGain(s_extra_audio_streams[i], gain);
-        }
-    }
-    extra_audio_lock_rel();
-}
-
-static inline void extra_audio_register_stream(SDL_AudioStream *stream) {
-    if (!stream) {
-        return;
-    }
-    float gain = extra_audio_effective_gain();
-    extra_audio_lock_acq();
-    for (int i = 0; i < EXTRA_AUDIO_MAX_STREAMS; i++) {
-        if (!s_extra_audio_streams[i]) {
-            s_extra_audio_streams[i] = stream;
-            break;
-        }
-    }
-    SDL_SetAudioStreamGain(stream, gain);
-    extra_audio_lock_rel();
-}
-
-static inline void extra_audio_unregister_stream(SDL_AudioStream *stream) {
-    if (!stream) {
-        return;
-    }
-    extra_audio_lock_acq();
-    for (int i = 0; i < EXTRA_AUDIO_MAX_STREAMS; i++) {
-        if (s_extra_audio_streams[i] == stream) {
-            s_extra_audio_streams[i] = NULL;
-        }
-    }
-    extra_audio_lock_rel();
-}
+#define EXTRA_AUDIO_QUEUE_CAP 32
+#define EXTRA_AUDIO_CHANNELS_ALIGN_MULT 2u
+#define EXTRA_AUDIO_RESYNC_MAX_GAP_SEC 0.5
+#define EXTRA_AUDIO_RESYNC_MAX_OWED_SEC 0.3
+#define EXTRA_AUDIO_RESYNC_MIN_OWED_SEC 0.0005
+#define EXTRA_AUDIO_RESYNC_LOG_LIMIT 15
+#define EXTRA_AUDIO_SKIP_FRACTION_NUM 3
+#define EXTRA_AUDIO_SKIP_FRACTION_DEN 4
+#define EXTRA_AUDIO_MS_PER_SEC 1000.0
+#define EXTRA_AUDIO_SEC_PER_NSEC 1e-9
 
 static _Atomic double g_extra_audio_starved_sec = 0.0;
 
@@ -138,7 +64,7 @@ typedef struct AudioHookOutput {
         unsigned nSamplesPerSec;
         unsigned nChannels;
     } format;
-    AudioHookBuffer buffers[32];
+    AudioHookBuffer buffers[EXTRA_AUDIO_QUEUE_CAP];
     unsigned head;
     unsigned count;
     uint64_t queued_bytes;
@@ -152,18 +78,23 @@ typedef struct AudioHookOutput {
 } AudioHookOutput;
 
 static inline uint64_t extra_audio_position(AudioHookOutput *out) {
-    if (!out || !out->stream) return 0;
+    if (!out || !out->stream) {
+        return 0;
+    }
     int queued = SDL_GetAudioStreamQueued(out->stream);
-    uint64_t q_frames = (queued > 0) ? (uint64_t)queued / (out->channels * 2u) : 0;
+    uint64_t q_frames = (queued > 0) ? (uint64_t)queued / (out->channels * EXTRA_AUDIO_CHANNELS_ALIGN_MULT) : 0;
     return out->appended_frames > q_frames ? out->appended_frames - q_frames : 0;
 }
 
 static void SDLCALL extra_audio_stream_cb(void *userdata, SDL_AudioStream *stream, int add, int tot) {
-    (void)add; (void)tot;
+    (void)add;
+    (void)tot;
     AudioHookOutput *out = (AudioHookOutput *)userdata;
-    if (!out || !out->running || out->count == 0) return;
+    if (!out || !out->running || out->count == 0) {
+        return;
+    }
     int queued = SDL_GetAudioStreamQueued(stream);
-    uint64_t q_frames = (queued > 0) ? (uint64_t)queued / (out->channels * 2u) : 0;
+    uint64_t q_frames = (queued > 0) ? (uint64_t)queued / (out->channels * EXTRA_AUDIO_CHANNELS_ALIGN_MULT) : 0;
     uint64_t played = out->appended_frames > q_frames ? out->appended_frames - q_frames : 0;
     if (played >= out->buffers[out->head].end_frame) {
         extra_set_event(out->completion);
@@ -209,17 +140,23 @@ static inline int extra_audio_start(AudioHookOutput *out) {
 }
 
 static inline int extra_audio_pause(AudioHookOutput *out) {
-    if (!out || !out->stream) return 0;
+    if (!out || !out->stream) {
+        return 0;
+    }
     SDL_PauseAudioStreamDevice(out->stream);
     out->running = 0;
     return 1;
 }
 
 static inline int extra_audio_append(AudioHookOutput *out, uint64_t tag, const void *pcm, size_t size) {
-    if (!out || !out->stream || !out->ready || out->count >= 32) return 0;
+    if (!out || !out->stream || !out->ready || out->count >= EXTRA_AUDIO_QUEUE_CAP) {
+        return 0;
+    }
     extra_audio_sync_gain();
-    size_t align = out->channels * 2u;
-    if (!align || (size % align) != 0) return 0;
+    size_t align = out->channels * EXTRA_AUDIO_CHANNELS_ALIGN_MULT;
+    if (!align || (size % align) != 0) {
+        return 0;
+    }
 
     SDL_LockAudioStream(out->stream);
     size_t skip = 0;
@@ -229,35 +166,48 @@ static inline int extra_audio_append(AudioHookOutput *out, uint64_t tag, const v
             const char *v = getenv("AC_AUDIO_RESYNC");
             resync = !(v && (v[0] == '0' || v[0] == 'n' || v[0] == 'N'));
         }
-        double now = (double)extra_qpc() / 1e9;
+        double now = (double)extra_qpc() * EXTRA_AUDIO_SEC_PER_NSEC;
         uint64_t played = extra_audio_position(out);
         uint64_t queued = out->appended_frames > played ? out->appended_frames - played : 0;
-        if (queued) out->play_end = now + (double)queued / (double)out->rate;
-        else if (out->play_end > now) out->play_end = now;
+        if (queued) {
+            out->play_end = now + (double)queued / (double)out->rate;
+        } else if (out->play_end > now) {
+            out->play_end = now;
+        }
 
         if (out->play_end > 0 && now > out->play_end) {
             double gap = now - out->play_end;
             out->starved += gap;
             extra_audio_add_starved(gap);
-            if (resync && gap < 0.5) {
+            if (resync && gap < EXTRA_AUDIO_RESYNC_MAX_GAP_SEC) {
                 out->owed += gap;
-                if (out->owed > 0.3) out->owed = 0.3;
+                if (out->owed > EXTRA_AUDIO_RESYNC_MAX_OWED_SEC) {
+                    out->owed = EXTRA_AUDIO_RESYNC_MAX_OWED_SEC;
+                }
             }
         }
         if (out->owed > 0) {
             size_t byte_rate = out->rate * align;
             size_t owed = (size_t)(out->owed * byte_rate) / align * align;
-            size_t most = (size / 4 * 3) / align * align;
+            size_t most = ((size / EXTRA_AUDIO_SKIP_FRACTION_DEN) * EXTRA_AUDIO_SKIP_FRACTION_NUM) / align * align;
             skip = owed < most ? owed : most;
             out->owed -= (double)skip / (double)byte_rate;
-            if (out->owed < 0.0005) out->owed = 0;
+            if (out->owed < EXTRA_AUDIO_RESYNC_MIN_OWED_SEC) {
+                out->owed = 0;
+            }
             out->skipped += (double)skip / (double)byte_rate;
             static unsigned s_resync_log = 0;
-            if (skip > 0 && s_resync_log++ < 15) printf("[audio] resync: dropped %zu bytes to realign (owed=%.1fms)\n", skip, out->owed * 1000.0);
+            if (skip > 0 && s_resync_log < EXTRA_AUDIO_RESYNC_LOG_LIMIT) {
+                s_resync_log++;
+                printf("[audio] resync: dropped %zu bytes to realign (owed=%.1fms)\n",
+                       skip, out->owed * EXTRA_AUDIO_MS_PER_SEC);
+            }
         }
         out->queued_then = out->play_end > now ? out->play_end - now : 0;
         out->last_append = now;
-        if (out->play_end < now) out->play_end = now;
+        if (out->play_end < now) {
+            out->play_end = now;
+        }
         out->play_end += (double)(size - skip) / (double)(out->rate * align);
     }
 
@@ -270,7 +220,7 @@ static inline int extra_audio_append(AudioHookOutput *out, uint64_t tag, const v
     }
     out->appended_frames += length / align;
 
-    unsigned idx = (out->head + out->count) % 32;
+    unsigned idx = (out->head + out->count) % EXTRA_AUDIO_QUEUE_CAP;
     out->buffers[idx].tag = tag;
     out->buffers[idx].length = length;
     out->buffers[idx].end_frame = out->appended_frames;
@@ -283,16 +233,20 @@ static inline int extra_audio_append(AudioHookOutput *out, uint64_t tag, const v
 }
 
 static inline unsigned extra_audio_collect(AudioHookOutput *out, uint64_t *tags, unsigned cap) {
-    if (!out || !out->stream) return 0;
+    if (!out || !out->stream) {
+        return 0;
+    }
     SDL_LockAudioStream(out->stream);
     uint64_t played = extra_audio_position(out);
     unsigned collected = 0;
     while (collected < cap && out->count > 0) {
         AudioHookBuffer *buf = &out->buffers[out->head];
-        if (played < buf->end_frame) break;
+        if (played < buf->end_frame) {
+            break;
+        }
         tags[collected++] = buf->tag;
         out->queued_bytes -= buf->length;
-        out->head = (out->head + 1) % 32;
+        out->head = (out->head + 1) % EXTRA_AUDIO_QUEUE_CAP;
         out->count--;
     }
     extra_reset_event(out->completion);
@@ -304,7 +258,9 @@ static inline unsigned extra_audio_collect(AudioHookOutput *out, uint64_t *tags,
 }
 
 static inline void extra_audio_close(AudioHookOutput *out) {
-    if (!out) return;
+    if (!out) {
+        return;
+    }
     if (out->stream) {
         extra_audio_unregister_stream(out->stream);
         SDL_DestroyAudioStream(out->stream);
@@ -322,46 +278,4 @@ static inline void extra_audio_close(AudioHookOutput *out) {
     out->running = 0;
 }
 
-typedef AudioHookOutput WaveOutput;
-typedef int MMRESULT;
-#define MMSYSERR_NOERROR 0
-#define MMSYSERR_ALLOCATED 4
-#define MMSYSERR_INVALHANDLE 5
-#define MMSYSERR_NODRIVER 6
-#define MMSYSERR_NOMEM 7
-#define MMSYSERR_NOTSUPPORTED 8
-#define MMSYSERR_INVALPARAM 11
-#define WAVERR_BADFORMAT 32
-
-static inline MMRESULT wave_output_open(WaveOutput *output, unsigned rate, unsigned channels) {
-    return extra_audio_open(output, rate, channels) ? MMSYSERR_NOERROR : MMSYSERR_NODRIVER;
-}
-static inline MMRESULT wave_output_start(WaveOutput *output) {
-    return extra_audio_start(output) ? MMSYSERR_NOERROR : MMSYSERR_INVALHANDLE;
-}
-static inline MMRESULT wave_output_pause(WaveOutput *output) {
-    return extra_audio_pause(output) ? MMSYSERR_NOERROR : MMSYSERR_INVALHANDLE;
-}
-static inline MMRESULT wave_output_append(WaveOutput *output, uint64_t tag, const void *pcm, size_t size) {
-    return extra_audio_append(output, tag, pcm, size) ? MMSYSERR_NOERROR : MMSYSERR_NOMEM;
-}
-static inline MMRESULT wave_output_collect(WaveOutput *output, uint64_t *tags, unsigned capacity, unsigned *count) {
-    *count = extra_audio_collect(output, tags, capacity);
-    return MMSYSERR_NOERROR;
-}
-static inline MMRESULT wave_output_position(WaveOutput *output, uint64_t *frames) {
-    *frames = extra_audio_position(output);
-    return MMSYSERR_NOERROR;
-}
-static inline unsigned wave_output_abandon(WaveOutput *output, uint64_t *dropped, unsigned capacity) {
-    unsigned n = 0;
-    for (unsigned i = 0; i < output->count && n < capacity; i++) {
-        dropped[n++] = output->buffers[(output->head + i) % 32].tag;
-    }
-    extra_audio_close(output);
-    return n;
-}
-static inline MMRESULT wave_output_close(WaveOutput *output) {
-    extra_audio_close(output);
-    return MMSYSERR_NOERROR;
-}
+#include "hooks/sdl/audio_waveout_shim.h"
