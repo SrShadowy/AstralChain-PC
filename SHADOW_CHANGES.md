@@ -954,6 +954,122 @@ O repositório foi reorganizado em pastas por domínio/módulo, sem alteração 
   - Rastreando getters `0x381430` e `0x381450`, mapeados os offsets universais da classe Actor: `+0x50` vetor de posição no mundo (X, Y, Z) e `+0x90` vetor de rotação (Pitch, Yaw, Roll).
   - Adicionadas funções `get_player_actor()`, `get_player_position()` e `get_player_rotation()`.
 
+#### 45. Expansão Integral do Mini-SDK AstralChain-PC (`ac_sdk`)
+- **Camera & Vision (`sdk/gameplay/camera.hpp`, `camera.cpp`)**:
+  - FOV dinâmico: offset `OFFSET_CAMERA_FOV = 0x60`, constantes `DEFAULT_FOV_DEGREES = 45.0f`, `MIN_FOV_DEGREES = 10.0f`, `MAX_FOV_DEGREES = 120.0f`, getters e setters `get_fov()`, `set_fov()`.
+  - FreeCamera / Modo Foto: constantes `CAMERA_MODE_NORMAL = 0`, `CAMERA_MODE_FREE = 1`, funções `is_free_camera_enabled()`, `set_free_camera_enabled()`.
+  - Modificador de Camera Shake: offset `OFFSET_CAMERA_SHAKE = 0x658`, `get_camera_shake_factor()`, `set_camera_shake_factor()`.
+- **Combat & Player Actor (`sdk/gameplay/game_state.hpp`, `game_state.cpp`)**:
+  - Setters de transformação do ator: `set_player_position()` e `set_player_rotation()`.
+  - HP e Max HP do jogador: offsets `OFFSET_ACTOR_STATUS = 0x88`, `OFFSET_STATUS_HP = 0x18`, `OFFSET_STATUS_MAX_HP = 0x1c`, `OFFSET_ACTOR_DIRECT_HP = 0x908`, `OFFSET_ACTOR_DIRECT_MAX_HP = 0x90c`, funções `get_player_hp()`, `get_player_max_hp()`, `set_player_hp()`.
+  - Medidor de Sincronia / Energia da Legião: offsets `OFFSET_STATUS_LEGION_ENERGY = 0x30`, `OFFSET_ACTOR_LEGION_ENERGY = 0xf50`, funções `get_legion_energy()`, `set_legion_energy()`.
+- **UI & Navigation (`sdk/gameplay/ui.hpp`, `ui.cpp`)**:
+  - Setters de seleção de menu: `set_selected_item_index()` e `set_selected_item_id()`.
+  - Hit-testing de cursor / mouse: estrutura `MenuItemRect`, conversão de coordenadas de viewport para tela base `screen_to_ui_coords()` (1920x1080) e algoritmo de hit-testing em caixas delimitadoras `hit_test_menu_item()`.
+- **Graphics & Post-Processing (`sdk/graphics/patch.hpp`, `patch.cpp`)**:
+  - Presets de distância de renderização (`DrawDistancePreset` Low, Medium, High, Ultra) e multiplicador linear via `get_draw_distance_multiplier()`. Sites mapeados: `0x551df0`, `0x55f0ec`, `0x59baa0`.
+  - Pós-processamento: mapeamento dos hashes de fragment shaders de motion blur de câmera/direção (`0x5a18c4e0982bb1a0`, `0x7c29d0f114389ae2`), aberração cromática (`0xb48231ec0981df61`) e granulado de filme (`0x3d82a17cbef10243`), com despachante `is_post_process_pass_enabled()`.
+- **Extended Controller Glyphs (`sdk/graphics/pipeline.hpp`, `pipeline.cpp`)**:
+  - Coordenadas de recorte e mapeamento dos glifos para controles PlayStation DualSense (Cross, Circle, Square, Triangle, L1, R1, L2, R2, Options, Touchpad) e Teclado/Mouse (Space, Shift, E, Q, LMB, RMB, MMB).
+  - Seletor unificado de temas de glifos `GlyphTheme` e despachante `get_button_glyph()`.
+- **Audio & Sound Subsystem (`sdk/core/sound.hpp`, `sound.cpp`)**:
+  - Novo módulo de áudio com controle em tempo real para Master, BGM, SFX, Voice e Environment.
+  - Integração com `g_extra_audio_volume`, `g_extra_audio_mute_unfocus` e `g_extra_audio_gen` com símbolos fracamente vinculados (`__attribute__((weak))`) para desacoplamento de build.
+  - Cálculo de ganho efetivo com suporte a mute em segundo plano via `calculate_effective_gain()`.
+- **Resiliência de Memória (`sdk/core/memory.hpp`, `memory.cpp`)**:
+  - Implementado `is_guest_memory_accessible()` via `mincore` com cache por processo para prevenir falhas de segmentação quando executado fora do runtime do jogo (ex.: ferramentas de linha de comando e testes de unidade).
+- **QA & Validação**:
+  - `tools/qa/sdk_test.cpp` expandido para cobrir todas as novas funcionalidades dos 10 módulos do SDK. 16/16 etapas de `./tools/qa/audit.sh` validadas com sucesso.
+
+#### 46. Desacoplamento de Simulação >30 FPS, Interceptação de Intervalo e Mapeamento 1/30.0f
+- **Interceptação de `nvnWindowSetPresentInterval` (`objects.c`, `ac_toggles.h`, `ac_toggles.c`)**:
+  - Criada a função `extra_target_present_interval(guest_interval)` em `src/additions/toggles/` para promover dinamicamente o intervalo Switch nativo de 30 FPS (intervalo 2) para 1 (60+ FPS) ou 0 (ilimitado / unthrottled), respeitando `AC_FPS`, `AC_PRESENT_INTERVAL` e o toggle de overlay.
+  - Interceptados `nvnWindowBuilderSetPresentInterval`, `nvnWindowInitialize` e `nvnWindowSetPresentInterval` em `src/runtime/las/nvn/objects.c`.
+- **Ajuste e Sincronização do `TimerManager` (`sdk/core/time.hpp`, `time.cpp`)**:
+  - Mapeados os campos internos `OFFSET_FRAME_STEP = 0xd0` (passo medido normalizado), `OFFSET_REMAINDER_TICKS = 0xd4` (resto acumulador fracionário) e `OFFSET_WHOLE_TICKS = 0xd8` (ticks inteiros de 30 FPS computados).
+  - Implementada a função `sync_simulation_step()`, que calcula o delta real do frame (`+0xe0`), aplica o multiplicador de velocidade (`+0xb0`), respeita os pisos/tetos (`MIN_FRAME_STEP_FLOOR = 1/16`, `MAX_FRAME_STEP_GAMEPLAY = 2.0`, `MAX_FRAME_STEP_CUTSCENE = 8.0`) e alimenta o acumulador de ticks inteiros em `+0xd8`, permitindo gameplay a 60/120/144 FPS sem acelerar o mundo.
+  - Adicionado helper `get_target_present_interval()` em `ac::time`.
+- **Varredura e Catalogação de 1/30.0f (`tools/qa/extract_symbols.py`, `docs/symbols.toml`)**:
+  - Localizado o literal IEEE-754 canônico `0x3d088889` em `.rodata` (`0x00b5ce8c`).
+  - Mapeados e classificados **41 call sites** diretos no executável ARM64:
+    - 6 sites de física de corrente da Legião e timer de bind escape (`0x10e7c8`, `0x11af30`, `0x11e1e8`, `0x126558`, `0x126e80`, `0x12b938`).
+    - 8 sites de janelas de oportunidade e pistas visuais de Sync Attack (`0x217f48`, `0x228224`, `0x25d144`, `0x25d470`, `0x25df14`, `0x25e0ec`, `0x25eae8`, `0x25f2e4`).
+    - 6 sites de inicialização e conversão de animação no `TimerManager` (`0x3e2cf4`, `0x3e4188`, `0x3e44a0`, `0x42e1b4`, `0x466658`, `0x467da4`).
+    - 5 sites de física de movimento do ator e aceleração de gravidade (`0x44d93c`, `0x44d960`, `0x44d9a0`, `0x44d9ec`, `0x487ad8`).
+    - 2 sites de duração de escudo e skills especiais de Legião (`0x5de2e4`, `0x5eacd8`).
+    - 14 sites de buffers de velocidade de câmera e interpolação (`0x696674`, `0x6a2f88`, `0x72a308`, `0x990288`, `0x992024`, etc.).
+  - Exportado catálogo no bloco `[[framerate_constants_30fps]]` em `docs/symbols.toml`.
+- **Assinaturas AOB Canônicas e Scanner Dinâmico (`memory.hpp`, `memory.cpp`, `symbols.toml`)**:
+  - Implementado `ac::memory::scan_aob(pattern, search_start, search_len)` com parsing de wildcards `??` e busca alinhada a 4 bytes.
+  - Extraídas e testadas 4 assinaturas AOB 100% únicas no binário NSO:
+    - `GetCameraManager` (`0x88fa20`): `?? ?? ?? b0 00 d0 41 f9 c0 03 5f d6 00 00 00 00 ?? ?? ?? b0 08 d1 41 f9 00 61 01 91`
+    - `TimerManager::Update` (`0x91dbd0`): `?? ?? ?? 94 68 66 40 f9 f4 03 00 aa ?? ?? ?? b4 88 02 08 cb 00 01 62 9e ?? ?? ?? 90 08 f1 45 f9`
+    - `OpenMenu` (`0x61bf00`): `f3 0f 1e f8 fd 7b 01 a9 fd 43 00 91 3f 30 00 71 ?? ?? ?? 54 e8 03 01 2a`
+    - `CameraDirector::Update` (`0x28b120`): `f3 0f 1e f8 fd 7b 01 a9 fd 43 00 91 f3 03 00 aa 68 46 46 b9 1f b5 03 71`
+  - Exportadas no bloco `[aob_signatures]` em `docs/symbols.toml`.
+
+#### 47. Blindagem Integral contra Offsets Fixos (AOB & Decodificação Dinâmica ADRP+LDR)
+- **Gerador e Validador de Assinaturas AOB (`tools/qa/extract_symbols.py`, `docs/symbols.toml`)**:
+  - Implementado `generate_anchor_aobs()` e `decode_slot_at()` no `SymbolExtractor`, automatizando a criação de assinaturas de bytes para as 18 funções-âncora centrais do executável ARM64.
+  - Mascaramento exato de imediatos de salto/relativos (`ADRP`, `BL`, `B`, `B.cond`, `CBZ`, `CBNZ`, `TBZ`, `TBNZ`) como `??`, mantendo invariantes de registradores e opcodes.
+  - Verificação automatizada de unicidade em `.text` (garantia de exatamente 1 ocorrência por padrão) e conferência do slot decodificado via ADRP + LDR.
+  - Geradas tabelas `[aob_signatures]` e `[[anchor_functions]]` em `docs/symbols.toml`.
+- **Decodificador ARM64 e Resolução Dinâmica (`sdk/core/memory.hpp`, `memory.cpp`)**:
+  - Criada `decode_adrp_ldr(code_addr, max_ins_scan)`: decodifica o par de instruções `ADRP` + `LDR` (64-bit / 32-bit) ou `ADD` (64-bit), computando o endereço absoluto e convertendo-o para offset relativo a `MAIN_MODULE_BASE`.
+  - Criada `resolve_slot_from_aob(pattern, fallback_offset, max_ins_scan)`: busca a função-âncora via `scan_aob()`, decodifica o slot em tempo de execução e, caso o scan falhe ou a memória guest não esteja mapeada (testes unitários offline), retorna com segurança o offset de fallback.
+- **Integração de Resolução Dinâmica nos Módulos do SDK**:
+  - `camera.cpp`: `get_camera_manager()` atualizado com `resolve_slot_from_aob(AOB_GET_CAMERA_MANAGER, SLOT_CAMERA_MANAGER)` e cache estático preguiçoso.
+  - `time.cpp`: `get_timer_manager_base()` atualizado com `resolve_slot_from_aob(AOB_TIMER_MANAGER, TIMER_MANAGER_PTR_SLOT)` para desvincular o singleton do timer do offset fixo.
+  - `ui.cpp`: `get_active_menu()`, `is_gameplay_paused()`, `is_camera_frozen()`, `is_engine_transitioning()` e seletores de menu atualizados com `AOB_ENGINE_STATE`, `AOB_MENU_SELECTION` e `AOB_MENU_PTR`.
+  - `input.cpp`: `get_right_stick()`, `get_left_stick()` e `get_buttons_held()` atualizados com `AOB_PAD_INPUT_STATE`.
+  - `game_state.cpp`: 8 slots centrais (`SLOT_SCENE`, `SLOT_PHASE`, `SLOT_AREA`, `SLOT_SUBAREA`, `SLOT_BOSS_ACTIVE`, `SLOT_PLAYER_TABLE`, `SLOT_VOICE_OPT`, `SLOT_VOICE_SE`) migrados para resolução dinâmica por AOB com cache estático.
+- **QA e Blindagem**:
+  - `tools/qa/sdk_test.cpp` expandido com validação das assinaturas AOB, verificação de fallback seguro e decodificação sintética de `ADRP` + `LDR`.
+  - Auditoria completa `./tools/qa/audit.sh` (16/16) e Fast-Relink validados com 100% de sucesso.
+
+#### 50. Aba de Desenvolvimento ImGui ("Dev SDK") — Explorer e Leitor Interativo do `ac_sdk`
+- **Aba "Dev SDK" no Terminal IRIS (`src/additions/overlay/ac_menu_tab_sdk.h`, `ac_menu_tab_sdk.cpp`)**:
+  - Implementada a nova aba "Dev SDK" no menu principal do jogo (`Insert` / Terminal Legatus), permitindo inspecionar dinamicamente funções e valores de retorno do `ac_sdk`.
+  - Caixa de busca no topo (`InputTextWithHint`) para filtragem instantânea por nome de função, módulo ou palavra-chave (ex.: `hp`, `camera`, `time`, `mod`, `legion`, `lang`, `sound`).
+  - Botão de ação rápida `[ Ler Visíveis ]` para atualizar todas as funções filtradas e `[ Limpar ]` para redefinir a busca.
+  - Tabela com colunas `Função SDK`, `Tipo`, `Valor Retornado` e botão individual `[ Ler ]` ao lado de cada getter para leitura sob demanda sem poluir a CPU frame a frame.
+  - Cobertura completa de leitura dos 11 módulos do SDK:
+    - `camera`: FOV, modo de câmera, status de free camera, fator de shake, ponteiros de controller e manager.
+    - `time`: delta em ms, FPS alvo, rate de simulação, escala de tempo e fator de combate em 60 Hz.
+    - `ui`: menu aberto, ID do menu ativo (-1 se gameplay), flags de pausa, congelamento de câmera e transição.
+    - `game_state`: ID de cena, fase, área, subárea, boss ativo, ID do boss, Legião ativa, idioma de áudio Wwise, idioma de texto Switch (0..14), HP do jogador, Max HP, energia da Legião e vetores de posição/rotação no mundo.
+    - `input`: máscara de botões pressionados e coordenadas de stick analógico (StickVector X/Y).
+    - `sound`: volume master, BGM e política de mudo ao perder foco.
+    - `mods`: contagem de mods ativos, total instalado e presença de mods de tradução ativos.
+    - `memory`: base guest do módulo principal (`0x7000010000`).
+- **Integração no Terminal e Build System (`ac_menu.cpp`, `nvn_build.py`)**:
+  - Expandido `kMenuTabCount = 6` em `ac_menu.cpp`, registrando `" Dev SDK "` e `ac_menu_tab_sdk` no loop de renderização ImGui.
+  - Adicionado `overlay/'ac_menu_tab_sdk.cpp'` às fontes de compilação em `src/astral_chain/gpu/nvn_build.py`.
+- **QA e Verificação de Invariantes**:
+  - Auditoria `./tools/qa/audit.sh` 100% aprovada (16/16).
+  - Fast-Relink gerado em 3.6s com GPU shader pipeline montado com sucesso.
+
+#### 52. Correção de Offsets de HP e Energia da Legião no Mini-SDK (`ac_sdk`)
+- **Evidência de Engenharia Reversa Estática (Desassemblagem ARM64)**:
+  - Rotina de formatação do texto de HP no HUD (`0x5c35c0`): obtém o `PlayerActor 0` via `0x454ac0` (`*(0xdbb680)`), lê o HP atual diretamente de `actor + 0x840` (`int32_t`) e o HP máximo de `actor + 0x844` (`int32_t`), formatando a string `"900/900"` com a máscara `"%s/%s"` (`0xb78aff`).
+  - Rotina de dreno e sinalização de esgotamento de energia da Legião (`0x32c000` / `0x32c084` e `0x27eb1c..0x27eb5c`): manipula `actor + 0xd54` (energia atual do Limiter como `float`) e `actor + 0xd58` (energia máxima como `float`), atualizando a razão de preenchimento da barra de HUD em `*(0xdb8580) + 0xb0`.
+- **Correção no Mini-SDK (`src/additions/sdk/gameplay/game_state.hpp`, `game_state.cpp`)**:
+  - Eliminados os offsets incorretos (`0xf50` da `.rodata` e `0x88` status).
+  - `get_player_hp(0)` e `get_player_max_hp(0)` agora lêem `0x840` e `0x844`, retornando com exatidão os `900` exibidos no HUD do jogo.
+  - `get_legion_energy(0)` calcula e reporta a porcentagem real da barra $(0.0\% \text{ a } 100.0\%)$ a partir de `0xd54 / 0xd58`, com suporte a `get_legion_max_energy(0)` e `get_legion_energy_raw(0)`.
+- **QA e Validação**:
+  - Testes unitários atualizados em `tools/qa/sdk_test.cpp` e `./tools/qa/audit.sh` (16/16) 100% aprovados.
+  - Fast-Relink gerado com sucesso em `build/game/round-00/trace`.
+
+
+
+
+
+
+
+
+
+
 
 
 

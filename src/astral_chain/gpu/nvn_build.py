@@ -82,7 +82,7 @@ def nvn_sources(backend):
         sources += sorted(sdk.rglob('*.cpp'))
         sources += [IMGUI/'backends'/'imgui_impl_sdl3.cpp', IMGUI/'backends'/'imgui_impl_vulkan.cpp',
                     overlay/'ac_overlay.cpp', overlay/'ac_vk_glue.cpp', overlay/'ac_hud.cpp',
-                    overlay/'ac_menu.cpp', overlay/'ac_menu_tabs.cpp',
+                    overlay/'ac_menu.cpp', overlay/'ac_menu_tabs.cpp', overlay/'ac_menu_tab_sdk.cpp',
                     overlay/'ac_reinfo.cpp', overlay/'ac_reinfo_probe.c',
                     rpc/'ac_game_data.cpp', rpc/'ac_discord_rpc.cpp', overlay/'ac_overlay_rpc.cpp',
                     config/'ac_ini_store.cpp', config/'ac_config_sync.cpp']

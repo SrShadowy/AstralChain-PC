@@ -3,6 +3,7 @@
  * the in-memory file_meta table and routing reads to host files in mods/. */
 #pragma once
 
+#include <dirent.h>
 #include <fcntl.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -32,8 +33,7 @@ extern "C" {
 #define EXTRA_ROMFS_FILE_DATA_OFF 8
 #define EXTRA_ROMFS_FILE_SIZE_OFF 16
 #define EXTRA_ROMFS_FULL_PATH_CAP 1024
-#define EXTRA_INI_LINE_CAP 128
-#define EXTRA_INI_TOKEN_CAP 32
+#define EXTRA_MAX_MOD_ROOTS 32
 
 typedef struct {
     uint64_t virtual_start;
@@ -49,66 +49,40 @@ static uint64_t s_extra_fmeta_off = 0;
 static uint64_t s_extra_fmeta_size = 0;
 static uint64_t s_extra_orig_size = 0;
 
-static inline const char *extra_read_ini_language(const char *ini_path, char *out_buf, size_t out_cap) {
-    FILE *f = fopen(ini_path, "r");
-    if (!f) {
-        return NULL;
-    }
-    char line[EXTRA_INI_LINE_CAP];
-    const char *found = NULL;
-    while (fgets(line, sizeof(line), f)) {
-        char k[EXTRA_INI_TOKEN_CAP];
-        char v[EXTRA_INI_TOKEN_CAP];
-        if (sscanf(line, " %31[^= \t\r\n] = %31[^\r\n]", k, v) == 2 && !strcmp(k, "language")) {
-            size_t len = strlen(v);
-            while (len > 0 && (v[len - 1] == ' ' || v[len - 1] == '\t')) {
-                v[--len] = '\0';
-            }
-            strncpy(out_buf, v, out_cap - 1);
-            out_buf[out_cap - 1] = '\0';
-            found = out_buf;
-            break;
-        }
-    }
-    fclose(f);
-    return found;
+static char s_extra_mod_roots[EXTRA_MAX_MOD_ROOTS][EXTRA_OVERLAY_PATH_CAP];
+static int s_extra_num_mod_roots = 0;
+
+static inline bool extra_mod_is_disabled(const char *root) {
+    char check_path[EXTRA_ROMFS_FULL_PATH_CAP];
+    snprintf(check_path, sizeof(check_path), "%s/.disabled", root);
+    if (access(check_path, F_OK) == 0) return true;
+    snprintf(check_path, sizeof(check_path), "%s.disabled", root);
+    if (access(check_path, F_OK) == 0) return true;
+    return false;
 }
 
-static inline bool extra_is_pt_language(void) {
-    static char ini_lang[EXTRA_INI_TOKEN_CAP];
-    const char *lang = getenv("AC_LANGUAGE");
-    if (!lang || !*lang) {
-        lang = getenv("LARECOMP_LANG");
-    }
-    if (!lang || !*lang) {
-        lang = extra_read_ini_language("userdata/launcher.ini", ini_lang, sizeof(ini_lang));
-    }
-    if (!lang || !*lang) {
-        lang = extra_read_ini_language("larecomp.ini", ini_lang, sizeof(ini_lang));
-    }
-    if (!lang || !*lang || !strcmp(lang, "auto")) {
-        const char *loc = getenv("LC_ALL");
-        if (!loc || !*loc) {
-            loc = getenv("LC_MESSAGES");
-        }
-        if (!loc || !*loc) {
-            loc = getenv("LANG");
-        }
-        if (loc && !strncmp(loc, "pt", 2)) {
-            return true;
-        }
-    }
-    if (lang && (!strcmp(lang, "pt-BR") || !strcmp(lang, "pt") || !strncmp(lang, "pt_", 3))) {
-        return true;
-    }
-    if (!lang || !*lang || !strcmp(lang, "auto")) {
+static inline void extra_discover_active_mods(void) {
+    s_extra_num_mod_roots = 0;
+    DIR *d = opendir("mods");
+    if (!d) return;
+
+    struct dirent *ent;
+    while ((ent = readdir(d)) != NULL && s_extra_num_mod_roots < EXTRA_MAX_MOD_ROOTS) {
+        if (ent->d_name[0] == '.') continue;
+        char candidate[EXTRA_OVERLAY_PATH_CAP];
+        snprintf(candidate, sizeof(candidate), "mods/%s", ent->d_name);
+
         struct stat st;
-        if (stat("mods/traducao_ptbr/Text/Text.pkz", &st) == 0 ||
-            stat("mods/traducao_ptbr/Text.pkz", &st) == 0) {
-            return true;
+        if (stat(candidate, &st) == 0 && S_ISDIR(st.st_mode)) {
+            if (!extra_mod_is_disabled(candidate)) {
+                strncpy(s_extra_mod_roots[s_extra_num_mod_roots], candidate, EXTRA_OVERLAY_PATH_CAP - 1);
+                s_extra_mod_roots[s_extra_num_mod_roots][EXTRA_OVERLAY_PATH_CAP - 1] = '\0';
+                fprintf(stderr, "[romfs_overlay] Active mod directory discovered: %s\n", candidate);
+                s_extra_num_mod_roots++;
+            }
         }
     }
-    return false;
+    closedir(d);
 }
 
 static inline void extra_romfs_dir_path(const uint8_t *dmeta, uint64_t dsz, uint32_t dir, char *out, size_t cap) {
@@ -135,43 +109,32 @@ static inline void extra_romfs_dir_path(const uint8_t *dmeta, uint64_t dsz, uint
 }
 
 static inline bool extra_romfs_find_mod_file(
-    bool is_pt,
     const char *full_path,
     const char *name,
     char *host_candidate,
     size_t candidate_cap,
     struct stat *st
 ) {
-    if (is_pt) {
-        static const char *const pt_roots[] = {
-            "mods/traducao_ptbr", "mods/ptbr", "mods/pt-BR", "mods/portugues"
-        };
-        for (size_t r = 0; r < sizeof(pt_roots) / sizeof(pt_roots[0]); r++) {
-            snprintf(host_candidate, candidate_cap, "%s/%s", pt_roots[r], full_path);
-            if (stat(host_candidate, st) == 0 && S_ISREG(st->st_mode)) {
-                return true;
-            }
-            snprintf(host_candidate, candidate_cap, "%s/%s", pt_roots[r], name);
-            if (stat(host_candidate, st) == 0 && S_ISREG(st->st_mode)) {
-                return true;
-            }
-            snprintf(host_candidate, candidate_cap, "%s/romfs/%s", pt_roots[r], full_path);
-            if (stat(host_candidate, st) == 0 && S_ISREG(st->st_mode)) {
-                return true;
-            }
-        }
+    for (int r = 0; r < s_extra_num_mod_roots; r++) {
+        snprintf(host_candidate, candidate_cap, "%s/%s", s_extra_mod_roots[r], full_path);
+        if (stat(host_candidate, st) == 0 && S_ISREG(st->st_mode)) return true;
+
+        snprintf(host_candidate, candidate_cap, "%s/romfs/%s", s_extra_mod_roots[r], full_path);
+        if (stat(host_candidate, st) == 0 && S_ISREG(st->st_mode)) return true;
+
+        snprintf(host_candidate, candidate_cap, "%s/%s", s_extra_mod_roots[r], name);
+        if (stat(host_candidate, st) == 0 && S_ISREG(st->st_mode)) return true;
     }
-    snprintf(host_candidate, candidate_cap, "mods/%s", full_path);
-    if (stat(host_candidate, st) == 0 && S_ISREG(st->st_mode)) {
-        return true;
-    }
-    snprintf(host_candidate, candidate_cap, "mods/%s", name);
-    if (stat(host_candidate, st) == 0 && S_ISREG(st->st_mode)) {
-        return true;
-    }
-    snprintf(host_candidate, candidate_cap, "mods/romfs/%s", full_path);
-    if (stat(host_candidate, st) == 0 && S_ISREG(st->st_mode)) {
-        return true;
+
+    if (!extra_mod_is_disabled("mods")) {
+        snprintf(host_candidate, candidate_cap, "mods/%s", full_path);
+        if (stat(host_candidate, st) == 0 && S_ISREG(st->st_mode)) return true;
+
+        snprintf(host_candidate, candidate_cap, "mods/romfs/%s", full_path);
+        if (stat(host_candidate, st) == 0 && S_ISREG(st->st_mode)) return true;
+
+        snprintf(host_candidate, candidate_cap, "mods/%s", name);
+        if (stat(host_candidate, st) == 0 && S_ISREG(st->st_mode)) return true;
     }
     return false;
 }
@@ -219,7 +182,7 @@ static inline void extra_romfs_overlay_init(void *romfs_handle, uint64_t *p_romf
         return;
     }
 
-    bool is_pt = extra_is_pt_language();
+    extra_discover_active_mods();
     uint64_t virt_end = (s_extra_orig_size + EXTRA_ROMFS_ALIGN_MASK) & ~EXTRA_ROMFS_ALIGN_MASK;
 
     for (uint64_t o = 0; o + EXTRA_ROMFS_FILE_NAME_OFF <= fsz;) {
@@ -241,7 +204,7 @@ static inline void extra_romfs_overlay_init(void *romfs_handle, uint64_t *p_romf
 
         char host_candidate[EXTRA_ROMFS_FULL_PATH_CAP] = {0};
         struct stat st;
-        bool found = extra_romfs_find_mod_file(is_pt, full_path, name, host_candidate, sizeof(host_candidate), &st);
+        bool found = extra_romfs_find_mod_file(full_path, name, host_candidate, sizeof(host_candidate), &st);
 
         if (found && s_extra_num_overlays < EXTRA_MAX_OVERLAYS) {
             int mod_fd = open(host_candidate, O_RDONLY);

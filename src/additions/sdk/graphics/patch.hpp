@@ -24,6 +24,17 @@ constexpr uintptr_t SVC_SITE_CAMERA_RECT   = 0x9a30c4ull;
 constexpr uintptr_t SVC_SITE_NOHUD_23      = 0x9177ecull;
 constexpr uintptr_t SVC_SITE_NOHUD_22      = 0x915ea0ull;
 
+// Draw Distance Hook Sites
+constexpr uintptr_t SITE_DRAW_DIST_ENTITY0 = 0x551df0ull;
+constexpr uintptr_t SITE_DRAW_DIST_ENTITY1 = 0x55f0ecull;
+constexpr uintptr_t SITE_DRAW_DIST_TERRAIN = 0x59baa0ull;
+
+// Post-Processing Filter Shader Hashes (Platinum cFilter / Filter01..09)
+constexpr uint64_t HASH_FILTER_MOTION_BLUR_CAM = 0x5a18c4e0982bb1a0ull;
+constexpr uint64_t HASH_FILTER_MOTION_BLUR_DIR = 0x7c29d0f114389ae2ull;
+constexpr uint64_t HASH_FILTER_CHROMATIC_ABERR = 0xb48231ec0981df61ull;
+constexpr uint64_t HASH_FILTER_FILM_GRAIN     = 0x3d82a17cbef10243ull;
+
 // Standard aspect ratios
 constexpr float ASPECT_16_9  = 16.0f / 9.0f;
 constexpr float ASPECT_16_10 = 16.0f / 10.0f;
@@ -47,6 +58,13 @@ constexpr uint64_t RES_1080P_PIXELS      = 1920ull * 1080ull;
 constexpr uint64_t RES_GBUF_BYTES_PER_PX = 8ull;
 constexpr uint64_t MIB_ALIGN_MASK        = 0xFFFFFull;
 
+enum class DrawDistancePreset : int32_t {
+    Low    = 0,
+    Medium = 1,
+    High   = 2,
+    Ultra  = 3
+};
+
 struct ResolutionConfig {
     int32_t width        = RES_DEFAULT_W;
     int32_t height       = RES_DEFAULT_H;
@@ -63,5 +81,8 @@ void snap_grid_dimensions(int32_t in_w, int32_t min_w, int32_t max_w, int32_t* o
 uint32_t calculate_pool_budget(int32_t w, int32_t h);
 uint32_t calculate_gbuffer_extra(int32_t w, int32_t h);
 bool is_widescreen(float aspect);
+
+float get_draw_distance_multiplier(DrawDistancePreset preset);
+bool is_post_process_pass_enabled(uint64_t filter_hash, bool motion_blur_enabled, bool chrom_aberr_enabled, bool grain_enabled);
 
 } // namespace ac::graphics

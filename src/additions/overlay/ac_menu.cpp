@@ -12,6 +12,7 @@
 #include "additions/toggles/ac_toggles.h"
 #include "additions/overlay/ac_hud.h"
 #include "additions/overlay/ac_menu_tabs.h"
+#include "additions/overlay/ac_menu_tab_sdk.h"
 #include "additions/overlay/ac_overlay.h"
 #include "additions/overlay/ac_overlay_rpc.h"
 #include "additions/overlay/ac_reinfo.h"
@@ -34,7 +35,7 @@ constexpr float kMenuDefaultWidth = 540.0f;
 constexpr float kMenuDefaultHeight = 580.0f;
 constexpr float kMenuDefaultPosX = 36.0f;
 constexpr float kMenuDefaultPosY = 36.0f;
-constexpr int kMenuTabCount = 5;
+constexpr int kMenuTabCount = 6;
 
 const char *const kPresentModes[] = {"mailbox", "fifo", "fifo_relaxed", "immediate"};
 
@@ -329,14 +330,16 @@ void ac_menu_frame(void) {
                 " Gráficos ",
                 " Áudio & Mouse ",
                 " Jogo & RPC ",
-                " Diagnóstico "
+                " Diagnóstico ",
+                " Dev SDK "
             };
             static void (*const kTabFns[kMenuTabCount])(void) = {
                 tab_performance,
                 ac_menu_tab_graphics,
                 ac_menu_tab_audio_mouse,
                 tab_game_and_rpc,
-                tab_diagnostics
+                tab_diagnostics,
+                ac_menu_tab_sdk
             };
             for (int i = 0; i < kMenuTabCount; i++) {
                 ImGuiTabItemFlags flags = (force_tab == i) ? ImGuiTabItemFlags_SetSelected : ImGuiTabItemFlags_None;

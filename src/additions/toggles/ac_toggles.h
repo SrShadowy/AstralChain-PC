@@ -117,6 +117,9 @@ uint32_t extra_sync_read_menu_mouse(int *nav, int *motion, float *cell);
 void ac_config_sync_init_hook(void);
 void ac_config_sync_save_hook(void);
 
+/* [extra] Overrides Switch 30 FPS interval (2) to 1 (60+ FPS) or 0 (unthrottled / unlimited) */
+int extra_target_present_interval(int guest_interval);
+
 #ifdef __cplusplus
 }
 #endif

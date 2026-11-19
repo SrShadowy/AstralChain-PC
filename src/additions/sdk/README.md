@@ -13,16 +13,19 @@ sdk/
 ├── README.md               # Documentação técnica
 ├── core/                   # Tipos fundamentais e infraestrutura de memória
 │   ├── types.hpp           # Vetores (Vec3, Vec4, StickVector) e estilos de controle
-│   ├── memory.hpp / .cpp   # Resolução de base em gmem (0x7000010000) e safe reads/writes
-│   └── time.hpp / .cpp     # Singleton de tempo, delta real do frame e FPS
+│   ├── memory.hpp / .cpp   # Resolução em gmem, scans AOB e decodificador ADRP+LDR ARM64
+│   ├── time.hpp / .cpp     # Singleton de tempo, 144+ FPS e invariantes de combate
+│   └── sound.hpp / .cpp    # Volumes master/BGM e controle de foco de áudio
 ├── graphics/               # Motor Gráfico, Resolução & Vulkan
 │   ├── patch.hpp / .cpp    # Sites SVC #0xB3, aspect ratio ultrawide/16:10, grid e pools
-│   └── pipeline.hpp / .cpp # Hashes de shaders UI/vídeo e atlas de glifos Xbox
-└── gameplay/               # Engine da PlatinumGames, Câmera e Estado
-    ├── camera.hpp / .cpp   # Vtables da câmera, pitch/yaw e injeção de mouse raw
-    ├── input.hpp / .cpp    # HID Switch (g_PadInputState) e botões
-    ├── ui.hpp / .cpp       # Detecção atômica de menu/pausa e liberação de cursor
-    └── game_state.hpp / .cpp # Cenas, fases, missões, bosses, Legiões e idioma Wwise
+│   └── pipeline.hpp / .cpp # Hashes de shaders UI/vídeo e atlas de glifos Switch/PS/KBM
+├── gameplay/               # Engine da PlatinumGames, Câmera e Estado
+│   ├── camera.hpp / .cpp   # Vtables da câmera, pitch/yaw e injeção de mouse raw
+│   ├── input.hpp / .cpp    # HID Switch (g_PadInputState) e botões
+│   ├── ui.hpp / .cpp       # Detecção atômica de menu/pausa e liberação de cursor
+│   └── game_state.hpp / .cpp # Cenas, fases, missões, Legiões e localização (Texto/Voz)
+└── storage/                # Gestão de Mods e Camada LayeredFS
+    └── mods.hpp / .cpp     # Descoberta, listagem e alternância atômica (.disabled) de mods
 ```
 
 ## Exemplo de Uso
@@ -48,3 +51,13 @@ void check_boss_encounter() {
     }
 }
 ```
+
+## Blindagem contra Offsets Fixos (AOB & Decodificação ADRP+LDR)
+
+Para suportar múltiplas revisões de dump (ex: v1.0.0 vs v1.0.1) ou mods sem quebrar ponteiros globais (`SLOT_*`), o `ac_sdk` integra resolução dinâmica de símbolos:
+
+- `ac::memory::scan_aob(pattern)`: Varredura vetorial com wildcards `??` na seção `.text`.
+- `ac::memory::decode_adrp_ldr(code_addr)`: Decodifica instruções ARM64 (`ADRP` + `LDR`/`ADD`) em tempo de execução para extrair o endereço absoluto/relativo do slot de memória de forma imune a deslocamentos de código.
+- `ac::memory::resolve_slot_from_aob(pattern, fallback)`: Busca a assinatura da função-âncora, decodifica o slot associado e, caso a memória guest não esteja mapeada (ex: testes unitários offline), utiliza o offset fallback seguro.
+
+Toda a tabela de assinaturas únicas e suas funções-âncora mapeadas é gerada e verificada por `tools/qa/extract_symbols.py` e registrada em `docs/symbols.toml`.

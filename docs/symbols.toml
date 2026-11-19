@@ -1,5 +1,5 @@
 # symbols.toml — Astral Chain (v1.0.1) Static Reverse-Engineering Symbol Map
-# Gerado automaticamente via tools/extract_symbols.py (Fase 1 AC-SDK)
+# Gerado automaticamente via tools/qa/extract_symbols.py (Fase 1 AC-SDK)
 
 [metadata]
 sha256 = "dc47cae835866379c597e1c507bf52ee0f865ec4412930dfdf1bbc20b6bb9c3b"
@@ -8,10 +8,6 @@ main_base = 0x7000010000
 text_range = "0x000000-0xa0e7d0"
 rodata_range = "0xa0f000-0xd34848"
 data_range = "0xd35000-0xdc4870"
-
-# -----------------------------------------------------------------------------
-# SDK Subsystems & Core Slots
-# -----------------------------------------------------------------------------
 
 [sdk.camera]
 vtable = 0x00d5b3d0
@@ -73,6 +69,154 @@ svc_site_bufroot = 0x00575a30
 svc_site_gbuf = 0x00575c94
 svc_site_camera_aspect = 0x009a30bc
 svc_site_nohud_23 = 0x009177ec
+
+[aob_signatures]
+get_camera_manager = "?? ?? ?? b0 00 d0 41 f9 c0 03 5f d6 00 00 00 00 ?? ?? ?? b0 08 d1 41 f9"
+timer_manager = "?? ?? ?? 90 08 d1 44 f9 00 d1 40 bd ?? ?? ?? 90 01 8d 4e bd 00 08 21 1e"
+engine_state = "?? ?? ?? b0 4a cd 41 f9 4a 31 40 b9 0b f4 9d 52 4b 01 a0 72 4a 09 13 12 29 69 6b b8 49 01 09 2a ?? ?? ?? 35"
+save = "?? ?? ?? 90 08 ed 41 f9 09 c0 9d 52 09 01 a0 72 01 69 69 b8 89 cc 9d 52 09 01 a0 72 14 69 69 b8"
+scene = "?? ?? ?? d0 29 65 42 f9 6a 32 48 b9 29 81 41 b9 29 3d 10 53 5f 05 00 31"
+phase = "?? ?? ?? 90 21 7c 42 f9 e0 43 0b 91 ?? ?? ?? 94 e0 43 0b 91 ?? ?? ?? 94"
+scenario = "?? ?? ?? 90 08 99 44 f9 09 f5 52 b9 e0 03 1f aa ?? ?? ?? 37 0a 29 4c b9"
+player_table = "?? ?? ?? f0 08 41 43 f9 00 59 60 f8 c0 03 5f d6 ?? ?? ?? 90 08 ed 41 f9"
+mission = "?? ?? ?? d0 08 11 42 f9 00 01 40 b9 c0 03 5f d6 f4 4f be a9 fd 7b 01 a9"
+boss_active = "?? ?? ?? 90 08 95 44 f9 08 01 40 b9 1f 05 00 71 ?? ?? ?? 54 ?? ?? ?? 14"
+area = "?? ?? ?? 90 ?? ?? ?? 90 29 89 47 f9 4a 8d 47 f9 0b 00 80 12 3f 01 00 b9"
+subarea = "?? ?? ?? 90 08 91 47 f9 00 01 40 b9 c0 03 5f d6 ff c3 01 d1 f5 23 00 f9"
+menu_ptr = "fd 7b bf a9 fd 03 00 91 ?? ?? ?? 94 ?? ?? ?? f0 08 41 46 f9 09 00 80 12"
+menu_selection = "ff c3 07 d1 fc f3 00 f9 0a 90 41 b9 e8 03 00 91 ?? ?? ?? 34 ?? ?? ?? 90"
+voice_opt = "?? ?? ?? 90 08 d9 41 f9 09 01 40 b9 3f 01 00 6b ?? ?? ?? 54 ?? ?? ?? 90"
+pad_state_table = "?? ?? ?? d0 29 8d 42 f9 0a 14 80 52 08 25 0a 9b e9 03 60 b2 00 e1 00 91"
+pad_input_state = "22 01 22 1e ?? ?? ?? d0 63 01 22 1e 29 a1 42 f9 80 01 22 1e e4 03 27 1e"
+voice_se = "?? ?? ?? f0 08 85 44 f9 1f 2c 00 71 00 01 00 b9 ?? ?? ?? 54 ?? ?? ?? d0 08 81 36 91 00 d9 60 f8 fd 7b c1 a8"
+open_menu = "f3 0f 1e f8 fd 7b 01 a9 fd 43 00 91 3f 30 00 71 ?? ?? ?? 54 e8 03 01 2a"
+camera_director_update = "f3 0f 1e f8 fd 7b 01 a9 fd 43 00 91 f3 03 00 aa 68 46 46 b9 1f b5 03 71"
+
+[[anchor_functions]]
+name = "get_camera_manager"
+func_entry = 0x88fa20
+target_slot = 0xdb83a0
+slot_symbol = "SLOT_CAMERA_MANAGER"
+pattern = "?? ?? ?? b0 00 d0 41 f9 c0 03 5f d6 00 00 00 00 ?? ?? ?? b0 08 d1 41 f9"
+
+[[anchor_functions]]
+name = "timer_manager"
+func_entry = 0x3e4178
+target_slot = 0xdb89a0
+slot_symbol = "SLOT_TIMER_MANAGER"
+pattern = "?? ?? ?? 90 08 d1 44 f9 00 d1 40 bd ?? ?? ?? 90 01 8d 4e bd 00 08 21 1e"
+
+[[anchor_functions]]
+name = "engine_state"
+func_entry = 0x05bd50
+target_slot = 0xdb8398
+slot_symbol = "SLOT_ENGINE_STATE"
+pattern = "?? ?? ?? b0 4a cd 41 f9 4a 31 40 b9 0b f4 9d 52 4b 01 a0 72 4a 09 13 12 29 69 6b b8 49 01 09 2a ?? ?? ?? 35"
+
+[[anchor_functions]]
+name = "save"
+func_entry = 0x058340
+target_slot = 0xdb83d8
+slot_symbol = "SLOT_SAVE"
+pattern = "?? ?? ?? 90 08 ed 41 f9 09 c0 9d 52 09 01 a0 72 01 69 69 b8 89 cc 9d 52 09 01 a0 72 14 69 69 b8"
+
+[[anchor_functions]]
+name = "scene"
+func_entry = 0x026180
+target_slot = 0xdb84c8
+slot_symbol = "SLOT_SCENE"
+pattern = "?? ?? ?? d0 29 65 42 f9 6a 32 48 b9 29 81 41 b9 29 3d 10 53 5f 05 00 31"
+
+[[anchor_functions]]
+name = "phase"
+func_entry = 0x034820
+target_slot = 0xdb84f8
+slot_symbol = "SLOT_PHASE"
+pattern = "?? ?? ?? 90 21 7c 42 f9 e0 43 0b 91 ?? ?? ?? 94 e0 43 0b 91 ?? ?? ?? 94"
+
+[[anchor_functions]]
+name = "scenario"
+func_entry = 0x4e41d0
+target_slot = 0xdb8930
+slot_symbol = "SLOT_SCENARIO"
+pattern = "?? ?? ?? 90 08 99 44 f9 09 f5 52 b9 e0 03 1f aa ?? ?? ?? 37 0a 29 4c b9"
+
+[[anchor_functions]]
+name = "player_table"
+func_entry = 0x454ad0
+target_slot = 0xdbb680
+slot_symbol = "SLOT_PLAYER_TABLE"
+pattern = "?? ?? ?? f0 08 41 43 f9 00 59 60 f8 c0 03 5f d6 ?? ?? ?? 90 08 ed 41 f9"
+
+[[anchor_functions]]
+name = "mission"
+func_entry = 0x4be600
+target_slot = 0xdbc420
+slot_symbol = "SLOT_MISSION"
+pattern = "?? ?? ?? d0 08 11 42 f9 00 01 40 b9 c0 03 5f d6 f4 4f be a9 fd 7b 01 a9"
+
+[[anchor_functions]]
+name = "boss_active"
+func_entry = 0x540430
+target_slot = 0xdbc928
+slot_symbol = "SLOT_BOSS_ACTIVE"
+pattern = "?? ?? ?? 90 08 95 44 f9 08 01 40 b9 1f 05 00 71 ?? ?? ?? 54 ?? ?? ?? 14"
+
+[[anchor_functions]]
+name = "area"
+func_entry = 0x56c100
+target_slot = 0xdbcf10
+slot_symbol = "SLOT_AREA"
+pattern = "?? ?? ?? 90 ?? ?? ?? 90 29 89 47 f9 4a 8d 47 f9 0b 00 80 12 3f 01 00 b9"
+
+[[anchor_functions]]
+name = "subarea"
+func_entry = 0x56c270
+target_slot = 0xdbcf20
+slot_symbol = "SLOT_SUBAREA"
+pattern = "?? ?? ?? 90 08 91 47 f9 00 01 40 b9 c0 03 5f d6 ff c3 01 d1 f5 23 00 f9"
+
+[[anchor_functions]]
+name = "menu_ptr"
+func_entry = 0x61bed8
+target_slot = 0xdbec80
+slot_symbol = "SLOT_MENU_PTR"
+pattern = "fd 7b bf a9 fd 03 00 91 ?? ?? ?? 94 ?? ?? ?? f0 08 41 46 f9 09 00 80 12"
+
+[[anchor_functions]]
+name = "menu_selection"
+func_entry = 0x63a980
+target_slot = 0xdbef78
+slot_symbol = "SLOT_MENU_SELECTION"
+pattern = "ff c3 07 d1 fc f3 00 f9 0a 90 41 b9 e8 03 00 91 ?? ?? ?? 34 ?? ?? ?? 90"
+
+[[anchor_functions]]
+name = "voice_opt"
+func_entry = 0x8e1a40
+target_slot = 0xdc13b0
+slot_symbol = "SLOT_VOICE_OPT"
+pattern = "?? ?? ?? 90 08 d9 41 f9 09 01 40 b9 3f 01 00 6b ?? ?? ?? 54 ?? ?? ?? 90"
+
+[[anchor_functions]]
+name = "pad_state_table"
+func_entry = 0x9ac630
+target_slot = 0xdc2518
+slot_symbol = "PAD_STATE_TABLE"
+pattern = "?? ?? ?? d0 29 8d 42 f9 0a 14 80 52 08 25 0a 9b e9 03 60 b2 00 e1 00 91"
+
+[[anchor_functions]]
+name = "pad_input_state"
+func_entry = 0x9acb64
+target_slot = 0xdc2540
+slot_symbol = "PAD_INPUT_STATE"
+pattern = "22 01 22 1e ?? ?? ?? d0 63 01 22 1e 29 a1 42 f9 80 01 22 1e e4 03 27 1e"
+
+[[anchor_functions]]
+name = "voice_se"
+func_entry = 0x9cb85c
+target_slot = 0xdc2908
+slot_symbol = "SLOT_VOICE_SE"
+pattern = "?? ?? ?? f0 08 85 44 f9 1f 2c 00 71 00 01 00 b9 ?? ?? ?? 54 ?? ?? ?? d0 08 81 36 91 00 d9 60 f8 fd 7b c1 a8"
 
 # -----------------------------------------------------------------------------
 # Discovered Resource Parser Functions (.uid, .bxm, .dat, .wmb)
@@ -3389,3 +3533,376 @@ string = "CORE_MAP_AREA_%02x"
 string_addr = 0xb6a2d3
 xref_site = 0x57a1e0
 func_entry = 0x57a1b0
+
+# -----------------------------------------------------------------------------
+# Framerate 1/30.0f Constants & Combat Timing Sites
+# -----------------------------------------------------------------------------
+
+[[framerate_constants_30fps]]
+constant_addr = 0x00b5ce8c
+constant_val = "0.033333335 (1/30.0f)"
+xref_site = 0x0009886c
+func_entry = 0x0009886c
+domain = "generic_simulation"
+instruction = "ldr s0, [x8, #0xe8c]"
+description = "Simulation step scaling"
+
+[[framerate_constants_30fps]]
+constant_addr = 0x00b5ce8c
+constant_val = "0.033333335 (1/30.0f)"
+xref_site = 0x0010e7c8
+func_entry = 0x0010e52c
+domain = "legion_chain_physics"
+instruction = "ldr s2, [x8, #0xe8c]"
+description = "Legion chain bind timer & tension damping"
+
+[[framerate_constants_30fps]]
+constant_addr = 0x00b5ce8c
+constant_val = "0.033333335 (1/30.0f)"
+xref_site = 0x0011af30
+func_entry = 0x0011ac74
+domain = "legion_chain_physics"
+instruction = "ldr s1, [x8, #0xe8c]"
+description = "Legion chain bind timer & tension damping"
+
+[[framerate_constants_30fps]]
+constant_addr = 0x00b5ce8c
+constant_val = "0.033333335 (1/30.0f)"
+xref_site = 0x0011e1e8
+func_entry = 0x0011dfc8
+domain = "legion_chain_physics"
+instruction = "ldr s0, [x8, #0xe8c]"
+description = "Legion chain bind timer & tension damping"
+
+[[framerate_constants_30fps]]
+constant_addr = 0x00b5ce8c
+constant_val = "0.033333335 (1/30.0f)"
+xref_site = 0x00126558
+func_entry = 0x00126558
+domain = "legion_chain_physics"
+instruction = "ldr s1, [x8, #0xe8c]"
+description = "Legion chain bind timer & tension damping"
+
+[[framerate_constants_30fps]]
+constant_addr = 0x00b5ce8c
+constant_val = "0.033333335 (1/30.0f)"
+xref_site = 0x00126e80
+func_entry = 0x00126d50
+domain = "legion_chain_physics"
+instruction = "ldr s1, [x8, #0xe8c]"
+description = "Legion chain bind timer & tension damping"
+
+[[framerate_constants_30fps]]
+constant_addr = 0x00b5ce8c
+constant_val = "0.033333335 (1/30.0f)"
+xref_site = 0x0012b938
+func_entry = 0x0012b428
+domain = "legion_chain_physics"
+instruction = "ldr s1, [x8, #0xe8c]"
+description = "Legion chain bind timer & tension damping"
+
+[[framerate_constants_30fps]]
+constant_addr = 0x00b5ce8c
+constant_val = "0.033333335 (1/30.0f)"
+xref_site = 0x001a1eb8
+func_entry = 0x001a1d40
+domain = "generic_simulation"
+instruction = "ldr s10, [x8, #0xe8c]"
+description = "Simulation step scaling"
+
+[[framerate_constants_30fps]]
+constant_addr = 0x00b5ce8c
+constant_val = "0.033333335 (1/30.0f)"
+xref_site = 0x001a47ec
+func_entry = 0x001a47d0
+domain = "generic_simulation"
+instruction = "ldr s0, [x8, #0xe8c]"
+description = "Simulation step scaling"
+
+[[framerate_constants_30fps]]
+constant_addr = 0x00b5ce8c
+constant_val = "0.033333335 (1/30.0f)"
+xref_site = 0x001fc860
+func_entry = 0x001fc69c
+domain = "generic_simulation"
+instruction = "ldr s10, [x8, #0xe8c]"
+description = "Simulation step scaling"
+
+[[framerate_constants_30fps]]
+constant_addr = 0x00b5ce8c
+constant_val = "0.033333335 (1/30.0f)"
+xref_site = 0x001fcae4
+func_entry = 0x001fc69c
+domain = "generic_simulation"
+instruction = "ldr s0, [x8, #0xe8c]"
+description = "Simulation step scaling"
+
+[[framerate_constants_30fps]]
+constant_addr = 0x00b5ce8c
+constant_val = "0.033333335 (1/30.0f)"
+xref_site = 0x00217f48
+func_entry = 0x00217e18
+domain = "sync_attack_combat"
+instruction = "ldr s1, [x8, #0xe8c]"
+description = "Sync Attack cue & combo opportunity window"
+
+[[framerate_constants_30fps]]
+constant_addr = 0x00b5ce8c
+constant_val = "0.033333335 (1/30.0f)"
+xref_site = 0x00228224
+func_entry = 0x00228000
+domain = "sync_attack_combat"
+instruction = "ldr s1, [x8, #0xe8c]"
+description = "Sync Attack cue & combo opportunity window"
+
+[[framerate_constants_30fps]]
+constant_addr = 0x00b5ce8c
+constant_val = "0.033333335 (1/30.0f)"
+xref_site = 0x0025d144
+func_entry = 0x0025cf10
+domain = "sync_attack_combat"
+instruction = "ldr s10, [x8, #0xe8c]"
+description = "Sync Attack cue & combo opportunity window"
+
+[[framerate_constants_30fps]]
+constant_addr = 0x00b5ce8c
+constant_val = "0.033333335 (1/30.0f)"
+xref_site = 0x0025d470
+func_entry = 0x0025cf10
+domain = "sync_attack_combat"
+instruction = "ldr s9, [x9, #0xe8c]"
+description = "Sync Attack cue & combo opportunity window"
+
+[[framerate_constants_30fps]]
+constant_addr = 0x00b5ce8c
+constant_val = "0.033333335 (1/30.0f)"
+xref_site = 0x0025df14
+func_entry = 0x0025df14
+domain = "sync_attack_combat"
+instruction = "ldr s8, [x8, #0xe8c]"
+description = "Sync Attack cue & combo opportunity window"
+
+[[framerate_constants_30fps]]
+constant_addr = 0x00b5ce8c
+constant_val = "0.033333335 (1/30.0f)"
+xref_site = 0x0025e0ec
+func_entry = 0x0025e0ec
+domain = "sync_attack_combat"
+instruction = "ldr s0, [x8, #0xe8c]"
+description = "Sync Attack cue & combo opportunity window"
+
+[[framerate_constants_30fps]]
+constant_addr = 0x00b5ce8c
+constant_val = "0.033333335 (1/30.0f)"
+xref_site = 0x0025eae8
+func_entry = 0x0025e9b0
+domain = "sync_attack_combat"
+instruction = "ldr s9, [x8, #0xe8c]"
+description = "Sync Attack cue & combo opportunity window"
+
+[[framerate_constants_30fps]]
+constant_addr = 0x00b5ce8c
+constant_val = "0.033333335 (1/30.0f)"
+xref_site = 0x0025f2e4
+func_entry = 0x0025ebc8
+domain = "sync_attack_combat"
+instruction = "ldr s8, [x8, #0xe8c]"
+description = "Sync Attack cue & combo opportunity window"
+
+[[framerate_constants_30fps]]
+constant_addr = 0x00b5ce8c
+constant_val = "0.033333335 (1/30.0f)"
+xref_site = 0x0027663c
+func_entry = 0x002765d0
+domain = "generic_simulation"
+instruction = "ldr s1, [x8, #0xe8c]"
+description = "Simulation step scaling"
+
+[[framerate_constants_30fps]]
+constant_addr = 0x00b5ce8c
+constant_val = "0.033333335 (1/30.0f)"
+xref_site = 0x00381524
+func_entry = 0x00381500
+domain = "generic_simulation"
+instruction = "ldr s1, [x8, #0xe8c]"
+description = "Simulation step scaling"
+
+[[framerate_constants_30fps]]
+constant_addr = 0x00b5ce8c
+constant_val = "0.033333335 (1/30.0f)"
+xref_site = 0x003e2cf4
+func_entry = 0x003e2c20
+domain = "engine_timer_simulation"
+instruction = "ldr s1, [x9, #0xe8c]"
+description = "TimerManager fractional step accumulator"
+
+[[framerate_constants_30fps]]
+constant_addr = 0x00b5ce8c
+constant_val = "0.033333335 (1/30.0f)"
+xref_site = 0x003e4188
+func_entry = 0x003e4178
+domain = "engine_timer_simulation"
+instruction = "ldr s1, [x8, #0xe8c]"
+description = "TimerManager fractional step accumulator"
+
+[[framerate_constants_30fps]]
+constant_addr = 0x00b5ce8c
+constant_val = "0.033333335 (1/30.0f)"
+xref_site = 0x003e44a0
+func_entry = 0x003e4490
+domain = "engine_timer_simulation"
+instruction = "ldr s1, [x8, #0xe8c]"
+description = "TimerManager fractional step accumulator"
+
+[[framerate_constants_30fps]]
+constant_addr = 0x00b5ce8c
+constant_val = "0.033333335 (1/30.0f)"
+xref_site = 0x0042e1b4
+func_entry = 0x0042e1a0
+domain = "engine_timer_simulation"
+instruction = "ldr s1, [x8, #0xe8c]"
+description = "TimerManager fractional step accumulator"
+
+[[framerate_constants_30fps]]
+constant_addr = 0x00b5ce8c
+constant_val = "0.033333335 (1/30.0f)"
+xref_site = 0x0044d93c
+func_entry = 0x0044d910
+domain = "actor_movement_physics"
+instruction = "ldr s0, [x9, #0xe8c]"
+description = "Character gravity & movement delta integration"
+
+[[framerate_constants_30fps]]
+constant_addr = 0x00b5ce8c
+constant_val = "0.033333335 (1/30.0f)"
+xref_site = 0x0044d960
+func_entry = 0x0044d910
+domain = "actor_movement_physics"
+instruction = "ldr s2, [x8, #0xe8c]"
+description = "Character gravity & movement delta integration"
+
+[[framerate_constants_30fps]]
+constant_addr = 0x00b5ce8c
+constant_val = "0.033333335 (1/30.0f)"
+xref_site = 0x0044d9a0
+func_entry = 0x0044d910
+domain = "actor_movement_physics"
+instruction = "ldr s1, [x9, #0xe8c]"
+description = "Character gravity & movement delta integration"
+
+[[framerate_constants_30fps]]
+constant_addr = 0x00b5ce8c
+constant_val = "0.033333335 (1/30.0f)"
+xref_site = 0x0044d9ec
+func_entry = 0x0044d910
+domain = "actor_movement_physics"
+instruction = "ldr s0, [x8, #0xe8c]"
+description = "Character gravity & movement delta integration"
+
+[[framerate_constants_30fps]]
+constant_addr = 0x00b5ce8c
+constant_val = "0.033333335 (1/30.0f)"
+xref_site = 0x00466658
+func_entry = 0x00466650
+domain = "actor_movement_physics"
+instruction = "ldr s1, [x8, #0xe8c]"
+description = "Character gravity & movement delta integration"
+
+[[framerate_constants_30fps]]
+constant_addr = 0x00b5ce8c
+constant_val = "0.033333335 (1/30.0f)"
+xref_site = 0x00467da4
+func_entry = 0x00467920
+domain = "actor_movement_physics"
+instruction = "ldr s1, [x8, #0xe8c]"
+description = "Character gravity & movement delta integration"
+
+[[framerate_constants_30fps]]
+constant_addr = 0x00b5ce8c
+constant_val = "0.033333335 (1/30.0f)"
+xref_site = 0x00487ad8
+func_entry = 0x00487a90
+domain = "actor_movement_physics"
+instruction = "ldr s8, [x8, #0xe8c]"
+description = "Character gravity & movement delta integration"
+
+[[framerate_constants_30fps]]
+constant_addr = 0x00b5ce8c
+constant_val = "0.033333335 (1/30.0f)"
+xref_site = 0x0049f99c
+func_entry = 0x0049f978
+domain = "generic_simulation"
+instruction = "ldr s1, [x8, #0xe8c]"
+description = "Simulation step scaling"
+
+[[framerate_constants_30fps]]
+constant_addr = 0x00b5ce8c
+constant_val = "0.033333335 (1/30.0f)"
+xref_site = 0x004c267c
+func_entry = 0x004c25cc
+domain = "generic_simulation"
+instruction = "ldr s1, [x8, #0xe8c]"
+description = "Simulation step scaling"
+
+[[framerate_constants_30fps]]
+constant_addr = 0x00b5ce8c
+constant_val = "0.033333335 (1/30.0f)"
+xref_site = 0x005de2e4
+func_entry = 0x005de2a0
+domain = "legion_style_skills"
+instruction = "ldr s3, [x8, #0xe8c]"
+description = "Legion skill & shield charge timers"
+
+[[framerate_constants_30fps]]
+constant_addr = 0x00b5ce8c
+constant_val = "0.033333335 (1/30.0f)"
+xref_site = 0x005eacd8
+func_entry = 0x005eab40
+domain = "legion_style_skills"
+instruction = "ldr s1, [x8, #0xe8c]"
+description = "Legion skill & shield charge timers"
+
+[[framerate_constants_30fps]]
+constant_addr = 0x00b5ce8c
+constant_val = "0.033333335 (1/30.0f)"
+xref_site = 0x00696674
+func_entry = 0x00696610
+domain = "camera_velocity_scaling"
+instruction = "ldr s9, [x8, #0xe8c]"
+description = "Camera velocity & smoothing scaling"
+
+[[framerate_constants_30fps]]
+constant_addr = 0x00b5ce8c
+constant_val = "0.033333335 (1/30.0f)"
+xref_site = 0x006a2f88
+func_entry = 0x006a2e50
+domain = "camera_velocity_scaling"
+instruction = "ldr s0, [x8, #0xe8c]"
+description = "Camera velocity & smoothing scaling"
+
+[[framerate_constants_30fps]]
+constant_addr = 0x00b5ce8c
+constant_val = "0.033333335 (1/30.0f)"
+xref_site = 0x0072a308
+func_entry = 0x0072a120
+domain = "camera_velocity_scaling"
+instruction = "ldr s0, [x9, #0xe8c]"
+description = "Camera velocity & smoothing scaling"
+
+[[framerate_constants_30fps]]
+constant_addr = 0x00b5ce8c
+constant_val = "0.033333335 (1/30.0f)"
+xref_site = 0x00990288
+func_entry = 0x00990214
+domain = "camera_velocity_scaling"
+instruction = "ldr s2, [x8, #0xe8c]"
+description = "Camera velocity & smoothing scaling"
+
+[[framerate_constants_30fps]]
+constant_addr = 0x00b5ce8c
+constant_val = "0.033333335 (1/30.0f)"
+xref_site = 0x00992024
+func_entry = 0x00991fa0
+domain = "camera_velocity_scaling"
+instruction = "ldr s2, [x8, #0xe8c]"
+description = "Camera velocity & smoothing scaling"

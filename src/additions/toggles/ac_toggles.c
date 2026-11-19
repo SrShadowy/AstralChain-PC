@@ -1,6 +1,7 @@
 /* [extra] Runtime toggles (additions/toggles/ac_toggles.h): plain globals so the ImGui
  * overlay and live INI config sync can override env-derived behaviour without relaunching. */
 #include "additions/toggles/ac_toggles.h"
+#include <stdlib.h>
 
 int g_extra_vtx_guard = EXTRA_TOGGLE_UNSET;
 int g_extra_vtx_debug = EXTRA_TOGGLE_UNSET;
@@ -91,3 +92,40 @@ __attribute__((weak)) void ac_config_sync_init_hook(void) {
 
 __attribute__((weak)) void ac_config_sync_save_hook(void) {
 }
+
+int extra_target_present_interval(int guest_interval) {
+    if (g_extra_fps_override == 0) {
+        return 0;
+    }
+    if (g_extra_fps_override >= 60 && guest_interval > 1) {
+        return 1;
+    }
+
+    const char *ev = getenv("AC_PRESENT_INTERVAL");
+    if (ev && *ev) {
+        int v = atoi(ev);
+        if (v >= 0) {
+            return v;
+        }
+    }
+
+    const char *ef = getenv("AC_FPS");
+    if (!ef || !*ef) {
+        ef = getenv("AC_TARGET_FPS");
+    }
+    if (ef && *ef) {
+        int fps = atoi(ef);
+        if (fps == 0) {
+            return 0;
+        }
+        if (fps >= 60 && guest_interval > 1) {
+            return 1;
+        }
+    }
+
+    if (g_extra_fps_unlocked == 1 && guest_interval > 1) {
+        return 1;
+    }
+    return guest_interval;
+}
+

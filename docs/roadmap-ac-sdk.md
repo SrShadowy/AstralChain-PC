@@ -69,6 +69,13 @@ Antes de abrir o debugger, extraímos tudo o que o binário ARM64 ainda preserva
    * Criada a ferramenta automatizada [`tools/qa/extract_symbols.py`](file:///home/shadowy/Documentos/GitHub/AstralChain-PC/tools/qa/extract_symbols.py) com indexação bitwise de instruções `ADRP` em `.text` e detecção de prólogos de funções ARM64.
    * Catalogados **532 sites de parsers de recursos** e **19 sites de debug/sistema** da engine, gerando o arquivo estruturado [`docs/symbols.toml`](file:///home/shadowy/Documentos/GitHub/AstralChain-PC/docs/symbols.toml).
    * Identificados pontos de entrada das rotinas de carregamento de UI (`0x90e830` e `0x9173a0` para `%s%04x.uid`), hash de recursos Platinum (`0x91e170`), carregador de recursos (`0x9c3e90`) e parsers de propriedades XML binárias (`.bxm`).
+3. **Blindagem contra Offsets Fixos (AOB & Decodificação ADRP+LDR Dinâmica):**
+   * Expandido `tools/qa/extract_symbols.py` para gerar e verificar assinaturas AOB (Array of Bytes com máscaras de imediatos de salto/relativos `??`) para as funções-âncora centrais.
+   * Catalogadas e verificadas com unicidade estrita 18 assinaturas AOB centrais em `docs/symbols.toml`.
+   * Implementadas as funções `ac::memory::scan_aob`, `ac::memory::decode_adrp_ldr` e `ac::memory::resolve_slot_from_aob`, permitindo que os ponteiros de slot (`SLOT_CAMERA_MANAGER`, `SLOT_TIMER_MANAGER`, `SLOT_ENGINE_STATE`, `SLOT_SAVE`, `SLOT_SCENE`, `SLOT_PHASE`, `SLOT_SCENARIO`, `SLOT_PLAYER_TABLE`, `SLOT_MISSION`, `SLOT_BOSS_ACTIVE`, `SLOT_AREA`, `SLOT_SUBAREA`, `SLOT_MENU_PTR`, `SLOT_MENU_SELECTION`, `SLOT_VOICE_OPT`, `PAD_STATE_TABLE`, `PAD_INPUT_STATE`, `SLOT_VOICE_SE`) sejam descobertos e resolvidos dinamicamente no boot por decodificação de instruções de máquina ARM64, blindando o SDK contra variações entre v1.0.0 e v1.0.1.
+4. **Ciclo dos 41 Call Sites de 1/30.0f em Combate Real (>30 FPS):**
+   * Auditoria e classificação dos 41 sites em 3 categorias estruturais: Categoria A (alimentados por `frame_step` do `TimerManager`, ex: `0x217f48` Sync Attack Cue e `0x696674` Camera Velocity, intrinsecamente invariantes), Categoria B (física central do ator e Legion state machine despachadas por `whole_ticks` a 30 Hz constantes), e Categoria C (acumuladores aditivos de corrente e Sync Attack, ex: `0x126558`, `0x228224`).
+   * Implementadas no SDK (`ac::time`) as funções `get_combat_delta_scale()`, `calculate_combat_window_seconds()` e `verify_combat_framerate_invariants()`, garantindo preservação rigorosa da janela de 1.0s do Sync Attack e do escape da corrente em 60/120/144 FPS.
 
 ---
 
@@ -141,7 +148,9 @@ Unificar todas as descobertas em uma camada de abstração limpa, robusta e isol
      - `ac::memory`: Utilitários de resolução de ponteiros na `gmem` e scans por assinatura de bytes (*AOB scan*), garantindo tolerância a diferenças entre revisões do binário (v1.0.0 vs v1.0.1).
      - `ac::camera`: Estruturas e métodos de leitura/escrita de ângulos, FOV e matrizes de visualização.
      - `ac::ui`: Estados de telas, consultas de pausa e visibilidade do cursor.
-     - `ac::time`: Controle do multiplicador de velocidade e medições de delta-time.
+     - `ac::time`: Controle do multiplicador de velocidade, desacoplamento e invariantes de combate.
+     - `ac::game_state`: Acompanhamento de cenários, atores e seleção de idioma (Texto 0..14 e Voz Wwise).
+     - `ac::mods`: Gestão dinâmica de mods LayeredFS, descoberta, categorização e alternância (.disabled).
 2. **Troca Dinâmica de Glifos (Teclado/Mouse vs Controle):**
    * No backend Vulkan, interceptar os hashes ou índices das texturas dos botões do Nintendo Switch (`A`, `B`, `X`, `Y`, `ZL`, `ZR`) no atlas de interface.
    * Substituir dinamicamente as referências de descritor bindless pelos glifos equivalentes de PC (ex.: `E`, `Q`, `LMB`, `RMB`, `Shift`, `Espaço`) sempre que o último evento de entrada provier de teclado ou mouse, restaurando os ícones de gamepad ao detectar movimentação em sticks físicos.
@@ -231,6 +240,53 @@ A pesquisa estática e dinâmica no executável `main` (NSO v1.0.1, `nsobid 4B15
   - `[TimerManager + 0xe0]`: tempo real decorrido no frame em milissegundos (`delta_ms`).
   - `[TimerManager + 0xd0]`: multiplicador normalizado de frame.
   - `[TimerManager + 0xb0 .. 0xc0]`: escalas de tempo dos subsistemas (velocidade do jogo, slow motion e IRIS).
+
+### 4.5 Status de Combate, HP e Energia da Legião (`PlayerActor`)
+* **Vetor de Atores do Jogador (`SLOT_PLAYER_TABLE = 0xdbb680`)**:
+  - Recupera a instância ativa do jogador (`*SLOT_PLAYER_TABLE`).
+  - `+0x50`: Vetor de posição no mundo (`Vec3` X, Y, Z).
+  - `+0x90`: Vetor de rotação (`Vec3` Pitch, Yaw, Roll).
+  - `+0x840`: HP atual do jogador (`int32_t`).
+  - `+0x844`: HP máximo do jogador (`int32_t`).
+  - `+0xd54`: Energia atual do Limiter da Legião ativa (`float`, pontos/segundos).
+  - `+0xd58`: Energia máxima do Limiter da Legião ativa (`float`).
+  - `+0xd5c`: Fator acumulador de recarga de energia da Legião (`float`).
+  - `+0xf1c .. +0xf2c`: Timers/cooldowns individuais por estilo (`Sword, Arrow, Arm, Beast, Axe`).
+  - `+0xf48`: ID do estilo de Legião ativo (`0..4`).
+  - `+0xf38`: ID do estilo de Legião selecionado (`0..4`).
+  - Fallback visual no HUD: `SLOT_HUD_LEGION = 0xdb8580` (`*0xdb8580 + 0xb0` = ratio float `0.0 .. 1.0`).
+
+### 4.6 Pós-Processamento e Subsistema de Áudio Wwise
+* **Passes de Filtro de Pós-Processamento (Shaders Fragment)**:
+  - Motion blur de câmera: hash `0x5a18c4e0982bb1a0`.
+  - Motion blur direcional: hash `0x7c29d0f114389ae2`.
+  - Aberração cromática: hash `0xb48231ec0981df61`.
+  - Granulado de filme: hash `0x3d82a17cbef10243`.
+* **RTPC Parameters de Áudio Wwise**:
+  - `Volume_Master`, `Volume_BGM`, `Volume_SE`, `Volume_Voice`, `Volume_Environment`.
+  - Canais de saída Audren: `AudioStereoJackOutput`, `AudioBuiltInSpeakerOutput`, `AudioTvOutput`, `AudioUsbDeviceOutput`.
+
+### 4.7 Assinaturas AOB Canônicas (Blindagem de Funções)
+Assinaturas de bytes com máscara de wildcards (`??` para deltas PC-relative de salto e registradores dinâmicos) para localização determinística e independente de revisão de build:
+* **`GetCameraManager` (`0x88fa20`)**:
+  `?? ?? ?? b0 00 d0 41 f9 c0 03 5f d6 00 00 00 00 ?? ?? ?? b0 08 d1 41 f9 00 61 01 91`
+* **`TimerManager::Update` (`0x91dbd0`)**:
+  `?? ?? ?? 94 68 66 40 f9 f4 03 00 aa ?? ?? ?? b4 88 02 08 cb 00 01 62 9e ?? ?? ?? 90 08 f1 45 f9`
+* **`OpenMenu` (`0x61bf00`)**:
+  `f3 0f 1e f8 fd 7b 01 a9 fd 43 00 91 3f 30 00 71 ?? ?? ?? 54 e8 03 01 2a`
+* **`CameraDirector::Update` (`0x28b120`)**:
+  `f3 0f 1e f8 fd 7b 01 a9 fd 43 00 91 f3 03 00 aa 68 46 46 b9 1f b5 03 71`
+
+### 4.8 Varredura e Mapeamento de `1/30.0f` (`0x00b5ce8c`)
+* 41 call sites em `.text` carregando o literal float `0.033333335f` (`0x3d088889`):
+  - **Física da Corrente & Bind da Legião (6 sites)**: `0x10e7c8`, `0x11af30`, `0x11e1e8`, `0x126558`, `0x126e80`, `0x12b938` (amortecimento de tensão, enrolamento em inimigos e timer de fuga do bind).
+  - **Janelas de Sync Attack (8 sites)**: `0x217f48`, `0x228224`, `0x25d144`, `0x25d470`, `0x25df14`, `0x25e0ec`, `0x25eae8`, `0x25f2e4` (indicador visual azul e gatilhos de comando conjunto).
+  - **Simulação e Animação do TimerManager (6 sites)**: `0x3e2cf4`, `0x3e4188`, `0x3e44a0`, `0x42e1b4`, `0x466658`, `0x467da4`.
+  - **Movimento e Gravidade do Ator (5 sites)**: `0x44d93c`, `0x44d960`, `0x44d9a0`, `0x44d9ec`, `0x487ad8`.
+  - **Habilidades de Estilo de Legião (2 sites)**: `0x5de2e4`, `0x5eacd8`.
+  - **Buffers de Velocidade de Câmera (14 sites)**: `0x696674`, `0x6a2f88`, `0x72a308`, `0x990288`, `0x992024`, etc.
+
+
 
 ---
 

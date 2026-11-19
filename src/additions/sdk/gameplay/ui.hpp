@@ -1,4 +1,5 @@
 #pragma once
+#include <cstddef>
 #include <cstdint>
 #include "../core/memory.hpp"
 
@@ -28,7 +29,18 @@ constexpr uintptr_t OFFSET_SEL_ITEM_INDEX     = 0x08ull;
 constexpr uintptr_t OFFSET_SEL_ITEM_STATE     = 0x14ull;
 constexpr uintptr_t OFFSET_SEL_ITEM_FLAGS     = 0x20ull;
 
-constexpr int32_t MENU_ID_NONE = -1;
+// Reference Canvas Coordinate Space
+constexpr float UI_CANVAS_WIDTH               = 1920.0f;
+constexpr float UI_CANVAS_HEIGHT              = 1080.0f;
+constexpr int32_t MENU_ID_NONE                = -1;
+
+struct MenuItemRect {
+    int32_t index;
+    float x0;
+    float y0;
+    float x1;
+    float y1;
+};
 
 int32_t get_active_menu();
 bool is_menu_open();
@@ -44,5 +56,11 @@ bool is_engine_transitioning();
 int32_t get_selected_item_index();
 uint64_t get_selected_item_id();
 bool has_selection();
+bool set_selected_item_index(int32_t index);
+bool set_selected_item_id(uint64_t id);
+
+// Hit-testing & Coordinate conversion
+bool screen_to_ui_coords(float screen_x, float screen_y, float screen_w, float screen_h, float* out_ui_x, float* out_ui_y);
+int32_t hit_test_menu_item(float ui_x, float ui_y, const MenuItemRect* items, size_t count);
 
 } // namespace ac::ui
