@@ -19,10 +19,20 @@ struct GraphicsSettings {
     static constexpr double kFsrSharpnessStep = 0.05;
     static constexpr int kFsrSharpnessDecimals = 2;
     static constexpr double kDefaultLodBias = 0.0;
+    static constexpr double kMaxLodBias = 3.0;
     static constexpr double kDefaultLodMin = 0.0;
+    static constexpr double kMaxLodMin = 4.0;
+    static constexpr double kLodSpinStep = 0.5;
+    static constexpr int kMinDrawDistance = 100;
+    static constexpr int kMaxDrawDistance = 400;
+    static constexpr int kDefaultDrawDistance = 100;
+    static constexpr int kDrawDistanceStep = 25;
+    static constexpr int kDefaultShadowScale = 1;
 
     int width{kDefaultWidth};
     int height{kDefaultHeight};
+    QString outputRes{"1600x900"};
+    QString aspect{"auto"};
     bool fullscreen{false};
     bool vsync{true};
     QString presentMode{"mailbox"};
@@ -37,6 +47,10 @@ struct GraphicsSettings {
     double lodBias{kDefaultLodBias};
     double lodMin{kDefaultLodMin};
     bool noShadow{false};
+    int drawDistance{kDefaultDrawDistance};
+    int shadowScale{kDefaultShadowScale};
+    bool hudHidden{false};
+    QString hudArea{"16:9"};
 };
 
 struct AudioSettings {
@@ -75,6 +89,8 @@ struct GameSettings {
     bool verboseLog{false};
     bool cutscene30Fps{false};
     bool asyncSubmit{true};
+    bool vtxGuard{false};
+    bool vtxDebug{false};
     bool xboxConfirmA{true};
     QString buttonPrompts{"auto"};
     QString language{"auto"};

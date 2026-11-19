@@ -88,17 +88,21 @@ void SettingsDialog::setupUi(bool gameRunning) {
 void SettingsDialog::wireLiveSignals() {
     for (auto* cb : {m_parallelCheck, m_ignoreFocusCheck, m_xboxConfirmACheck, m_fullscreenCheck,
                      m_vsyncCheck, m_fpsUnlockedCheck, m_fsrJitterCheck, m_frameGenCheck,
-                     m_noShadowCheck, m_muteUnfocusCheck, m_bc7Check, m_forceShadersCheck,
-                     m_verboseLogCheck, m_cutscene30Check, m_asyncSubmitCheck}) {
+                     m_noShadowCheck, m_hudHiddenCheck, m_muteUnfocusCheck, m_bc7Check,
+                     m_forceShadersCheck, m_verboseLogCheck, m_cutscene30Check, m_asyncSubmitCheck,
+                     m_vtxGuardCheck, m_vtxDebugCheck}) {
         connect(cb, &QCheckBox::toggled, this, &SettingsDialog::onLiveControlModified);
     }
     for (auto* combo : {m_promptsCombo, m_languageCombo, m_voiceLangCombo, m_resolutionCombo,
-                        m_presentModeCombo, m_scaleCombo, m_upscalerCombo, m_antialiasCombo,
-                        m_textureQualityCombo, m_lodCombo}) {
+                        m_outputResCombo, m_aspectCombo, m_presentModeCombo, m_scaleCombo,
+                        m_upscalerCombo, m_antialiasCombo, m_shadowScaleCombo, m_hudAreaCombo}) {
         connect(combo, &QComboBox::currentIndexChanged, this, &SettingsDialog::onLiveControlModified);
     }
     connect(m_fpsSpin, &QSpinBox::valueChanged, this, &SettingsDialog::onLiveControlModified);
+    connect(m_drawDistanceSpin, &QSpinBox::valueChanged, this, &SettingsDialog::onLiveControlModified);
     connect(m_fsrSharpnessSpin, &QDoubleSpinBox::valueChanged, this, &SettingsDialog::onLiveControlModified);
+    connect(m_lodBiasSpin, &QDoubleSpinBox::valueChanged, this, &SettingsDialog::onLiveControlModified);
+    connect(m_lodMinSpin, &QDoubleSpinBox::valueChanged, this, &SettingsDialog::onLiveControlModified);
     connect(m_volumeSlider, &QSlider::valueChanged, this, &SettingsDialog::onLiveControlModified);
     connect(m_mouseWidget, &MouseSettingsWidget::modified, this, &SettingsDialog::onLiveControlModified);
     connect(m_overlayRpcWidget, &OverlayRpcSettingsWidget::modified, this, &SettingsDialog::onLiveControlModified);
@@ -151,8 +155,25 @@ void SettingsDialog::loadFromConfig() {
         combo->setCurrentIndex(best);
     };
     selectNearest(m_scaleCombo, g.renderScale);
-    selectNearest(m_textureQualityCombo, g.lodBias);
-    selectNearest(m_lodCombo, g.lodMin);
+    if (!m_lodBiasSpin->hasFocus()) {
+        m_lodBiasSpin->setValue(g.lodBias);
+    }
+    if (!m_lodMinSpin->hasFocus()) {
+        m_lodMinSpin->setValue(g.lodMin);
+    }
+    int outIdx = m_outputResCombo->findData(g.outputRes);
+    if (outIdx < 0 && !g.outputRes.isEmpty()) {
+        m_outputResCombo->addItem(g.outputRes + " [Reinício]", g.outputRes);
+        outIdx = m_outputResCombo->findData(g.outputRes);
+    }
+    m_outputResCombo->setCurrentIndex(qMax(0, outIdx));
+    m_aspectCombo->setCurrentIndex(qMax(0, m_aspectCombo->findData(g.aspect)));
+    m_shadowScaleCombo->setCurrentIndex(qMax(0, m_shadowScaleCombo->findData(g.shadowScale)));
+    if (!m_drawDistanceSpin->hasFocus()) {
+        m_drawDistanceSpin->setValue(g.drawDistance);
+    }
+    m_hudAreaCombo->setCurrentIndex(qMax(0, m_hudAreaCombo->findData(g.hudArea)));
+    m_hudHiddenCheck->setChecked(g.hudHidden);
     m_noShadowCheck->setChecked(g.noShadow);
 
     const auto& a = m_config.audio();
@@ -169,6 +190,8 @@ void SettingsDialog::loadFromConfig() {
     m_verboseLogCheck->setChecked(gm.verboseLog);
     m_cutscene30Check->setChecked(gm.cutscene30Fps);
     m_asyncSubmitCheck->setChecked(gm.asyncSubmit);
+    m_vtxGuardCheck->setChecked(gm.vtxGuard);
+    m_vtxDebugCheck->setChecked(gm.vtxDebug);
     if (!m_wrapperEdit->hasFocus()) {
         m_wrapperEdit->setText(gm.commandWrapper);
     }
@@ -191,6 +214,8 @@ void SettingsDialog::writeToConfig() {
         g.width = parts[0].toInt();
         g.height = parts[1].toInt();
     }
+    g.outputRes = m_outputResCombo->currentData().toString();
+    g.aspect = m_aspectCombo->currentData().toString();
     g.fullscreen = m_fullscreenCheck->isChecked();
     g.vsync = m_vsyncCheck->isChecked();
     g.presentMode = m_presentModeCombo->currentData().toString();
@@ -202,9 +227,13 @@ void SettingsDialog::writeToConfig() {
     g.fsrJitter = m_fsrJitterCheck->isChecked();
     g.fsrSharpness = m_fsrSharpnessSpin->value();
     g.frameGen = m_frameGenCheck->isChecked();
-    g.lodBias = m_textureQualityCombo->currentData().toDouble();
-    g.lodMin = m_lodCombo->currentData().toDouble();
+    g.lodBias = m_lodBiasSpin->value();
+    g.lodMin = m_lodMinSpin->value();
+    g.shadowScale = m_shadowScaleCombo->currentData().toInt();
+    g.drawDistance = m_drawDistanceSpin->value();
     g.noShadow = m_noShadowCheck->isChecked();
+    g.hudArea = m_hudAreaCombo->currentData().toString();
+    g.hudHidden = m_hudHiddenCheck->isChecked();
 
     auto& a = m_config.audio();
     a.masterVolume = m_volumeSlider->value();
@@ -225,6 +254,8 @@ void SettingsDialog::writeToConfig() {
     gm.verboseLog = m_verboseLogCheck->isChecked();
     gm.cutscene30Fps = m_cutscene30Check->isChecked();
     gm.asyncSubmit = m_asyncSubmitCheck->isChecked();
+    gm.vtxGuard = m_vtxGuardCheck->isChecked();
+    gm.vtxDebug = m_vtxDebugCheck->isChecked();
     gm.commandWrapper = m_wrapperEdit->text().trimmed();
     gm.customEnv = m_customEnvEdit->text().trimmed();
 }

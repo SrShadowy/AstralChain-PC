@@ -181,6 +181,32 @@ def _direct_call(text, called):
 PAGE_JUMPS = False
 _JUMP_TAIL = re.compile(r'c->pc=(\d+)ull; break; \}$')
 _COND_TAIL = re.compile(r'c->pc=\((.*)\) \? (\d+)ull : (\d+)ull; break; \}$')
+_DIRECT_CALL_TAIL = re.compile(r'c->x\[30\]=(\d+)ull; c->pc=(\d+)ull; (page_[0-9a-f]+\(c\)); break; \}$')
+_MAIN_SPIN_BUILD_PREFIX = '4b159f0f7a360669'
+_MAIN_V101_SPIN_WAITS = (
+    (0x3e0728, 0x3e0724), (0x3e39dc, 0x3e39d8), (0x3e3e78, 0x3e3e74), (0x3e4160, 0x3e415c),
+    (0x4be88c, 0x4be7fc), (0x5009c8, 0x5009ac), (0x500adc, 0x500ac0), (0x5317f0, 0x5317d4),
+    (0x586318, 0x586314), (0x73a448, 0x73a40c), (0x7a7210, 0x7a7208), (0x7a76d0, 0x7a76c8),
+    (0x7a778c, 0x7a7784), (0x7afed0, 0x7afec8), (0x7b0020, 0x7b0018), (0x7b00e8, 0x7b00e0),
+    (0x7b0290, 0x7b0288), (0x7b0328, 0x7b0320), (0x7b04c8, 0x7b04c0), (0x7b07f0, 0x7b07e8),
+    (0x7b0958, 0x7b0950), (0x7cdb08, 0x7cdacc), (0x7fa0ec, 0x7fa0e4), (0x80a3f4, 0x80a2d4),
+    (0x80a610, 0x80a4f0), (0x81b544, 0x81b53c), (0x81b9f0, 0x81b9e8), (0x81c724, 0x81c71c),
+    (0x8254dc, 0x8254d4), (0x855a50, 0x855894), (0x855a64, 0x855894), (0x87ade8, 0x87adb0),
+    (0x9a829c, 0x9a8274),
+)
+SPIN_BACKS = {}
+
+
+def _inject_spin_gates(cases):
+    out = []
+    for text in cases:
+        m = re.search(r'\bcase (\d+)ull:', text)
+        head = SPIN_BACKS.get(int(m.group(1))) if m else None
+        if head is not None:
+            needle = f'c->pc={head}ull;'
+            text = text.replace(needle, f'rt_spin_gate(c,{head}ull); {needle}', 1)
+        out.append(text)
+    return out
 
 
 def _local_jumps(cases, page):
@@ -199,6 +225,15 @@ def _local_jumps(cases, page):
             m = _JUMP_TAIL.search(text)
             if m and int(m.group(1)) in labels:
                 text = text[:m.start()] + go(int(m.group(1))) + ' }'
+            else:
+                m = _DIRECT_CALL_TAIL.search(text)
+                if m and int(m.group(1)) in labels:
+                    ra = int(m.group(1))
+                    used.add(ra)
+                    text = text[:m.start()] + (
+                        f'c->x[30]={ra}ull; c->pc={m.group(2)}ull; {m.group(3)}; '
+                        f'if (__builtin_expect(c->pc=={ra}ull,1)) goto L_{ra:x}; break; }}'
+                    )
         out.append(text)
     return [(f'L_{int(t[5:t.index("ull")]):x}: ' if int(t[5:t.index('ull')]) in used else '') + t for t in out]
 
@@ -214,6 +249,8 @@ def emit_page(page,cases,limit,stop_at=None,external=False,chain=False):
             if chain: cases=chain_cases(cases)
             cases=_local_jumps(cases,page)
             chain=False  # (already chained)
+        if SPIN_BACKS:
+            cases=_inject_spin_gates(cases)
         protos=''.join(f'void page_{p:x}(Cpu*);\n' for p in sorted(called - {page}))
         parts=[f'{protos}{"" if external else "static "}__attribute__((noinline)) void page_{page:x}(Cpu *{PAGE_RESTRICT}c) {{\nwhile((c->pc>>12)=={page}ull) {{\nswitch(c->pc) {{']
         parts.extend(cases if PAGE_JUMPS else chain_cases(cases) if chain else sorted(cases))  # (--jumps: ordered and chained above)
@@ -513,6 +550,15 @@ if(BCryptGenRandom(NULL,(PUCHAR)entropy,sizeof(entropy),BCRYPT_USE_SYSTEM_PREFER
             from astral_chain.translator import native_trace as imported
             imported.DIRECT_PAGES = set(pages)
             imported.DIRECT_EXCLUDE = {image.symbols[name][0] for name in (*HLE_SYMBOLS, 'nvnBootstrapLoader') if name in image.symbols}
+        if args.lean:
+            main_mod = next((m for m in image.modules if m.name == 'main'), None)
+            bid = '' if not main_mod else (main_mod.nso.build_id if isinstance(main_mod.nso.build_id, str) else main_mod.nso.build_id.hex())
+            spin_map = {main_mod.base + back: main_mod.base + head for back, head in _MAIN_V101_SPIN_WAITS} if bid.lower().startswith(_MAIN_SPIN_BUILD_PREFIX) else {}
+            SPIN_BACKS.clear()
+            SPIN_BACKS.update(spin_map)
+            from astral_chain.translator import native_trace as imported
+            imported.SPIN_BACKS.clear()
+            imported.SPIN_BACKS.update(spin_map)
         checkpoint('compiling',translation)
         dispatch=emit_blocks(nodes,args.steps,args.stop_at) if nodes is not None else emit_dispatch(pages,args.steps,args.stop_at,chain=args.chain)
         units=None

@@ -1,99 +1,23 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-// [extra] In-game Audio and Mouse settings tab for the Legatus / IRIS terminal.
+// [extra] In-game Graphics, Audio and Mouse settings tabs for the Legatus / IRIS terminal.
 #include "additions/overlay/ac_menu_tabs.h"
 
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
-#include <cstdlib>
-#include <cstring>
 
 #include "imgui.h"
 #include "settings.h"
 #include "additions/overlay/ac_hud.h"
+#include "additions/overlay/ac_menu_gfx_helpers.h"
 #include "additions/toggles/ac_toggles.h"
+
+using namespace ac::menu;
 
 namespace {
 
-constexpr int kDefaultVolumePct      = 100;
-constexpr float kMinSensPct          = 5.0f;
-constexpr float kMaxSensPct          = 4000.0f;
-constexpr float kSliderMaxSensPct    = 400.0f;
-constexpr float kMinYScale           = 0.05f;
-constexpr float kMaxYScale           = 10.0f;
-constexpr float kSliderMaxYScale     = 3.0f;
-constexpr float kMinMenuCellPx       = 10.0f;
-constexpr float kMaxMenuCellPx       = 200.0f;
-constexpr double kCurveLinear        = 1.0;
-constexpr double kCurvePower         = 1.35;
-constexpr double kCurveAggressive    = 1.75;
-constexpr double kCurveMatchEps      = 0.02;
-constexpr int kDefaultWinWidth       = 1600;
-constexpr int kDefaultWinHeight      = 900;
-constexpr int kResPresetCount        = 5;
-constexpr int kUpscalerModeCount     = 3;
-constexpr int kScalePresetCount      = 9;
-constexpr int kDefaultScaleIndex     = 4;
-constexpr int kCustomResBufSize      = 48;
-constexpr int kScaleLabelBufSize     = 48;
-constexpr int kAntialiasCount        = 2;
-constexpr float kMaxLodBiasSlider    = 3.0f;
-constexpr float kMaxLodMinSlider     = 4.0f;
-constexpr float kMaxSharpnessSlider  = 1.0f;
-
-struct ResPreset {
-    int w;
-    int h;
-    const char *label;
-};
-
-const ResPreset kResPresets[kResPresetCount] = {
-    {1280, 720, "1280x720 (HD)"},
-    {1600, 900, "1600x900 (HD+ Padrao)"},
-    {1920, 1080, "1920x1080 (Full HD)"},
-    {2560, 1440, "2560x1440 (QHD)"},
-    {3840, 2160, "3840x2160 (4K UHD)"}
-};
-
-const int kUpscalerValues[kUpscalerModeCount] = {UPSCALE_BILINEAR, UPSCALE_FSR1, UPSCALE_FSR3};
-const char *const kUpscalerLabels[kUpscalerModeCount] = {
-    "Off (Bilinear)",
-    "AMD FSR 1.0 (Espacial)",
-    "AMD FSR 3.1 (Temporal + Jitter + RCAS)"
-};
-const char *const kUpscalerPrefixes[kUpscalerModeCount] = {"", "FSR 1.0 ", "FSR 3.1 "};
-const char *const kNativeScaleTags[kUpscalerModeCount] = {"Nativo 1:1", "FSR 1.0 Nativo", "FSR 3.1 Native AA"};
-const float kScaleValues[kScalePresetCount] = {0.50f, 0.58f, 0.67f, 0.75f, 1.00f, 1.25f, 1.50f, 1.75f, 2.00f};
-const char *const kScaleTags[kScalePresetCount] = {
-    "Performance", "Balanced", "Quality", "Ultra Quality",
-    nullptr,
-    "SSAA Qualidade", "SSAA Ultra", "SSAA Extremo", "SSAA 4K"
-};
-const char *const kAntialiasLabels[kAntialiasCount] = {"Desativado", "SMAA Ultra (Color Edge)"};
-
-int effective_audio_volume(void) {
-    if (g_extra_audio_volume >= 0) {
-        return std::clamp(g_extra_audio_volume, 0, EXTRA_AUDIO_VOL_MAX);
-    }
-    const char *e = std::getenv("AC_MASTER_VOLUME");
-    if (e && *e) {
-        return std::clamp(std::atoi(e), 0, EXTRA_AUDIO_VOL_MAX);
-    }
-    return kDefaultVolumePct;
-}
-
-bool effective_audio_mute_unfocus(void) {
-    if (g_extra_audio_mute_unfocus >= 0) {
-        return g_extra_audio_mute_unfocus != 0;
-    }
-    const char *e = std::getenv("AC_MUTE_ON_UNFOCUS");
-    return e && (*e == '1' || std::strcmp(e, "true") == 0);
-}
-
 void ensure_mouse_initialized(void) {
-    if (g_extra_mouse_override) {
-        return;
-    }
+    if (g_extra_mouse_override) return;
     const char *ml = std::getenv("AC_MOUSE_LOOK");
     g_extra_mouse_look = !(ml && *ml == '0') ? 1 : 0;
     g_extra_mouse_sens = 1.0;
@@ -107,22 +31,14 @@ void ensure_mouse_initialized(void) {
 }
 
 int curve_exp_to_index(double exp) {
-    if (std::fabs(exp - kCurveLinear) < kCurveMatchEps) {
-        return 0;
-    }
-    if (std::fabs(exp - kCurveAggressive) < kCurveMatchEps) {
-        return 2;
-    }
+    if (std::fabs(exp - kCurveLinear) < kCurveMatchEps) return 0;
+    if (std::fabs(exp - kCurveAggressive) < kCurveMatchEps) return 2;
     return 1;
 }
 
 double curve_index_to_exp(int idx) {
-    if (idx == 0) {
-        return kCurveLinear;
-    }
-    if (idx == 2) {
-        return kCurveAggressive;
-    }
+    if (idx == 0) return kCurveLinear;
+    if (idx == 2) return kCurveAggressive;
     return kCurvePower;
 }
 
@@ -134,40 +50,13 @@ void commit_audio_change(void) {
 void commit_mouse_change(bool bump_prompts) {
     g_extra_mouse_override = 1;
     g_extra_mouse_gen++;
-    if (bump_prompts) {
-        g_sdl_prompt_generation++;
-    }
+    if (bump_prompts) g_sdl_prompt_generation++;
     ac_config_sync_save_hook();
-}
-
-float eff_lod_bias(void) {
-    if (g_extra_lod_bias >= 0.0f) {
-        return g_extra_lod_bias;
-    }
-    const char *e = std::getenv("LARECOMP_LOD_BIAS");
-    return e ? static_cast<float>(std::atof(e)) : 0.0f;
-}
-
-float eff_lod_min(void) {
-    if (g_extra_lod_min >= 0.0f) {
-        return g_extra_lod_min;
-    }
-    const char *e = std::getenv("LARECOMP_LOD_MIN");
-    return e ? static_cast<float>(std::atof(e)) : 0.0f;
-}
-
-bool eff_no_shadow(void) {
-    if (g_extra_no_shadow >= 0) {
-        return g_extra_no_shadow != 0;
-    }
-    return std::getenv("LARECOMP_NO_SHADOW") != nullptr;
 }
 
 int upscaler_to_index(int upscaler) {
     for (int i = 0; i < kUpscalerModeCount; i++) {
-        if (upscaler == kUpscalerValues[i]) {
-            return i;
-        }
+        if (upscaler == kUpscalerValues[i]) return i;
     }
     return 0;
 }
@@ -186,7 +75,7 @@ int find_nearest_scale_index(float scale) {
 }
 
 void render_display_section(void) {
-    ac_ui_section_header("JANELA & EXIBIÇÃO", "// SYS.DISP");
+    ac_ui_section_header("JANELA, OUTPUT & PROPORÇÃO", "// SYS.DISP");
     int cur_w = g_extra_win_w > 0 ? g_extra_win_w : kDefaultWinWidth;
     int cur_h = g_extra_win_h > 0 ? g_extra_win_h : kDefaultWinHeight;
     int res_idx = kResPresetCount;
@@ -208,12 +97,32 @@ void render_display_section(void) {
                 g_extra_win_resize_pending = 1;
                 ac_config_sync_save_hook();
             }
-            if (selected) {
-                ImGui::SetItemDefaultFocus();
-            }
+            if (selected) ImGui::SetItemDefaultFocus();
         }
         ImGui::EndCombo();
     }
+
+    char custom_out_buf[kCustomResBufSize];
+    int out_idx = eff_output_res_index(custom_out_buf, sizeof(custom_out_buf));
+    const char *out_preview = (out_idx >= 0) ? kOutResLabels[out_idx] : custom_out_buf;
+    if (ImGui::BeginCombo("Resolução Output (HUD/Composite)", out_preview)) {
+        for (int i = 0; i < kOutResPresetCount; i++) {
+            bool selected = (i == out_idx);
+            if (ImGui::Selectable(kOutResLabels[i], selected)) {
+                std::snprintf(g_extra_output_res, sizeof(g_extra_output_res), "%s", kOutResKeys[i]);
+                ac_config_sync_save_hook();
+            }
+            if (selected) ImGui::SetItemDefaultFocus();
+        }
+        ImGui::EndCombo();
+    }
+
+    int asp_idx = eff_aspect_index();
+    if (ImGui::Combo("Proporção (Aspect Ratio)", &asp_idx, kAspectLabels, kAspectPresetCount)) {
+        std::snprintf(g_extra_aspect_str, sizeof(g_extra_aspect_str), "%s", kAspectKeys[asp_idx]);
+        ac_config_sync_save_hook();
+    }
+
     bool fs = (g_extra_fullscreen_pending >= 0 ? g_extra_fullscreen_pending : g_sdl_fullscreen) != 0;
     if (ImGui::Checkbox("Tela Cheia (F11)", &fs)) {
         g_extra_fullscreen_pending = fs ? 1 : 0;
@@ -222,7 +131,7 @@ void render_display_section(void) {
 }
 
 void render_fsr_section(void) {
-    ac_ui_section_header("RECONSTRUÇÃO & SUPER RESOLUÇÃO (AMD FSR)", "// SYS.FSR");
+    ac_ui_section_header("SCENE RES, RECONSTRUÇÃO & FSR", "// SYS.FSR");
     int up = upscaler_to_index(g_settings.upscaler);
     if (ImGui::Combo("Upscaler", &up, kUpscalerLabels, kUpscalerModeCount)) {
         g_settings.upscaler = kUpscalerValues[up];
@@ -230,19 +139,18 @@ void render_fsr_section(void) {
     }
 
     float cur_sc = g_extra_render_scale > 0.0f ? g_extra_render_scale : g_settings.render_scale;
-    if (cur_sc <= 0.0f) {
-        cur_sc = kScaleValues[kDefaultScaleIndex];
-    }
+    if (cur_sc <= 0.0f) cur_sc = kScaleValues[kDefaultScaleIndex];
     int sc_idx = find_nearest_scale_index(cur_sc);
     char scale_bufs[kScalePresetCount][kScaleLabelBufSize];
     const char *scale_items[kScalePresetCount];
     for (int i = 0; i < kScalePresetCount; i++) {
         const char *tag = (i == kDefaultScaleIndex) ? kNativeScaleTags[up] : kScaleTags[i];
         const char *pfx = (i == kDefaultScaleIndex) ? "" : kUpscalerPrefixes[up];
-        std::snprintf(scale_bufs[i], sizeof(scale_bufs[i]), "%.2fx (%s%s)", kScaleValues[i], pfx, tag);
+        const char *suf = (i < kDefaultScaleIndex) ? " [Reinício]" : "";
+        std::snprintf(scale_bufs[i], sizeof(scale_bufs[i]), "%.2fx (%s%s)%s", kScaleValues[i], pfx, tag, suf);
         scale_items[i] = scale_bufs[i];
     }
-    if (ImGui::Combo("Escala Interna / SSAA", &sc_idx, scale_items, kScalePresetCount)) {
+    if (ImGui::Combo("Escala Scene / SSAA", &sc_idx, scale_items, kScalePresetCount)) {
         g_extra_render_scale = kScaleValues[sc_idx];
         g_settings.render_scale = kScaleValues[sc_idx];
         settings_save();
@@ -270,11 +178,25 @@ void render_fsr_section(void) {
 }
 
 void render_quality_section(void) {
-    ac_ui_section_header("QUALIDADE & FILTROS", "// SYS.GFX");
+    ac_ui_section_header("QUALIDADE, DRAW DISTANCE & HUD", "// SYS.GFX");
     int aa = std::clamp(g_settings.antialias, 0, kAntialiasCount - 1);
     if (ImGui::Combo("Antialiasing", &aa, kAntialiasLabels, kAntialiasCount)) {
         g_settings.antialias = aa;
         settings_save();
+    }
+
+    int dd = eff_draw_distance();
+    if (ImGui::SliderInt("Distância de Visão (Ao vivo)", &dd,
+                         EXTRA_DRAW_DISTANCE_MIN, EXTRA_DRAW_DISTANCE_MAX,
+                         "%d%%", ImGuiSliderFlags_AlwaysClamp)) {
+        g_extra_draw_distance = dd;
+        ac_config_sync_save_hook();
+    }
+
+    int ss_idx = eff_shadow_scale_index();
+    if (ImGui::Combo("Sombras Solares (Shadow Scale)", &ss_idx, kShadowScaleLabels, kShadowScaleCount)) {
+        g_extra_shadow_scale = kShadowScaleVals[ss_idx];
+        ac_config_sync_save_hook();
     }
 
     float bias = eff_lod_bias();
@@ -293,7 +215,17 @@ void render_quality_section(void) {
         g_extra_no_shadow = shadow ? 0 : 1;
         ac_config_sync_save_hook();
     }
-    ImGui::TextDisabled("Nota: Bias LOD, LoD Mínimo e Sombras aplicam-se a novos samplers (reinicie para cache completo).");
+    bool hide_hud = eff_hud_hidden();
+    if (ImGui::Checkbox("Ocultar HUD em Jogo (F12 - Ao vivo)", &hide_hud)) {
+        g_extra_no_hud = hide_hud ? 1 : 0;
+        ac_config_sync_save_hook();
+    }
+    bool hud_center = eff_hud_centered();
+    if (ImGui::Checkbox("Centralizar HUD em 16:9 (Ultrawide - Ao vivo)", &hud_center)) {
+        g_extra_hud_area = hud_center ? EXTRA_HUD_AREA_16_9 : EXTRA_HUD_AREA_SCREEN;
+        ac_config_sync_save_hook();
+    }
+    ImGui::TextDisabled("Sincronizado bidirecionalmente com userdata/launcher.ini (Launcher Qt6).");
 }
 
 } // namespace
@@ -308,14 +240,12 @@ void ac_menu_tab_graphics(void) {
 
 void ac_menu_tab_audio_mouse(void) {
     ac_ui_section_header("ÁUDIO & MUTE AUTOMÁTICO", "// SYS.AUDIO");
-
-    int vol = effective_audio_volume();
+    int vol = eff_audio_volume();
     if (ImGui::SliderInt("Volume Geral", &vol, 0, EXTRA_AUDIO_VOL_MAX, "%d%%", ImGuiSliderFlags_AlwaysClamp)) {
         g_extra_audio_volume = vol;
         commit_audio_change();
     }
-
-    bool mute_unfocus = effective_audio_mute_unfocus();
+    bool mute_unfocus = eff_audio_mute_unfocus();
     if (ImGui::Checkbox("Silenciar Quando a Janela Perder Foco", &mute_unfocus)) {
         g_extra_audio_mute_unfocus = mute_unfocus ? 1 : 0;
         commit_audio_change();
@@ -330,29 +260,21 @@ void ac_menu_tab_audio_mouse(void) {
         g_extra_mouse_look = look ? 1 : 0;
         commit_mouse_change(true);
     }
-
     float sens_pct = std::clamp(static_cast<float>(g_extra_mouse_sens * 100.0), kMinSensPct, kMaxSensPct);
     if (ImGui::SliderFloat("Sensibilidade (%)", &sens_pct, 25.0f, kSliderMaxSensPct, "%.0f%%")) {
-        sens_pct = std::clamp(sens_pct, kMinSensPct, kMaxSensPct);
-        g_extra_mouse_sens = static_cast<double>(sens_pct) / 100.0;
+        g_extra_mouse_sens = static_cast<double>(std::clamp(sens_pct, kMinSensPct, kMaxSensPct)) / 100.0;
         commit_mouse_change(false);
     }
-
     float yscale = std::clamp(static_cast<float>(g_extra_mouse_yscale), kMinYScale, kMaxYScale);
     if (ImGui::SliderFloat("Escala Vertical (Y Scale)", &yscale, 0.25f, kSliderMaxYScale, "%.2fx")) {
-        g_extra_mouse_yscale = std::clamp(static_cast<double>(yscale),
-                                          static_cast<double>(kMinYScale),
-                                          static_cast<double>(kMaxYScale));
+        g_extra_mouse_yscale = static_cast<double>(std::clamp(yscale, kMinYScale, kMaxYScale));
         commit_mouse_change(false);
     }
-
     int curve_idx = curve_exp_to_index(g_extra_mouse_curve_exp);
-    if (ImGui::Combo("Curva de Resposta", &curve_idx,
-                     "Linear (1.0)\0Power Suave (1.35)\0Agressiva (1.75)\0")) {
+    if (ImGui::Combo("Curva de Resposta", &curve_idx, "Linear (1.0)\0Power Suave (1.35)\0Agressiva (1.75)\0")) {
         g_extra_mouse_curve_exp = curve_index_to_exp(curve_idx);
         commit_mouse_change(false);
     }
-
     bool invert_y = g_extra_mouse_invert != 0;
     if (ImGui::Checkbox("Inverter Eixo Y da Câmera", &invert_y)) {
         g_extra_mouse_invert = invert_y ? 1 : 0;
@@ -361,24 +283,23 @@ void ac_menu_tab_audio_mouse(void) {
 
     ImGui::Spacing();
     ac_ui_section_header("NAVEGAÇÃO EM MENUS COM PONTEIRO", "// SYS.MENU");
-
     bool menu_nav = g_extra_mouse_menu_nav != 0;
     if (ImGui::Checkbox("Navegação por Mouse nos Menus do Jogo", &menu_nav)) {
         g_extra_mouse_menu_nav = menu_nav ? 1 : 0;
         commit_mouse_change(false);
     }
-
+    ImGui::BeginDisabled(!menu_nav);
     bool menu_motion = g_extra_mouse_menu_motion != 0;
     if (ImGui::Checkbox("Movimento do Ponteiro Navega Listas", &menu_motion)) {
         g_extra_mouse_menu_motion = menu_motion ? 1 : 0;
         commit_mouse_change(false);
     }
-
     float cell_px = std::clamp(g_extra_mouse_menu_cell, kMinMenuCellPx, kMaxMenuCellPx);
     if (ImGui::SliderFloat("Distância por Passo (px)", &cell_px, kMinMenuCellPx, kMaxMenuCellPx,
                            "%.0f px", ImGuiSliderFlags_AlwaysClamp)) {
         g_extra_mouse_menu_cell = cell_px;
         commit_mouse_change(false);
     }
+    ImGui::EndDisabled();
     ImGui::TextDisabled("Alterações são aplicadas em tempo real e salvas em userdata/launcher.ini.");
 }

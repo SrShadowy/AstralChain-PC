@@ -66,6 +66,7 @@ LASRECOMP = PROJECT/'third_party'/'LASRecomp'
 FPS_PATCH = PROJECT/'third_party'/'AstralChain-Dynamic-FPS'/'1.0.1.pchtxt'
 UNLOCKED_PATCH = SRC/'resources'/'patches'/'dynamic-unlocked-1.0.1.pchtxt'
 CUTSCENE_PATCH = SRC/'resources'/'patches'/'cutscene-catchup-1.0.1.pchtxt'
+RES_PATCH = SRC/'resources'/'patches'/'resolution-1.0.1.pchtxt'
 
 
 def fps_unlocked():
@@ -80,6 +81,7 @@ def active_patches():
     if fps_unlocked():
         patches.append(UNLOCKED_PATCH)
     patches.append(CUTSCENE_PATCH)
+    patches.append(RES_PATCH)
     return patches
 
 
@@ -410,6 +412,8 @@ def fingerprint():
 def guest_fingerprint():
     """Hashes guest executable, patches, lifter and translator."""
     digest = hashlib.sha256()
+    digest.update(b'portable=1\n' if is_portable_build() else b'portable=0\n')
+    digest.update(b'restrict=1\n')
     if UPDATE_EXEFS.exists():
         for path in sorted(UPDATE_EXEFS.rglob('*')):
             if path.is_file():
@@ -418,6 +422,13 @@ def guest_fingerprint():
     for patch in active_patches():
         if Path(patch).is_file():
             digest.update(Path(patch).read_bytes())
+    for extra in (SRC/'astral_chain'/'translator', SRC/'astral_chain'/'build'/'native_build.py',
+                  PROJECT/'third_party'/'LASRecomp'/'translator', PROJECT/'third_party'/'LASRecomp'/'runtime'/'cpu'):
+        paths = sorted(extra.rglob('*')) if extra.is_dir() else [extra]
+        for path in paths:
+            if path.is_file() and '__pycache__' not in path.parts:
+                digest.update(str(path.relative_to(PROJECT)).encode())
+                digest.update(path.read_bytes())
     return digest.hexdigest()
 
 
@@ -458,6 +469,8 @@ def try_fast_relink():
 
     _refresh_trace_host_runtime(trace_c)
     from astral_chain.gpu.nvn_build import build_nvn_objects
+    from astral_chain.build import native_build
+    native_build.FLAGS[:] = target_flags(optimize=True)
     from astral_chain.build.native_build import FLAGS, run_compiler
     nvn_objects, nvn_link = build_nvn_objects(ZIG, LASRECOMP, BUILD/'objects', 'vulkan')
     vk_headers = PROJECT/'third_party/Vulkan-Headers/include'
@@ -493,7 +506,7 @@ def build_game():
     """native_trace wants a new folder: an older build moves to build/game-old, its shader cache is carried over."""
     if build_is_current():
         return
-    if GUEST_FINGERPRINT.is_file():
+    if GUEST_FINGERPRINT.is_file() and GUEST_FINGERPRINT.read_text(encoding='ascii').strip() == guest_fingerprint():
         if try_fast_relink():
             return
     step('Building the game (translating and compiling; the first build takes several minutes)')
@@ -510,7 +523,7 @@ def build_game():
                '--instructions', '4000000', '--sample-steps', '0', '--run-timeout', '86400', '--unbounded', '--chain',
                '--follow', '0', '--entry', 'rtld:start', '--seed-all-text', '--build', 'cached',
                '--control', CONTROL, '--romfs', ROMFS_IMAGE, '--nvn-hle', '--nvn-backend', 'vulkan',
-               '--optimize', '--lean', '--direct-calls', '--jumps']
+               '--optimize', '--lean', '--direct-calls', '--jumps', '--restrict']
     for patch in active_patches():
         command += ['--patch', patch]
     command.append('--build-only')

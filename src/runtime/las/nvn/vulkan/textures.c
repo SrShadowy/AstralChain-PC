@@ -181,6 +181,30 @@ static bool tex_scalable(const NvnTexture *t) {
     return a > 1.74f && a < 1.81f;
 }
 
+static int extra_shadow_scale(void) { // [extra]
+    static int s_scale = -1;
+    if (s_scale < 0) {
+        int v = g_extra_shadow_scale;
+        if (v < EXTRA_SHADOW_SCALE_MIN) {
+            const char *e = getenv("AC_SHADOW_SCALE");
+            v = (e && *e) ? atoi(e) : EXTRA_SHADOW_SCALE_DEFAULT;
+        }
+        if (v < EXTRA_SHADOW_SCALE_MIN) v = EXTRA_SHADOW_SCALE_MIN;
+        if (v > EXTRA_SHADOW_SCALE_MAX) v = EXTRA_SHADOW_SCALE_MAX;
+        VkPhysicalDeviceProperties props;
+        vkGetPhysicalDeviceProperties(g_vk.phys, &props);
+        while (v > 1 && 2048u * (uint32_t)v > props.limits.maxImageDimension2D) v >>= 1;
+        s_scale = v;
+    }
+    return s_scale;
+}
+
+static bool tex_is_scaled_sun_shadow(const NvnTexture *t) {
+    return extra_shadow_scale() > 1 && t->format == 0x35 && t->target == 1 &&
+           t->width == 2048 && t->height == 2048 && t->levels <= 1 && t->samples <= 1 &&
+           (t->flags & 8) && !(t->flags & 0x14);
+} // [extra]
+
 bool renderer_texture_first_write(NvnTexture *t) {
     TexBackend *b = t ? (TexBackend *)t->backend : NULL;
     uint64_t total_frames = renderer_present_count();
@@ -268,8 +292,13 @@ void vk_collect_dead(void) {
 
 static void create_image(NvnTexture *t, TexBackend *b) {
     VkFmt mf = fmt_of(t->format);
-    b->sx = b->scalable ? g_rs_x : 1;
-    b->sy = b->scalable ? g_rs_y : 1;
+    if (tex_is_scaled_sun_shadow(t)) { // [extra]
+        float s = (float)extra_shadow_scale();
+        b->sx = s; b->sy = s;
+    } else {
+        b->sx = b->scalable ? g_rs_x : 1;
+        b->sy = b->scalable ? g_rs_y : 1;
+    } // [extra]
     uint32_t tw = t->width ? t->width : 1, th = t->height ? t->height : 1;
     if (b->scalable) {
         tw = (uint32_t)lroundf(tw * b->sx); th = (uint32_t)lroundf(th * b->sy);
@@ -429,7 +458,7 @@ static void live_remove(TexBackend *b) {
 static TexBackend *tex_backend(NvnTexture *t) {
     TexBackend *b = t->backend;
     if (b) {
-        if (b->scalable && (b->sx != g_rs_x || b->sy != g_rs_y)) {  // output resolution changed: reallocate
+        if (b->scalable && !tex_is_scaled_sun_shadow(t) && (b->sx != g_rs_x || b->sy != g_rs_y)) { // [extra]
             destroy_image(b);
             create_image(t, b);
         }
@@ -437,7 +466,7 @@ static TexBackend *tex_backend(NvnTexture *t) {
     }
     vk_collect_dead();
     b = calloc(1, sizeof *b);
-    b->scalable = tex_scalable(t);
+    b->scalable = tex_scalable(t) || tex_is_scaled_sun_shadow(t); // [extra]
     create_image(t, b);
     t->backend = b;
     live_add(t, b);
@@ -683,7 +712,8 @@ static void upload_texture(NvnTexture *t, TexBackend *b) {
     bool full = b->dynamic || !b->uploaded || always_full;
     // (safety net: a full hash now and then. A texture over the per-frame budget may take a whole frame's budget:
     // before, those never had one, and a sampled hash misses changed blocks in them.)
-    bool periodic = frame - b->full_frame >= 120 && (full_hash_budget >= total || full_hash_budget == 4 << 20);
+    uint64_t periodic_interval = (watch && b->wgen) ? 1800ull : 120ull; // [extra]
+    bool periodic = frame - b->full_frame >= periodic_interval && (full_hash_budget >= total || full_hash_budget == 4 << 20); // [extra]
     if (!full && periodic) { full = true; full_hash_budget = full_hash_budget >= total ? full_hash_budget - total : 0; }
     if (!b->tp) b->tp = texpatch_identify(t) + 1;  // (button prompts / Hero Mode icon: re-uploaded when their look changes)
     bool restyle = b->tp > 0 && b->uploaded && b->tp_gen != texpatch_generation();
@@ -712,9 +742,11 @@ static void upload_texture(NvnTexture *t, TexBackend *b) {
         if (sh == b->sample_hash) return;
     }
     prof_tex_full++; prof_tex_full_bytes += total; if (b->dynamic) prof_tex_dyn++;
-    uint64_t hash_t0 = SDL_GetTicksNS();
+    extern uint64_t prof_up_ns; // [extra]
+    bool do_prof = prof_up_ns != ~0ull; // [extra]
+    uint64_t hash_t0 = do_prof ? SDL_GetTicksNS() : 0; // [extra]
     uint64_t h = hash_full(mem, total);
-    ft.hash += SDL_GetTicksNS() - hash_t0; ft.n_full++; ft.hash_bytes += total;
+    if (do_prof) { ft.hash += SDL_GetTicksNS() - hash_t0; ft.n_full++; ft.hash_bytes += total; } // [extra]
     b->full_frame = frame;
     b->sample_hash = fnv_sample(mem, total);
     if (b->uploaded && h == b->data_hash && !restyle) return;
@@ -723,7 +755,7 @@ static void upload_texture(NvnTexture *t, TexBackend *b) {
     b->data_hash = h;
     b->uploaded = true;
     if (b->format != mf.vf && !b->astc_bw) return;  // unsupported format: nothing sensible to copy
-    uint64_t slow_t0 = SDL_GetTicksNS(), slow_wait = 0;
+    uint64_t slow_t0 = SDL_GetTicksNS(), slow_wait = 0; // [extra]
     VkCommandBuffer cb = vk_upload_cmd();
     uint32_t layers = t->layout.layers ? t->layout.layers : 1;
     if (layers > b->layers && b->depth == 1) layers = b->layers;
@@ -1054,7 +1086,9 @@ void renderer_upload_rgba(NvnTexture *t, const void *rgba, uint32_t w, uint32_t 
 }
 
 // ================================================================== views
-#define VIEW_TAB 16384
+#define VIEW_TAB 65536 // [extra]
+#define VIEW_PROBE 64
+#define VIEW_TOMBSTONE ((TexBackend *)(uintptr_t)1) // [extra]
 typedef struct { TexBackend *b; uint64_t k1, k2; VkImageView view; } ViewEnt;
 static ViewEnt view_tab[VIEW_TAB];
 
@@ -1062,9 +1096,18 @@ static ViewEnt view_tab[VIEW_TAB];
 void vk_views_forget(TexBackend *b) { views_forget(b); }
 uint32_t vk_view_gen;  // bumped whenever a cached view may be destroyed (exec.c's per-frame texture memo)
 static void views_forget(TexBackend *b) {
+    if (!b || !b->view_count) return; // [extra]
     vk_view_gen++;
-    for (int i = 0; i < VIEW_TAB; i++)
-        if (view_tab[i].b == b) { defer((Dead){.view = view_tab[i].view}); view_tab[i].b = NULL; view_tab[i].view = VK_NULL_HANDLE; }
+    uint32_t rem = b->view_count; // [extra]
+    for (int i = 0; i < VIEW_TAB && rem; i++) {
+        if (view_tab[i].b == b) {
+            defer((Dead){.view = view_tab[i].view});
+            view_tab[i].b = VIEW_TOMBSTONE;
+            view_tab[i].view = VK_NULL_HANDLE;
+            rem--;
+        }
+    }
+    b->view_count = 0; // [extra]
 }
 
 VkImageView vk_image_view(TexBackend *b, VkImageViewType type, VkFormat fmt, uint32_t lv0, uint32_t nlv, uint32_t ly0,
@@ -1072,12 +1115,15 @@ VkImageView vk_image_view(TexBackend *b, VkImageViewType type, VkFormat fmt, uin
     uint64_t k1 = (uint64_t)type | (uint64_t)fmt << 8 | (uint64_t)lv0 << 40 | (uint64_t)nlv << 48 | (uint64_t)aspect << 56;
     uint64_t k2 = (uint64_t)ly0 | (uint64_t)nly << 16 | (uint64_t)sw.r << 32 | (uint64_t)sw.g << 40 | (uint64_t)sw.b << 48 | (uint64_t)sw.a << 56;
     uint64_t h = ((uint64_t)(uintptr_t)b * 0x9E3779B97F4A7C15ull) ^ (k1 * 0xC2B2AE3D27D4EB4Full) ^ (k2 * 0x165667B19E3779F9ull);
-    uint32_t slot = (uint32_t)(h ^ (h >> 32)) & (VIEW_TAB - 1);
-    for (int probe = 0; probe < 16; probe++, slot = (slot + 1) & (VIEW_TAB - 1)) {
+    uint32_t base = (uint32_t)(h ^ (h >> 32)) & (VIEW_TAB - 1); // [extra]
+    int ins = -1;
+    for (int probe = 0; probe < VIEW_PROBE; probe++) {
+        uint32_t slot = (base + (uint32_t)probe) & (VIEW_TAB - 1); // [extra]
         ViewEnt *e = &view_tab[slot];
+        if (!e->b) { if (ins < 0) ins = (int)slot; break; } // [extra]
+        if (e->b == VIEW_TOMBSTONE) { if (ins < 0) ins = (int)slot; continue; } // [extra]
         if (e->b == b && e->k1 == k1 && e->k2 == k2) return e->view;
-        if (!e->b) break;
-    }
+    } // [extra]
     extern uint64_t prof_views_created;
     prof_views_created++;
     VkImageViewCreateInfo vi = {.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO, .image = b->image, .viewType = type,
@@ -1091,9 +1137,15 @@ VkImageView vk_image_view(TexBackend *b, VkImageViewType type, VkFormat fmt, uin
         if (nfail++ < 20) LOG("[vk] view failed: type %d fmt %d (image fmt %d) levels %u+%u layers %u+%u\n", type, fmt, b->format, lv0, nlv, ly0, nly);
         return VK_NULL_HANDLE;
     }
-    ViewEnt *e = &view_tab[slot];
-    if (e->b) { defer((Dead){.view = e->view}); vk_view_gen++; }  // evict (16 probes taken)
+    uint32_t dst = ins >= 0 ? (uint32_t)ins : ((base + (uint32_t)(h & (VIEW_PROBE - 1))) & (VIEW_TAB - 1)); // [extra]
+    ViewEnt *e = &view_tab[dst];
+    if (e->b && e->b != VIEW_TOMBSTONE) {
+        if ((uintptr_t)e->b > (uintptr_t)VIEW_TOMBSTONE && e->b->view_count) e->b->view_count--;
+        defer((Dead){.view = e->view});
+        vk_view_gen++;
+    } // [extra]
     *e = (ViewEnt){b, k1, k2, v};
+    b->view_count++; // [extra]
     return v;
 }
 

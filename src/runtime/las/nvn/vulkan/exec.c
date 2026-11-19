@@ -50,6 +50,7 @@ bool g_debug_frame;
 
 // ================================================================== state
 ExecState st; // [extra]
+static uint64_t exec_state_gen = 1; // [extra]
 
 uint32_t nvn_window_origin(void);
 uint32_t nvn_depth_mode(void);
@@ -70,6 +71,8 @@ static void st_defaults(void) {
     st.ds[1] = 1; st.ds[2] = 2;
     st.poly[1] = 1; st.poly[2] = 2;
     for (int i = 0; i < 8; i++) { st.blend[i][1] = 2; st.blend[i][2] = 1; st.blend[i][3] = 2; st.blend[i][4] = 1; st.blend[i][5] = 1; st.blend[i][6] = 1; }
+    st.prog_gen = exec_state_gen++; // [extra]
+    st.pipe_gen = exec_state_gen++; // [extra]
 }
 
 void vk_exec_init(void) {
@@ -160,21 +163,26 @@ static void exec_list(uint64_t handle, int depth) {
                 else { memset(&composite.stages[s], 0, sizeof composite.stages[s]); composite.stage_mask &= ~(1u << s); }
             }
             st.program = composite.stage_mask ? &composite : NULL;
+            st.prog_gen = exec_state_gen++; // [extra]
+            st.pipe_gen = exec_state_gen++; // [extra]
             break;
         }
-        case CMD_BIND_BLEND: { uint8_t *b = x; memcpy(st.blend[b[0] & 7], b, 8); break; }
-        case CMD_BIND_CHANNEL_MASK: memcpy(&st.channel_mask, x, 4); break;
-        case CMD_BIND_COLOR: memcpy(st.color_state, x, 4); break;
+        case CMD_BIND_BLEND: { uint8_t *b = x; memcpy(st.blend[b[0] & 7], b, 8); st.pipe_gen = exec_state_gen++; break; } // [extra]
+        case CMD_BIND_CHANNEL_MASK: memcpy(&st.channel_mask, x, 4); st.pipe_gen = exec_state_gen++; break; // [extra]
+        case CMD_BIND_COLOR: memcpy(st.color_state, x, 4); st.prog_gen = exec_state_gen++; st.pipe_gen = exec_state_gen++; break; // [extra]
         case CMD_BIND_DEPTH_STENCIL: memcpy(st.ds, x, 8); break;
-        case CMD_BIND_MULTISAMPLE: memcpy(st.ms, x, 0x18); break;
-        case CMD_BIND_POLYGON: memcpy(st.poly, x, 4); break;
+        case CMD_BIND_MULTISAMPLE: memcpy(st.ms, x, 0x18); st.pipe_gen = exec_state_gen++; break; // [extra]
+        case CMD_BIND_POLYGON: memcpy(st.poly, x, 4); st.pipe_gen = exec_state_gen++; break; // [extra]
         case CMD_BIND_VERTEX_ATTRIB:
             st.nattrib = (int)r->x[0] > 16 ? 16 : (int)r->x[0];
             memcpy(st.attrib, x, st.nattrib * 4);
+            st.prog_gen = exec_state_gen++; // [extra]
+            st.pipe_gen = exec_state_gen++; // [extra]
             break;
         case CMD_BIND_VERTEX_STREAM:
             st.nstream = (int)r->x[0] > 16 ? 16 : (int)r->x[0];
             memcpy(st.stream, x, st.nstream * 8);
+            st.pipe_gen = exec_state_gen++; // [extra]
             break;
         case CMD_BIND_VERTEX_BUFFERS:
             for (uint64_t i = 0; i < r->x[1] && r->x[0] + i < 16; i++) memcpy(&st.vbuf[r->x[0] + i], (uint8_t *)x + i * 16, 16);
@@ -213,7 +221,11 @@ static void exec_list(uint64_t handle, int depth) {
             st.rt.has_dview = rt->has_dview;
             static int always = -1;
             if (always < 0) always = getenv("LARECOMP_VK_PASS_RESTART") != NULL;
-            if (always || memcmp(&prev, &st.rt, sizeof prev)) st.rt_dirty = true;
+            if (always || memcmp(&prev, &st.rt, sizeof prev)) { // [extra]
+                st.rt_dirty = true;
+                st.prog_gen = exec_state_gen++;
+                st.pipe_gen = exec_state_gen++;
+            } // [extra]
             break;
         }
         case CMD_SET_VIEWPORTS:
@@ -237,13 +249,15 @@ static void exec_list(uint64_t handle, int depth) {
             break;
         }
         case CMD_SET_POLYGON_OFFSET: memcpy(st.poly_offset, r->f, sizeof st.poly_offset); break;
-        case CMD_SET_ALPHA_REF: st.alpha_ref = r->f[0]; break;
+        case CMD_SET_ALPHA_REF: st.alpha_ref = r->f[0]; st.prog_gen = exec_state_gen++; break; // [extra]
         case CMD_SET_PRIMITIVE_RESTART: st.prim_restart = r->x[0] != 0; st.restart_index = (uint32_t)r->x[1]; break;
         case CMD_SET_COPY_STRIDES: st.copy_row_stride = r->x[0]; st.copy_image_stride = r->x[1]; break;
         case CMD_CLEAR_COLOR: {
             snap_reason = "clear-color"; snapshots_invalidate(NULL);
             int index = (int)r->x[0];
-            if (getenv("LARECOMP_LOG_CLEARS") && index < st.rt.ncolor && st.rt.color[index])
+            static int log_clears = -1; // [extra]
+            if (log_clears < 0) log_clears = getenv("LARECOMP_LOG_CLEARS") != NULL;
+            if (log_clears && index < st.rt.ncolor && st.rt.color[index]) // [extra]
                 LOG("[cclear] frame %llu idx %d %ux%u f%#x mask %#x\n", (unsigned long long)renderer_present_count(), index,
                     st.rt.color[index]->width, st.rt.color[index]->height, st.rt.color[index]->format, (uint32_t)r->x[2]);
             if (ct_on() && index < st.rt.ncolor && st.rt.color[index])

@@ -123,8 +123,32 @@ Todas as frentes de trabalho são classificadas em quatro categorias explícitas
   - [x] Eliminar picos de latência no agendador paralelo (`THREAD_WAIT_GPU` via `vkWaitSemaphores` direto e `klock_wait_ns` em nanosegundos), corrida *catch-up* no pacer (`pace_trampoline.h`) e churn de alocação VMA via pool de reciclagem (`heap_mirror_extra.h`).
   - [ ] Investigar pausas pontuais na compressão de texturas BC7 sob demanda em GPU (*Planejado*).
   - [x] Implementar upscaling espacial (AMD FSR 1.0) e temporal (AMD FSR 3.1 TAAU + Camera Jitter Halton(2,3) + RCAS + Frame Generation 2x) para máxima nitidez e fluidez.
+  - [x] Eliminar gargalo de hash de vertex shader por draw, reconstrução de estados/render-pass e colisão/eviction de `view_tab` em `textures.c` (`Wave 1 & 2`).
+  - [x] **Onda A — Desbloqueio de 60 FPS em cenas 3D densas (CPU / HLE / NVN)** (*Concluído*):
+    - [x] Profiler amostral POSIX multi-thread via `SIGRTMIN+2` (`AC_LPROF` / `tgkill`) compatível com threads SDL3 (`lprof_report.py`).
+    - [x] `--restrict` em `native_trace.py`, `-O2 -mcpu=native` (correção em `try_fast_relink()`), salto direto pós-`BL` (`_DIRECT_CALL_TAIL`), patch dos 33 *spin-wait* back-edges no `main` 1.0.1 (`rt_spin_gate`), `romfs_read()` `pread` fora de `klock()` e `svcSleepThread()` sem busy-spin.
+    - [x] Otimização NVN->Vulkan: `feedback.c` extraído (`descriptors/`), cache zero-span UBO (`ZERO_UBO_CACHE_BYTES`), `tex_memo` 2-way, `rscale_span`, cache 2-way de `VkDescriptorSet` + elisão `bound_sets` (`LARECOMP_VK_DESC_CACHE`), redução de re-hash periódico em `textures.c` (`1800` frames). (`PushDescriptor` / `DrawIndexedIndirectCount` dispensados por já atingir `~63.8+ fps` em Harmony Square.)
 - **Critérios Objetivos de Aceitação**: Taxa estável de 60 FPS (ou 120+ FPS efetivos com `AC_FPS_UNLOCKED=1` / FSR 3.1 Frame Generation) com frame time linear, 1% Low próximo à média e sem hitches perceptíveis.
-- **Riscos / Pontos Não Resolvidos**: Otimizações agressivas em estruturas centrais do runtime podem causar regressões sutis em cutscenes.
+- **Riscos / Pontos Não Resolvidos**: Otimizações agressivas em estruturas centrais do runtime ou `--restrict`/PGO podem causar regressões sutis em cutscenes ou aliasing; validar cada subitem em cenários 3D reais e `qa_runner.sh`.
+
+---
+
+### Etapa 9: Consolidação PC, Resolução Interna Avançada e Refinos Visuais (Ondas B & C)
+- **Objetivo**: Consolidar recursos de qualidade de vida, escalonamento nativo até 4K e recursos visuais avançados em Vulkan 1.3 sob governança Linux First.
+- **Dependências**: Etapa 7 (Onda A concluída para folga de CPU/frame pacing).
+- **Tarefas**:
+  - [x] **Onda B — Resolução Interna & UX PC** (*Core Concluído; refinamentos opcionais pendentes*):
+    - [x] Suporte nativo até 4K (`3840x2160` em grade `32n x 18n`) crescendo os heaps `BUFFER ROOT` (`0x575a30`) e `GRAPHIC BUFFER` (`0x575c94`), budget `0x40e0b0`, headroom em `extra_memory_budget()` (`heap_memory.h`) e mipmap bias (`0x9ed178`).
+    - [x] Separação real `Output Res` (`AC_OUTPUT_RES`) × `Scene Res` (`render_scale < 1.0`) via Dynamic-Res ladder (`0x40f184..0x40f1dc`, alinhado em `32n x 18n`), preservando shaders `SUST`/`TLDS` sem escalar render targets coloridos à força no backend.
+    - [x] Patches nativos lockless (`SVC #0xB3`) de `Draw Distance` (`100%..400%`, `AC_DRAW_DISTANCE`) e `Shadow Scale` (`1x/2x/4x` no mapa de sombras solar `2048x2048 D24S8` em `textures.c`).
+    - [x] UX In-Game & Launcher: atalho rápido No-HUD (`F12` / `AC_HUD` ocultando apenas `hud2`), opção `hud_area` (`16:9` centralizado vs `screen` em `draw.c`), badges `[Env]` / `[Reinício]` no terminal ImGui (`ac_menu_tabs.cpp`) e controles sincronizados no Launcher Qt6 (`Config` / `SettingsDialogTabs`).
+    - [ ] Itens opcionais pendentes: entrada `PC Settings` nativa dentro do menu *Options* do jogo e *sub-texel gather bias* (`subTexelPrecisionBits`) no tradutor de shaders.
+  - [ ] **Onda C — Refino Visual & Latência (após validação das Ondas A & B)** (*Planejado*):
+    - Modo de Baixa Latência (`VK_AMD_anti_lag` no Mesa RADV, `VK_NV_low_latency2` no driver NVIDIA e *sleep* adaptativo built-in) + detecção/auto-lock VRR (`vsync = auto`).
+    - Efeitos pós-processamento Vulkan puros: Ambient Occlusion (GTAO fog/ambient-aware) + Contact Shadows + avaliação de GI (Radiance Cascades).
+    - Saída HDR10 nativa em compositores Wayland HDR via SDL3 preservando curva de tonemap e HUD em paper-white.
+- **Critérios Objetivos de Aceitação**: Escalonamento 4K/Scene sem crashes de heap nem artefatos em `SUST`/`TLDS`, menus in-game estáveis e passes visuais opcionais validados em RADV sem queda abaixo de 60 FPS.
+- **Riscos / Pontos Não Resolvidos**: Compatibilidade de extensão `VK_AMD_anti_lag` / HDR Wayland varia conforme versão de Mesa/compositor; manter fallbacks seguros.
 
 ---
 
@@ -160,3 +184,6 @@ Todas as frentes de trabalho são classificadas em quatro categorias explícitas
 | **12** | Upscaling AMD FSR 3.1 (TAAU + Jitter + RCAS + FrameGen) & FSR 1.0 | Melhoria Opcional | **Concluído** |
 | **13** | Backend DirectX 12 / Ferramentas Windows | Fora de Escopo | **Descartado / Irrelevante** |
 | **14** | Suporte a 144 FPS (desacoplar câmera/input/timers) | Hipótese sob Investigação | **Adiado — ver [`fps-cap-144.md`](fps-cap-144.md)** |
+| **15** | Onda A: Desbloqueio 60 FPS CPU/HLE/NVN (`AC_LPROF`, spin-waits, `--restrict`, `-O2 -mcpu=native`, cache DS) | Requisito Obrigatório | **Concluído** |
+| **16** | Onda B: Resolução Interna 4K/Scene (`GRAPHIC BUFFER`), Draw Distance, Shadow Scale, No-HUD (`F12`) & UX | Tarefa Planejada | **Core Concluído (Refinos Opcionais Pendentes)** |
+| **17** | Onda C: Low Latency, VRR, GTAO/Contact Shadows & Wayland HDR10 | Melhoria Opcional | **Planejado (após testes A+B)** |

@@ -19,6 +19,8 @@ void Config::load() {
     s.beginGroup("Graphics");
     m_graphics.width = s.value("width", GraphicsSettings::kDefaultWidth).toInt();
     m_graphics.height = s.value("height", GraphicsSettings::kDefaultHeight).toInt();
+    m_graphics.outputRes = s.value("output_res", "1600x900").toString();
+    m_graphics.aspect = s.value("aspect", "auto").toString();
     m_graphics.fullscreen = s.value("fullscreen", false).toBool();
     m_graphics.vsync = s.value("vsync", true).toBool();
     m_graphics.presentMode = s.value("present_mode", "mailbox").toString();
@@ -33,6 +35,12 @@ void Config::load() {
     m_graphics.lodBias = s.value("lod_bias", GraphicsSettings::kDefaultLodBias).toDouble();
     m_graphics.lodMin = s.value("lod_min", GraphicsSettings::kDefaultLodMin).toDouble();
     m_graphics.noShadow = s.value("no_shadow", false).toBool();
+    m_graphics.drawDistance = std::clamp(
+        s.value("draw_distance", GraphicsSettings::kDefaultDrawDistance).toInt(),
+        GraphicsSettings::kMinDrawDistance, GraphicsSettings::kMaxDrawDistance);
+    m_graphics.shadowScale = s.value("shadow_scale", GraphicsSettings::kDefaultShadowScale).toInt();
+    m_graphics.hudHidden = s.value("hud_hidden", false).toBool();
+    m_graphics.hudArea = s.value("hud_area", "16:9").toString();
     s.endGroup();
 
     s.beginGroup("Audio");
@@ -59,6 +67,8 @@ void Config::load() {
     m_game.verboseLog = s.value("verbose_log", false).toBool();
     m_game.cutscene30Fps = s.value("cutscene_30fps", false).toBool();
     m_game.asyncSubmit = s.value("async_submit", true).toBool();
+    m_game.vtxGuard = s.value("vtx_guard", false).toBool();
+    m_game.vtxDebug = s.value("vtx_debug", false).toBool();
     m_game.xboxConfirmA = s.value("xbox_confirm_a", true).toBool();
     m_game.buttonPrompts = s.value("button_prompts", "auto").toString();
     m_game.language = s.value("language", "auto").toString();
@@ -105,6 +115,8 @@ void Config::save() {
     s.beginGroup("Graphics");
     s.setValue("width", m_graphics.width);
     s.setValue("height", m_graphics.height);
+    s.setValue("output_res", m_graphics.outputRes);
+    s.setValue("aspect", m_graphics.aspect);
     s.setValue("fullscreen", m_graphics.fullscreen);
     s.setValue("vsync", m_graphics.vsync);
     s.setValue("present_mode", m_graphics.presentMode);
@@ -119,6 +131,10 @@ void Config::save() {
     s.setValue("lod_bias", m_graphics.lodBias);
     s.setValue("lod_min", m_graphics.lodMin);
     s.setValue("no_shadow", m_graphics.noShadow);
+    s.setValue("draw_distance", m_graphics.drawDistance);
+    s.setValue("shadow_scale", m_graphics.shadowScale);
+    s.setValue("hud_hidden", m_graphics.hudHidden);
+    s.setValue("hud_area", m_graphics.hudArea);
     s.endGroup();
 
     s.beginGroup("Audio");
@@ -145,6 +161,8 @@ void Config::save() {
     s.setValue("verbose_log", m_game.verboseLog);
     s.setValue("cutscene_30fps", m_game.cutscene30Fps);
     s.setValue("async_submit", m_game.asyncSubmit);
+    s.setValue("vtx_guard", m_game.vtxGuard);
+    s.setValue("vtx_debug", m_game.vtxDebug);
     s.setValue("xbox_confirm_a", m_game.xboxConfirmA);
     s.setValue("button_prompts", m_game.buttonPrompts);
     s.setValue("language", m_game.language);
@@ -212,9 +230,17 @@ QString Config::buildLaunchEnv() const {
     if (m_graphics.lodBias > 0.0) env << QString("LARECOMP_LOD_BIAS=%1").arg(m_graphics.lodBias);
     if (m_graphics.lodMin > 0.0) env << QString("LARECOMP_LOD_MIN=%1").arg(m_graphics.lodMin);
     if (m_graphics.noShadow) env << "LARECOMP_NO_SHADOW=1";
+    if (!m_graphics.outputRes.isEmpty()) env << QString("AC_OUTPUT_RES=%1").arg(m_graphics.outputRes);
+    if (!m_graphics.aspect.isEmpty()) env << QString("AC_ASPECT=%1").arg(m_graphics.aspect);
+    env << QString("AC_DRAW_DISTANCE=%1").arg(m_graphics.drawDistance);
+    env << QString("AC_SHADOW_SCALE=%1").arg(m_graphics.shadowScale);
+    env << QString("AC_HUD=%1").arg(m_graphics.hudHidden ? 0 : 1);
+    if (!m_graphics.hudArea.isEmpty()) env << QString("AC_HUD_AREA=%1").arg(m_graphics.hudArea);
     if (m_game.verboseLog) env << "AC_VERBOSE=1";
     if (m_game.cutscene30Fps) env << "AC_CUTSCENE_FPS=30";
     if (m_game.asyncSubmit) env << "AC_ASYNC_SUBMIT=1";
+    if (m_game.vtxGuard) env << "LARECOMP_GUARD_VTX=1";
+    if (m_game.vtxDebug) env << "LARECOMP_DEBUG_VTX=1";
     env << QString("AC_PROMPTS=%1").arg(m_game.buttonPrompts.isEmpty() ? "auto" : m_game.buttonPrompts);
     env << QString("AC_XBOX_CONFIRM_A=%1").arg(m_game.xboxConfirmA ? 1 : 0);
     if (!m_game.language.isEmpty()) {

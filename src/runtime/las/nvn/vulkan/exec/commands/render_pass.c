@@ -17,7 +17,7 @@
 StateFilter ss;
 int ss_on = -1;
 
-void ss_forget(void) { ss.known = 0; ss.vb_known = 0; }
+void ss_forget(void) { ss.known = 0; ss.vb_known = 0; ss.bound_layout = VK_NULL_HANDLE; } // [extra]
 
 bool ss_enabled(void) {
     if (ss_on < 0) { const char *e = getenv("LARECOMP_VK_STATE_FILTER"); ss_on = !e || atoi(e) != 0; }
@@ -30,6 +30,7 @@ uint32_t pass_ncolor, pass_samples = 1, pass_w, pass_h;
 float pass_sx = 1, pass_sy = 1;
 float vp_sx = 1, vp_sy = 1, vp_ox = 0, vp_oy = 0;
 bool in_pass;
+uint64_t pass_gen = 1; // [extra]
 int debug_pass_no;
 
 void vk_end_pass_at(int line) {
@@ -127,6 +128,7 @@ void begin_pass(void) {
     vkCmdBeginRendering(cb, &ri);
     ss_forget();  // (whatever ran between the passes may have set its own state)
     in_pass = true;
+    pass_gen++; // [extra]
     vp_sx = pass_sx; vp_sy = pass_sy; vp_ox = 0; vp_oy = 0;
     stat_passes++;
 }

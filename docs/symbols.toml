@@ -1,0 +1,3391 @@
+# symbols.toml — Astral Chain (v1.0.1) Static Reverse-Engineering Symbol Map
+# Gerado automaticamente via tools/extract_symbols.py (Fase 1 AC-SDK)
+
+[metadata]
+sha256 = "dc47cae835866379c597e1c507bf52ee0f865ec4412930dfdf1bbc20b6bb9c3b"
+build_id = "4b159f0f7a360669738390ee8657b4f000000000000000000000000000000000"
+main_base = 0x7000010000
+text_range = "0x000000-0xa0e7d0"
+rodata_range = "0xa0f000-0xd34848"
+data_range = "0xd35000-0xdc4870"
+
+# -----------------------------------------------------------------------------
+# SDK Subsystems & Core Slots
+# -----------------------------------------------------------------------------
+
+[sdk.camera]
+vtable = 0x00d5b3d0
+method_update = 0x0027f640
+director_update = 0x0028b120
+free_camera_update = 0x002bd8b0
+slot_camera_manager = 0x00db83a0
+camera_manager_direct = 0x00dca490
+get_camera_manager_fn = 0x0088fa20
+pitch_accum_offset = 0x00001284
+input_delta_x_offset = 0x000008d8
+input_delta_y_offset = 0x000008e0
+pos_x_offset = 0x00000b50
+
+[sdk.ui]
+active_menu_slot = 0x00dbec80
+active_menu_direct = 0x00d82d18
+slot_engine_state = 0x00db8398
+engine_state_direct = 0x00dcba30
+slot_menu_selection = 0x00dbef78
+menu_selection_direct = 0x00d83180
+open_menu_fn = 0x0061bf00
+close_menu_fn = 0x0061bed8
+
+[sdk.time]
+timer_manager_slot = 0x00db89a0
+timer_manager_direct = 0x00dcbfd0
+setup_timer_fn = 0x003e3cf4
+update_timer_fn = 0x0091dbd0
+
+[sdk.input]
+pad_input_state = 0x00dc2540
+pad_state_table = 0x00dc2518
+get_stick_vector_fn = 0x009ad0a0
+
+[sdk.game_state]
+slot_save = 0x00db83d8
+slot_scene = 0x00db84c8
+slot_phase = 0x00db84f8
+slot_scenario = 0x00db8930
+slot_player_table = 0x00dbb680
+slot_mission = 0x00dbc420
+slot_boss_active = 0x00dbc928
+slot_area = 0x00dbcf10
+slot_subarea = 0x00dbcf20
+slot_legion = 0x00dc5bb8
+slot_voice_opt = 0x00dc13b0
+slot_voice_dirty1 = 0x00dc13b8
+slot_voice_dirty2 = 0x00dc13c0
+slot_voice_se = 0x00dc2908
+
+[sdk.graphics]
+svc_site_display_w = 0x004328c0
+svc_site_display_h = 0x004328c8
+svc_site_startup_w = 0x0040d5e4
+svc_site_pool_size = 0x0040e0b0
+svc_site_render_scale = 0x0040f184
+svc_site_bufroot = 0x00575a30
+svc_site_gbuf = 0x00575c94
+svc_site_camera_aspect = 0x009a30bc
+svc_site_nohud_23 = 0x009177ec
+
+# -----------------------------------------------------------------------------
+# Discovered Resource Parser Functions (.uid, .bxm, .dat, .wmb)
+# -----------------------------------------------------------------------------
+
+[[resource_parsers]]
+string = "%s%04x.uid"
+string_addr = 0xb65858
+xref_site = 0x90e844
+func_entry = 0x90e830
+
+[[resource_parsers]]
+string = "%s%04x.uid"
+string_addr = 0xb65858
+xref_site = 0x917444
+func_entry = 0x9173a0
+
+[[resource_parsers]]
+string = "PhaseReadMapObj_p%03x.bxm"
+string_addr = 0xb61ec1
+xref_site = 0x590358
+func_entry = 0x5902dc
+
+[[resource_parsers]]
+string = "ObjList.bxm"
+string_addr = 0xb62116
+xref_site = 0x8ade24
+func_entry = 0x8ade20
+
+[[resource_parsers]]
+string = "StateData.bxm"
+string_addr = 0xb6217a
+xref_site = 0x8b5df8
+func_entry = 0x8b5de0
+
+[[resource_parsers]]
+string = "ViewArea.bxm"
+string_addr = 0xb62e5c
+xref_site = 0x45a0e4
+func_entry = 0x459f40
+
+[[resource_parsers]]
+string = "HiddenItemData.bxm"
+string_addr = 0xb630ae
+xref_site = 0x538574
+func_entry = 0x538550
+
+[[resource_parsers]]
+string = "p%03x_BezierData.bxm"
+string_addr = 0xb63bb9
+xref_site = 0x1a022c
+func_entry = 0x1a01d0
+
+[[resource_parsers]]
+string = "p%03x_Route_%1x.bxm"
+string_addr = 0xb642b5
+xref_site = 0x4fae04
+func_entry = 0x4fad60
+
+[[resource_parsers]]
+string = "opening_staff.bxm"
+string_addr = 0xb645e1
+xref_site = 0x6a44f4
+func_entry = 0x6a44c0
+
+[[resource_parsers]]
+string = "opening_bike.bxm"
+string_addr = 0xb645f3
+xref_site = 0x6a4a24
+func_entry = 0x6a49f0
+
+[[resource_parsers]]
+string = "TalkScript_common.bxm"
+string_addr = 0xb6538a
+xref_site = 0x43c608
+func_entry = 0x43c4fc
+
+[[resource_parsers]]
+string = "r%03x_EffectArea.bxm"
+string_addr = 0xb6573c
+xref_site = 0x89a174
+func_entry = 0x89a130
+
+[[resource_parsers]]
+string = "r%03x_EffectArea.bxm"
+string_addr = 0xb6573c
+xref_site = 0x89a55c
+func_entry = 0x89a490
+
+[[resource_parsers]]
+string = "MatAnimData.bxm"
+string_addr = 0xb6659e
+xref_site = 0x4a1c6c
+func_entry = 0x4a1be0
+
+[[resource_parsers]]
+string = "HiddenBeastItemData.bxm"
+string_addr = 0xb66696
+xref_site = 0x53b0c4
+func_entry = 0x53b0a0
+
+[[resource_parsers]]
+string = "ShadowArea.bxm"
+string_addr = 0xb679e5
+xref_site = 0x45a150
+func_entry = 0x459f40
+
+[[resource_parsers]]
+string = "level_table.bxm"
+string_addr = 0xb67aeb
+xref_site = 0x4bfb50
+func_entry = 0x4bfb20
+
+[[resource_parsers]]
+string = "TreasureChestData.bxm"
+string_addr = 0xb67c3b
+xref_site = 0x5355c4
+func_entry = 0x5355a0
+
+[[resource_parsers]]
+string = "r%03xSst.bxm"
+string_addr = 0xb67fb0
+xref_site = 0x899c30
+func_entry = 0x899c00
+
+[[resource_parsers]]
+string = "r%03xSst.bxm"
+string_addr = 0xb67fb0
+xref_site = 0x89a744
+func_entry = 0x89a720
+
+[[resource_parsers]]
+string = "CutList.bxm"
+string_addr = 0xb68031
+xref_site = 0x8b1c6c
+func_entry = 0x8b1c50
+
+[[resource_parsers]]
+string = "%s_0_%1d_clh.bxm"
+string_addr = 0xb684fd
+xref_site = 0x0009fc
+func_entry = 0x000810
+
+[[resource_parsers]]
+string = "%s_0_%1d_clh.bxm"
+string_addr = 0xb684fd
+xref_site = 0x0331d0
+func_entry = 0x032b6c
+
+[[resource_parsers]]
+string = "%s_0_%1d_clh.bxm"
+string_addr = 0xb684fd
+xref_site = 0x197eb0
+func_entry = 0x197c40
+
+[[resource_parsers]]
+string = "%s_0_%1d_clh.bxm"
+string_addr = 0xb684fd
+xref_site = 0x1cc6ac
+func_entry = 0x1cc33c
+
+[[resource_parsers]]
+string = "%s_0_%1d_clh.bxm"
+string_addr = 0xb684fd
+xref_site = 0x1cc7ac
+func_entry = 0x1cc33c
+
+[[resource_parsers]]
+string = "%s_0_%1d_clh.bxm"
+string_addr = 0xb684fd
+xref_site = 0x1cc894
+func_entry = 0x1cc33c
+
+[[resource_parsers]]
+string = "%s_0_%1d_clh.bxm"
+string_addr = 0xb684fd
+xref_site = 0x1cc97c
+func_entry = 0x1cc33c
+
+[[resource_parsers]]
+string = "%s_0_%1d_clh.bxm"
+string_addr = 0xb684fd
+xref_site = 0x1eb700
+func_entry = 0x1eb700
+
+[[resource_parsers]]
+string = "%s_0_%1d_clh.bxm"
+string_addr = 0xb684fd
+xref_site = 0x1eb7e8
+func_entry = 0x1eb7e8
+
+[[resource_parsers]]
+string = "%s_0_%1d_clh.bxm"
+string_addr = 0xb684fd
+xref_site = 0x1eb8d0
+func_entry = 0x1eb8d0
+
+[[resource_parsers]]
+string = "%s_0_%1d_clh.bxm"
+string_addr = 0xb684fd
+xref_site = 0x1eb9b8
+func_entry = 0x1eb9b8
+
+[[resource_parsers]]
+string = "%s_0_%1d_clh.bxm"
+string_addr = 0xb684fd
+xref_site = 0x20d114
+func_entry = 0x20d080
+
+[[resource_parsers]]
+string = "%s_0_%1d_clh.bxm"
+string_addr = 0xb684fd
+xref_site = 0x27b1b8
+func_entry = 0x27b1b8
+
+[[resource_parsers]]
+string = "%s_0_%1d_clh.bxm"
+string_addr = 0xb684fd
+xref_site = 0x27b2b0
+func_entry = 0x27b2b0
+
+[[resource_parsers]]
+string = "%s_0_%1d_clh.bxm"
+string_addr = 0xb684fd
+xref_site = 0x27b3a8
+func_entry = 0x27b3a8
+
+[[resource_parsers]]
+string = "%s_0_%1d_clh.bxm"
+string_addr = 0xb684fd
+xref_site = 0x27b4a0
+func_entry = 0x27b4a0
+
+[[resource_parsers]]
+string = "%s_0_%1d_clh.bxm"
+string_addr = 0xb684fd
+xref_site = 0x3603f4
+func_entry = 0x360340
+
+[[resource_parsers]]
+string = "%s_0_%1d_clh.bxm"
+string_addr = 0xb684fd
+xref_site = 0x3604d0
+func_entry = 0x360340
+
+[[resource_parsers]]
+string = "%s_0_%1d_clh.bxm"
+string_addr = 0xb684fd
+xref_site = 0x3605b8
+func_entry = 0x360340
+
+[[resource_parsers]]
+string = "%s_0_%1d_clh.bxm"
+string_addr = 0xb684fd
+xref_site = 0x3616a0
+func_entry = 0x3615f0
+
+[[resource_parsers]]
+string = "%s_0_%1d_clh.bxm"
+string_addr = 0xb684fd
+xref_site = 0x36179c
+func_entry = 0x3615f0
+
+[[resource_parsers]]
+string = "%s_0_%1d_clh.bxm"
+string_addr = 0xb684fd
+xref_site = 0x3618a4
+func_entry = 0x3615f0
+
+[[resource_parsers]]
+string = "%s_0_%1d_clh.bxm"
+string_addr = 0xb684fd
+xref_site = 0x367068
+func_entry = 0x367010
+
+[[resource_parsers]]
+string = "%s_0_%1d_clh.bxm"
+string_addr = 0xb684fd
+xref_site = 0x367144
+func_entry = 0x367010
+
+[[resource_parsers]]
+string = "%s_0_%1d_clh.bxm"
+string_addr = 0xb684fd
+xref_site = 0x36722c
+func_entry = 0x367010
+
+[[resource_parsers]]
+string = "%s_0_%1d_clh.bxm"
+string_addr = 0xb684fd
+xref_site = 0x367628
+func_entry = 0x3673b0
+
+[[resource_parsers]]
+string = "%s_0_%1d_clh.bxm"
+string_addr = 0xb684fd
+xref_site = 0x367710
+func_entry = 0x3673b0
+
+[[resource_parsers]]
+string = "%s_0_%1d_clh.bxm"
+string_addr = 0xb684fd
+xref_site = 0x3677f8
+func_entry = 0x3673b0
+
+[[resource_parsers]]
+string = "%s_0_%1d_clh.bxm"
+string_addr = 0xb684fd
+xref_site = 0x3678e0
+func_entry = 0x3673b0
+
+[[resource_parsers]]
+string = "%s_0_%1d_clh.bxm"
+string_addr = 0xb684fd
+xref_site = 0x3760e8
+func_entry = 0x375fc0
+
+[[resource_parsers]]
+string = "%s_0_%1d_clh.bxm"
+string_addr = 0xb684fd
+xref_site = 0x3761c4
+func_entry = 0x375fc0
+
+[[resource_parsers]]
+string = "%s_0_%1d_clh.bxm"
+string_addr = 0xb684fd
+xref_site = 0x37b298
+func_entry = 0x37b200
+
+[[resource_parsers]]
+string = "%s_0_%1d_clh.bxm"
+string_addr = 0xb684fd
+xref_site = 0x37b374
+func_entry = 0x37b200
+
+[[resource_parsers]]
+string = "ObjectParam.bxm"
+string_addr = 0xb68cbb
+xref_site = 0x459e6c
+func_entry = 0x459dcc
+
+[[resource_parsers]]
+string = "ObjectParam.bxm"
+string_addr = 0xb68cbb
+xref_site = 0x55ebfc
+func_entry = 0x55eb70
+
+[[resource_parsers]]
+string = "LoadArea.bxm"
+string_addr = 0xb68ccb
+xref_site = 0x414ef8
+func_entry = 0x414ef8
+
+[[resource_parsers]]
+string = "LoadArea.bxm"
+string_addr = 0xb68ccb
+xref_site = 0x459988
+func_entry = 0x459910
+
+[[resource_parsers]]
+string = "QuestData.bxm"
+string_addr = 0xb6a080
+xref_site = 0x471024
+func_entry = 0x471000
+
+[[resource_parsers]]
+string = "%s_seq.bxm"
+string_addr = 0xb6a69d
+xref_site = 0x8c182c
+func_entry = 0x8c17b0
+
+[[resource_parsers]]
+string = "%s_seq.bxm"
+string_addr = 0xb6a69d
+xref_site = 0x8c1e7c
+func_entry = 0x8c1e1c
+
+[[resource_parsers]]
+string = "workingevalue_point.bxm"
+string_addr = 0xb6b410
+xref_site = 0x4b8a64
+func_entry = 0x4b89c0
+
+[[resource_parsers]]
+string = "CleanModData.bxm"
+string_addr = 0xb6b428
+xref_site = 0x4b9d30
+func_entry = 0x4b9c70
+
+[[resource_parsers]]
+string = "CleanModData.bxm"
+string_addr = 0xb6b428
+xref_site = 0x4b9eb0
+func_entry = 0x4b9c70
+
+[[resource_parsers]]
+string = "CleanModData.bxm"
+string_addr = 0xb6b428
+xref_site = 0x4b9fb0
+func_entry = 0x4b9c70
+
+[[resource_parsers]]
+string = "ObjSubInfo.bxm"
+string_addr = 0xb6b8ad
+xref_site = 0x8ade5c
+func_entry = 0x8ade20
+
+[[resource_parsers]]
+string = "_seq.bxm"
+string_addr = 0xb6c96e
+xref_site = 0x868dd4
+func_entry = 0x868d60
+
+[[resource_parsers]]
+string = "_seq.bxm"
+string_addr = 0xb6c96e
+xref_site = 0x868df8
+func_entry = 0x868d60
+
+[[resource_parsers]]
+string = "_seq.bxm"
+string_addr = 0xb6c96e
+xref_site = 0x868df8
+func_entry = 0x868d60
+
+[[resource_parsers]]
+string = "_seq.bxm"
+string_addr = 0xb6c96e
+xref_site = 0x869488
+func_entry = 0x869440
+
+[[resource_parsers]]
+string = "_seq.bxm"
+string_addr = 0xb6c96e
+xref_site = 0x8694b8
+func_entry = 0x8694b4
+
+[[resource_parsers]]
+string = "%s_%1d_spr.bxm"
+string_addr = 0xb6ddef
+xref_site = 0x000934
+func_entry = 0x000810
+
+[[resource_parsers]]
+string = "%s_%1d_spr.bxm"
+string_addr = 0xb6ddef
+xref_site = 0x00098c
+func_entry = 0x000810
+
+[[resource_parsers]]
+string = "%s_%1d_spr.bxm"
+string_addr = 0xb6ddef
+xref_site = 0x033410
+func_entry = 0x033410
+
+[[resource_parsers]]
+string = "%s_%1d_spr.bxm"
+string_addr = 0xb6ddef
+xref_site = 0x033478
+func_entry = 0x033478
+
+[[resource_parsers]]
+string = "%s_%1d_spr.bxm"
+string_addr = 0xb6ddef
+xref_site = 0x0334d4
+func_entry = 0x0334d4
+
+[[resource_parsers]]
+string = "%s_%1d_spr.bxm"
+string_addr = 0xb6ddef
+xref_site = 0x033534
+func_entry = 0x033534
+
+[[resource_parsers]]
+string = "%s_%1d_spr.bxm"
+string_addr = 0xb6ddef
+xref_site = 0x27b57c
+func_entry = 0x27b57c
+
+[[resource_parsers]]
+string = "%s_%1d_spr.bxm"
+string_addr = 0xb6ddef
+xref_site = 0x27b5dc
+func_entry = 0x27b5dc
+
+[[resource_parsers]]
+string = "%s_%1d_spr.bxm"
+string_addr = 0xb6ddef
+xref_site = 0x27b63c
+func_entry = 0x27b63c
+
+[[resource_parsers]]
+string = "%s_%1d_spr.bxm"
+string_addr = 0xb6ddef
+xref_site = 0x27b69c
+func_entry = 0x27b69c
+
+[[resource_parsers]]
+string = "%s_%1d_spr.bxm"
+string_addr = 0xb6ddef
+xref_site = 0x3606ac
+func_entry = 0x360340
+
+[[resource_parsers]]
+string = "%s_%1d_spr.bxm"
+string_addr = 0xb6ddef
+xref_site = 0x360704
+func_entry = 0x360340
+
+[[resource_parsers]]
+string = "%s_%1d_spr.bxm"
+string_addr = 0xb6ddef
+xref_site = 0x361994
+func_entry = 0x3615f0
+
+[[resource_parsers]]
+string = "%s_%1d_spr.bxm"
+string_addr = 0xb6ddef
+xref_site = 0x3619f4
+func_entry = 0x3615f0
+
+[[resource_parsers]]
+string = "%s_%1d_spr.bxm"
+string_addr = 0xb6ddef
+xref_site = 0x3762b8
+func_entry = 0x375fc0
+
+[[resource_parsers]]
+string = "%s_%1d_spr.bxm"
+string_addr = 0xb6ddef
+xref_site = 0x376310
+func_entry = 0x375fc0
+
+[[resource_parsers]]
+string = "%s_%1d_spr.bxm"
+string_addr = 0xb6ddef
+xref_site = 0x37b458
+func_entry = 0x37b200
+
+[[resource_parsers]]
+string = "%s_%1d_spr.bxm"
+string_addr = 0xb6ddef
+xref_site = 0x37b4b0
+func_entry = 0x37b200
+
+[[resource_parsers]]
+string = "TalkScript_speech_dummy.bxm"
+string_addr = 0xb6e568
+xref_site = 0x43c6a0
+func_entry = 0x43c4fc
+
+[[resource_parsers]]
+string = "TalkScript_speech_dummy.bxm"
+string_addr = 0xb6e568
+xref_site = 0x471370
+func_entry = 0x471000
+
+[[resource_parsers]]
+string = "p%03x_NaviRoute2.bxm"
+string_addr = 0xb6e68e
+xref_site = 0x4feb5c
+func_entry = 0x4fea90
+
+[[resource_parsers]]
+string = "effect/EffectAttr.bxm"
+string_addr = 0xb6f566
+xref_site = 0x3c0438
+func_entry = 0x3c03d0
+
+[[resource_parsers]]
+string = "effect/EffectAttr.bxm"
+string_addr = 0xb6f566
+xref_site = 0x3c0454
+func_entry = 0x3c03d0
+
+[[resource_parsers]]
+string = "effect/EffectAttr.bxm"
+string_addr = 0xb6f566
+xref_site = 0x3c0454
+func_entry = 0x3c03d0
+
+[[resource_parsers]]
+string = "ShadeArea.bxm"
+string_addr = 0xb6f9f7
+xref_site = 0x45a108
+func_entry = 0x459f40
+
+[[resource_parsers]]
+string = "TextTagSetting.bxm"
+string_addr = 0xb6fedf
+xref_site = 0x6e44f0
+func_entry = 0x6e4400
+
+[[resource_parsers]]
+string = "NameArea.bxm"
+string_addr = 0xb70b02
+xref_site = 0x45a12c
+func_entry = 0x459f40
+
+[[resource_parsers]]
+string = "hierarchy.bxm"
+string_addr = 0xb70d1a
+xref_site = 0x55bafc
+func_entry = 0x55bad0
+
+[[resource_parsers]]
+string = "resultbonus_point.bxm"
+string_addr = 0xb7220c
+xref_site = 0x413e04
+func_entry = 0x413700
+
+[[resource_parsers]]
+string = "resultbonus_point.bxm"
+string_addr = 0xb7220c
+xref_site = 0x6739d4
+func_entry = 0x6739a0
+
+[[resource_parsers]]
+string = "effect/resource.bxm"
+string_addr = 0xb73415
+xref_site = 0x9416cc
+func_entry = 0x9411c0
+
+[[resource_parsers]]
+string = "%s_0_%1d_clw.bxm"
+string_addr = 0xb7371e
+xref_site = 0x000a14
+func_entry = 0x000810
+
+[[resource_parsers]]
+string = "%s_0_%1d_clw.bxm"
+string_addr = 0xb7371e
+xref_site = 0x0331e8
+func_entry = 0x032b6c
+
+[[resource_parsers]]
+string = "%s_0_%1d_clw.bxm"
+string_addr = 0xb7371e
+xref_site = 0x197eb8
+func_entry = 0x197c40
+
+[[resource_parsers]]
+string = "%s_0_%1d_clw.bxm"
+string_addr = 0xb7371e
+xref_site = 0x1cc6c4
+func_entry = 0x1cc33c
+
+[[resource_parsers]]
+string = "%s_0_%1d_clw.bxm"
+string_addr = 0xb7371e
+xref_site = 0x1cc7c4
+func_entry = 0x1cc33c
+
+[[resource_parsers]]
+string = "%s_0_%1d_clw.bxm"
+string_addr = 0xb7371e
+xref_site = 0x1cc8ac
+func_entry = 0x1cc33c
+
+[[resource_parsers]]
+string = "%s_0_%1d_clw.bxm"
+string_addr = 0xb7371e
+xref_site = 0x1cc994
+func_entry = 0x1cc33c
+
+[[resource_parsers]]
+string = "%s_0_%1d_clw.bxm"
+string_addr = 0xb7371e
+xref_site = 0x1eb718
+func_entry = 0x1eb718
+
+[[resource_parsers]]
+string = "%s_0_%1d_clw.bxm"
+string_addr = 0xb7371e
+xref_site = 0x1eb800
+func_entry = 0x1eb800
+
+[[resource_parsers]]
+string = "%s_0_%1d_clw.bxm"
+string_addr = 0xb7371e
+xref_site = 0x1eb8e8
+func_entry = 0x1eb8e8
+
+[[resource_parsers]]
+string = "%s_0_%1d_clw.bxm"
+string_addr = 0xb7371e
+xref_site = 0x1eb9d0
+func_entry = 0x1eb9d0
+
+[[resource_parsers]]
+string = "%s_0_%1d_clw.bxm"
+string_addr = 0xb7371e
+xref_site = 0x20d12c
+func_entry = 0x20d080
+
+[[resource_parsers]]
+string = "%s_0_%1d_clw.bxm"
+string_addr = 0xb7371e
+xref_site = 0x27b1d0
+func_entry = 0x27b1d0
+
+[[resource_parsers]]
+string = "%s_0_%1d_clw.bxm"
+string_addr = 0xb7371e
+xref_site = 0x27b2c8
+func_entry = 0x27b2c8
+
+[[resource_parsers]]
+string = "%s_0_%1d_clw.bxm"
+string_addr = 0xb7371e
+xref_site = 0x27b3c0
+func_entry = 0x27b3c0
+
+[[resource_parsers]]
+string = "%s_0_%1d_clw.bxm"
+string_addr = 0xb7371e
+xref_site = 0x27b4b8
+func_entry = 0x27b4b8
+
+[[resource_parsers]]
+string = "%s_0_%1d_clw.bxm"
+string_addr = 0xb7371e
+xref_site = 0x36040c
+func_entry = 0x360340
+
+[[resource_parsers]]
+string = "%s_0_%1d_clw.bxm"
+string_addr = 0xb7371e
+xref_site = 0x3604e8
+func_entry = 0x360340
+
+[[resource_parsers]]
+string = "%s_0_%1d_clw.bxm"
+string_addr = 0xb7371e
+xref_site = 0x3605d0
+func_entry = 0x360340
+
+[[resource_parsers]]
+string = "%s_0_%1d_clw.bxm"
+string_addr = 0xb7371e
+xref_site = 0x3616b8
+func_entry = 0x3615f0
+
+[[resource_parsers]]
+string = "%s_0_%1d_clw.bxm"
+string_addr = 0xb7371e
+xref_site = 0x3617b4
+func_entry = 0x3615f0
+
+[[resource_parsers]]
+string = "%s_0_%1d_clw.bxm"
+string_addr = 0xb7371e
+xref_site = 0x3618bc
+func_entry = 0x3615f0
+
+[[resource_parsers]]
+string = "%s_0_%1d_clw.bxm"
+string_addr = 0xb7371e
+xref_site = 0x367080
+func_entry = 0x367010
+
+[[resource_parsers]]
+string = "%s_0_%1d_clw.bxm"
+string_addr = 0xb7371e
+xref_site = 0x36715c
+func_entry = 0x367010
+
+[[resource_parsers]]
+string = "%s_0_%1d_clw.bxm"
+string_addr = 0xb7371e
+xref_site = 0x367244
+func_entry = 0x367010
+
+[[resource_parsers]]
+string = "%s_0_%1d_clw.bxm"
+string_addr = 0xb7371e
+xref_site = 0x367640
+func_entry = 0x3673b0
+
+[[resource_parsers]]
+string = "%s_0_%1d_clw.bxm"
+string_addr = 0xb7371e
+xref_site = 0x367728
+func_entry = 0x3673b0
+
+[[resource_parsers]]
+string = "%s_0_%1d_clw.bxm"
+string_addr = 0xb7371e
+xref_site = 0x367810
+func_entry = 0x3673b0
+
+[[resource_parsers]]
+string = "%s_0_%1d_clw.bxm"
+string_addr = 0xb7371e
+xref_site = 0x3678f8
+func_entry = 0x3673b0
+
+[[resource_parsers]]
+string = "%s_0_%1d_clw.bxm"
+string_addr = 0xb7371e
+xref_site = 0x376100
+func_entry = 0x375fc0
+
+[[resource_parsers]]
+string = "%s_0_%1d_clw.bxm"
+string_addr = 0xb7371e
+xref_site = 0x3761dc
+func_entry = 0x375fc0
+
+[[resource_parsers]]
+string = "%s_0_%1d_clw.bxm"
+string_addr = 0xb7371e
+xref_site = 0x37b2b0
+func_entry = 0x37b200
+
+[[resource_parsers]]
+string = "%s_0_%1d_clw.bxm"
+string_addr = 0xb7371e
+xref_site = 0x37b38c
+func_entry = 0x37b200
+
+[[resource_parsers]]
+string = "EnemySet.bxm"
+string_addr = 0xb740f5
+xref_site = 0x471048
+func_entry = 0x471000
+
+[[resource_parsers]]
+string = "_param.bxm"
+string_addr = 0xb74f2f
+xref_site = 0x3be92c
+func_entry = 0x3be720
+
+[[resource_parsers]]
+string = "_param.bxm"
+string_addr = 0xb74f2f
+xref_site = 0x93fe24
+func_entry = 0x93fd10
+
+[[resource_parsers]]
+string = "ending_staff.bxm"
+string_addr = 0xb76981
+xref_site = 0x6745ac
+func_entry = 0x674580
+
+[[resource_parsers]]
+string = "BezierData.bxm"
+string_addr = 0xb7764e
+xref_site = 0x471108
+func_entry = 0x471000
+
+[[resource_parsers]]
+string = "%s_0_%1d_clp.bxm"
+string_addr = 0xb77fdb
+xref_site = 0x0009e4
+func_entry = 0x000810
+
+[[resource_parsers]]
+string = "%s_0_%1d_clp.bxm"
+string_addr = 0xb77fdb
+xref_site = 0x0331c8
+func_entry = 0x032b6c
+
+[[resource_parsers]]
+string = "%s_0_%1d_clp.bxm"
+string_addr = 0xb77fdb
+xref_site = 0x197ea4
+func_entry = 0x197c40
+
+[[resource_parsers]]
+string = "%s_0_%1d_clp.bxm"
+string_addr = 0xb77fdb
+xref_site = 0x1cc694
+func_entry = 0x1cc33c
+
+[[resource_parsers]]
+string = "%s_0_%1d_clp.bxm"
+string_addr = 0xb77fdb
+xref_site = 0x1cc794
+func_entry = 0x1cc33c
+
+[[resource_parsers]]
+string = "%s_0_%1d_clp.bxm"
+string_addr = 0xb77fdb
+xref_site = 0x1cc87c
+func_entry = 0x1cc33c
+
+[[resource_parsers]]
+string = "%s_0_%1d_clp.bxm"
+string_addr = 0xb77fdb
+xref_site = 0x1cc964
+func_entry = 0x1cc33c
+
+[[resource_parsers]]
+string = "%s_0_%1d_clp.bxm"
+string_addr = 0xb77fdb
+xref_site = 0x1eb6e8
+func_entry = 0x1eb6e8
+
+[[resource_parsers]]
+string = "%s_0_%1d_clp.bxm"
+string_addr = 0xb77fdb
+xref_site = 0x1eb7d0
+func_entry = 0x1eb7d0
+
+[[resource_parsers]]
+string = "%s_0_%1d_clp.bxm"
+string_addr = 0xb77fdb
+xref_site = 0x1eb8b8
+func_entry = 0x1eb8b8
+
+[[resource_parsers]]
+string = "%s_0_%1d_clp.bxm"
+string_addr = 0xb77fdb
+xref_site = 0x1eb9a0
+func_entry = 0x1eb9a0
+
+[[resource_parsers]]
+string = "%s_0_%1d_clp.bxm"
+string_addr = 0xb77fdb
+xref_site = 0x20d0fc
+func_entry = 0x20d080
+
+[[resource_parsers]]
+string = "%s_0_%1d_clp.bxm"
+string_addr = 0xb77fdb
+xref_site = 0x27b1a0
+func_entry = 0x27b1a0
+
+[[resource_parsers]]
+string = "%s_0_%1d_clp.bxm"
+string_addr = 0xb77fdb
+xref_site = 0x27b298
+func_entry = 0x27b298
+
+[[resource_parsers]]
+string = "%s_0_%1d_clp.bxm"
+string_addr = 0xb77fdb
+xref_site = 0x27b390
+func_entry = 0x27b390
+
+[[resource_parsers]]
+string = "%s_0_%1d_clp.bxm"
+string_addr = 0xb77fdb
+xref_site = 0x27b488
+func_entry = 0x27b488
+
+[[resource_parsers]]
+string = "%s_0_%1d_clp.bxm"
+string_addr = 0xb77fdb
+xref_site = 0x3603dc
+func_entry = 0x360340
+
+[[resource_parsers]]
+string = "%s_0_%1d_clp.bxm"
+string_addr = 0xb77fdb
+xref_site = 0x3604b8
+func_entry = 0x360340
+
+[[resource_parsers]]
+string = "%s_0_%1d_clp.bxm"
+string_addr = 0xb77fdb
+xref_site = 0x3605a0
+func_entry = 0x360340
+
+[[resource_parsers]]
+string = "%s_0_%1d_clp.bxm"
+string_addr = 0xb77fdb
+xref_site = 0x361688
+func_entry = 0x3615f0
+
+[[resource_parsers]]
+string = "%s_0_%1d_clp.bxm"
+string_addr = 0xb77fdb
+xref_site = 0x361784
+func_entry = 0x3615f0
+
+[[resource_parsers]]
+string = "%s_0_%1d_clp.bxm"
+string_addr = 0xb77fdb
+xref_site = 0x36188c
+func_entry = 0x3615f0
+
+[[resource_parsers]]
+string = "%s_0_%1d_clp.bxm"
+string_addr = 0xb77fdb
+xref_site = 0x367050
+func_entry = 0x367010
+
+[[resource_parsers]]
+string = "%s_0_%1d_clp.bxm"
+string_addr = 0xb77fdb
+xref_site = 0x36712c
+func_entry = 0x367010
+
+[[resource_parsers]]
+string = "%s_0_%1d_clp.bxm"
+string_addr = 0xb77fdb
+xref_site = 0x367214
+func_entry = 0x367010
+
+[[resource_parsers]]
+string = "%s_0_%1d_clp.bxm"
+string_addr = 0xb77fdb
+xref_site = 0x367610
+func_entry = 0x3673b0
+
+[[resource_parsers]]
+string = "%s_0_%1d_clp.bxm"
+string_addr = 0xb77fdb
+xref_site = 0x3676f8
+func_entry = 0x3673b0
+
+[[resource_parsers]]
+string = "%s_0_%1d_clp.bxm"
+string_addr = 0xb77fdb
+xref_site = 0x3677e0
+func_entry = 0x3673b0
+
+[[resource_parsers]]
+string = "%s_0_%1d_clp.bxm"
+string_addr = 0xb77fdb
+xref_site = 0x3678c8
+func_entry = 0x3673b0
+
+[[resource_parsers]]
+string = "%s_0_%1d_clp.bxm"
+string_addr = 0xb77fdb
+xref_site = 0x3760d0
+func_entry = 0x375fc0
+
+[[resource_parsers]]
+string = "%s_0_%1d_clp.bxm"
+string_addr = 0xb77fdb
+xref_site = 0x3761ac
+func_entry = 0x375fc0
+
+[[resource_parsers]]
+string = "%s_0_%1d_clp.bxm"
+string_addr = 0xb77fdb
+xref_site = 0x37b280
+func_entry = 0x37b200
+
+[[resource_parsers]]
+string = "%s_0_%1d_clp.bxm"
+string_addr = 0xb77fdb
+xref_site = 0x37b35c
+func_entry = 0x37b200
+
+[[resource_parsers]]
+string = "case3_bio_line.bxm"
+string_addr = 0xb787fb
+xref_site = 0x432d68
+func_entry = 0x432d30
+
+[[resource_parsers]]
+string = "help_release.bxm"
+string_addr = 0xb78c6d
+xref_site = 0x69fcf4
+func_entry = 0x69fcc0
+
+[[resource_parsers]]
+string = "HighWayCourse.bxm"
+string_addr = 0xb79c79
+xref_site = 0x50f8f4
+func_entry = 0x50f890
+
+[[resource_parsers]]
+string = "TalkScript_%04x.bxm"
+string_addr = 0xb7abc6
+xref_site = 0x471290
+func_entry = 0x471000
+
+[[resource_parsers]]
+string = "MaterialAnimationData.bxm"
+string_addr = 0xb7aca8
+xref_site = 0x49d01c
+func_entry = 0x49cfd0
+
+[[resource_parsers]]
+string = "HighWayCourse2.bxm"
+string_addr = 0xb7addd
+xref_site = 0x50f8fc
+func_entry = 0x50f890
+
+[[resource_parsers]]
+string = "SoundMacro.bxm"
+string_addr = 0xb7c0f6
+xref_site = 0x572e2c
+func_entry = 0x572e10
+
+[[resource_parsers]]
+string = "TalkScript_speech_%04x.bxm"
+string_addr = 0xb7cfe4
+xref_site = 0x471310
+func_entry = 0x471000
+
+[[resource_parsers]]
+string = "effect/CallSelector.bxm"
+string_addr = 0xb7dc94
+xref_site = 0x3c0470
+func_entry = 0x3c03d0
+
+[[resource_parsers]]
+string = "effect/CallSelector.bxm"
+string_addr = 0xb7dc94
+xref_site = 0x3c048c
+func_entry = 0x3c03d0
+
+[[resource_parsers]]
+string = "effect/CallSelector.bxm"
+string_addr = 0xb7dc94
+xref_site = 0x3c048c
+func_entry = 0x3c03d0
+
+[[resource_parsers]]
+string = "ShopItemList.bxm"
+string_addr = 0xb7e088
+xref_site = 0x546b40
+func_entry = 0x546b10
+
+[[resource_parsers]]
+string = "autoshadereffInfo.bxm"
+string_addr = 0xb7e3db
+xref_site = 0x8a36f8
+func_entry = 0x8a36c0
+
+[[resource_parsers]]
+string = "CameraList.bxm"
+string_addr = 0xb7e3fb
+xref_site = 0x8affa4
+func_entry = 0x8aff70
+
+[[resource_parsers]]
+string = "TalkScript_speech_common.bxm"
+string_addr = 0xb7f286
+xref_site = 0x43c648
+func_entry = 0x43c4fc
+
+[[resource_parsers]]
+string = "talkscript_item_table.bxm"
+string_addr = 0xb7f2a3
+xref_site = 0x43c6cc
+func_entry = 0x43c4fc
+
+[[resource_parsers]]
+string = "CubeMapArea.bxm"
+string_addr = 0xb7f2c9
+xref_site = 0x45a0c0
+func_entry = 0x459f40
+
+[[resource_parsers]]
+string = "TalkScript_dummy.bxm"
+string_addr = 0xb8030b
+xref_site = 0x08f828
+func_entry = 0x08f770
+
+[[resource_parsers]]
+string = "TalkScript_dummy.bxm"
+string_addr = 0xb8030b
+xref_site = 0x32fc04
+func_entry = 0x32fbb0
+
+[[resource_parsers]]
+string = "TalkScript_dummy.bxm"
+string_addr = 0xb8030b
+xref_site = 0x43c674
+func_entry = 0x43c4fc
+
+[[resource_parsers]]
+string = "TalkScript_dummy.bxm"
+string_addr = 0xb8030b
+xref_site = 0x4712f0
+func_entry = 0x471000
+
+[[resource_parsers]]
+string = "GAArea.bxm"
+string_addr = 0xb80338
+xref_site = 0x45a000
+func_entry = 0x459f40
+
+[[resource_parsers]]
+string = "info.bxm"
+string_addr = 0xb807e5
+xref_site = 0x93e49c
+func_entry = 0x93e2d0
+
+[[resource_parsers]]
+string = "meshPattern.bxm"
+string_addr = 0xb81611
+xref_site = 0x552594
+func_entry = 0x552580
+
+[[resource_parsers]]
+string = "OffsetData.bxm"
+string_addr = 0xb8188d
+xref_site = 0x8b5378
+func_entry = 0x8b5360
+
+[[resource_parsers]]
+string = "ListenerPreset.bxm"
+string_addr = 0xb818c2
+xref_site = 0x8e1050
+func_entry = 0x8e1030
+
+[[resource_parsers]]
+string = "p%03x_sub.bxm"
+string_addr = 0xb825f8
+xref_site = 0x563014
+func_entry = 0x562fe0
+
+[[resource_parsers]]
+string = "AttachList.bxm"
+string_addr = 0xb82892
+xref_site = 0x8ade94
+func_entry = 0x8ade20
+
+[[resource_parsers]]
+string = "header.bxm"
+string_addr = 0xb8292a
+xref_site = 0x93ea40
+func_entry = 0x93e9e0
+
+[[resource_parsers]]
+string = "effect/shadowarea.bxm"
+string_addr = 0xb82e59
+xref_site = 0x3c04e8
+func_entry = 0x3c03d0
+
+[[resource_parsers]]
+string = "effect/shadowarea.bxm"
+string_addr = 0xb82e59
+xref_site = 0x3c0504
+func_entry = 0x3c03d0
+
+[[resource_parsers]]
+string = "effect/shadowarea.bxm"
+string_addr = 0xb82e59
+xref_site = 0x3c0504
+func_entry = 0x3c03d0
+
+[[resource_parsers]]
+string = "PhaseInfo.bxm"
+string_addr = 0xb834ad
+xref_site = 0x562ef4
+func_entry = 0x562d80
+
+[[resource_parsers]]
+string = "effect/exposure.bxm"
+string_addr = 0xb8403e
+xref_site = 0x3c04ac
+func_entry = 0x3c03d0
+
+[[resource_parsers]]
+string = "effect/exposure.bxm"
+string_addr = 0xb8403e
+xref_site = 0x3c04c8
+func_entry = 0x3c03d0
+
+[[resource_parsers]]
+string = "effect/exposure.bxm"
+string_addr = 0xb8403e
+xref_site = 0x3c04c8
+func_entry = 0x3c03d0
+
+[[resource_parsers]]
+string = "sad.bxm"
+string_addr = 0xb84806
+xref_site = 0x93bd08
+func_entry = 0x93bbb0
+
+[[resource_parsers]]
+string = "core/coreui.dat"
+string_addr = 0xb61812
+xref_site = 0x3e2abc
+func_entry = 0x3e2a20
+
+[[resource_parsers]]
+string = "SAVE:/GameData.dat"
+string_addr = 0xb63696
+xref_site = 0x9ca040
+func_entry = 0x9c9f30
+
+[[resource_parsers]]
+string = "SAVE:/GameData.dat"
+string_addr = 0xb63696
+xref_site = 0x9ca264
+func_entry = 0x9ca220
+
+[[resource_parsers]]
+string = "SAVE:/GameData.dat"
+string_addr = 0xb63696
+xref_site = 0x9ca614
+func_entry = 0x9ca5d0
+
+[[resource_parsers]]
+string = "SAVE:/GameData.dat"
+string_addr = 0xb63696
+xref_site = 0x9ca8d0
+func_entry = 0x9ca890
+
+[[resource_parsers]]
+string = "autoshadereff.dat"
+string_addr = 0xb65039
+xref_site = 0x3c0138
+func_entry = 0x3c0120
+
+[[resource_parsers]]
+string = ".dat"
+string_addr = 0xb66724
+xref_site = 0x55de5c
+func_entry = 0x55de50
+
+[[resource_parsers]]
+string = ".dat"
+string_addr = 0xb66724
+xref_site = 0x588a94
+func_entry = 0x588a50
+
+[[resource_parsers]]
+string = "font/Font_21.dat"
+string_addr = 0xb668d0
+xref_site = 0x58869c
+func_entry = 0x588610
+
+[[resource_parsers]]
+string = "font/Font_03.dat"
+string_addr = 0xb668e1
+xref_site = 0x588720
+func_entry = 0x588610
+
+[[resource_parsers]]
+string = "core/core.dat"
+string_addr = 0xb689e5
+xref_site = 0x3e2800
+func_entry = 0x3e27b0
+
+[[resource_parsers]]
+string = "shaderefflayout.dat"
+string_addr = 0xb69c13
+xref_site = 0x3c0158
+func_entry = 0x3c0120
+
+[[resource_parsers]]
+string = "stb/r%03x.dat"
+string_addr = 0xb6d787
+xref_site = 0x5692a8
+func_entry = 0x569130
+
+[[resource_parsers]]
+string = "shadereff.dat"
+string_addr = 0xb6e249
+xref_site = 0x3c014c
+func_entry = 0x3c0120
+
+[[resource_parsers]]
+string = "quest/quest%04x.dat"
+string_addr = 0xb6fa09
+xref_site = 0x470e10
+func_entry = 0x470de0
+
+[[resource_parsers]]
+string = "font/Font_33.dat"
+string_addr = 0xb6fd2d
+xref_site = 0x5886fc
+func_entry = 0x588610
+
+[[resource_parsers]]
+string = "shader2.dat"
+string_addr = 0xb708e2
+xref_site = 0x40d65c
+func_entry = 0x40d5a0
+
+[[resource_parsers]]
+string = "st%x/r%x%02x.dat"
+string_addr = 0xb70af1
+xref_site = 0x4597b8
+func_entry = 0x459770
+
+[[resource_parsers]]
+string = "st%x/r%x%02x.dat"
+string_addr = 0xb70af1
+xref_site = 0x4597f0
+func_entry = 0x459770
+
+[[resource_parsers]]
+string = "core/coreph.dat"
+string_addr = 0xb71bad
+xref_site = 0x0ad808
+func_entry = 0x0ad7d0
+
+[[resource_parsers]]
+string = "core/coreph.dat"
+string_addr = 0xb71bad
+xref_site = 0x3e2ac8
+func_entry = 0x3e2a20
+
+[[resource_parsers]]
+string = "miscTex/%s/%s.dat"
+string_addr = 0xb72333
+xref_site = 0x6e2d78
+func_entry = 0x6e2d30
+
+[[resource_parsers]]
+string = "miscTex/%s/%s.dat"
+string_addr = 0xb72333
+xref_site = 0x6e2f70
+func_entry = 0x6e2f40
+
+[[resource_parsers]]
+string = "shader.dat"
+string_addr = 0xb750e1
+xref_site = 0x410bc0
+func_entry = 0x410b70
+
+[[resource_parsers]]
+string = "font/Font_23.dat"
+string_addr = 0xb75606
+xref_site = 0x5886b4
+func_entry = 0x588610
+
+[[resource_parsers]]
+string = "font/Font_31.dat"
+string_addr = 0xb77912
+xref_site = 0x0f3684
+func_entry = 0x0f3598
+
+[[resource_parsers]]
+string = "font/Font_31.dat"
+string_addr = 0xb77912
+xref_site = 0x5886e4
+func_entry = 0x588610
+
+[[resource_parsers]]
+string = "font/Font_01.dat"
+string_addr = 0xb77923
+xref_site = 0x588708
+func_entry = 0x588610
+
+[[resource_parsers]]
+string = "font/Font_01.dat"
+string_addr = 0xb77923
+xref_site = 0x588708
+func_entry = 0x588610
+
+[[resource_parsers]]
+string = "font/Font_41.dat"
+string_addr = 0xb78aab
+xref_site = 0x5886c0
+func_entry = 0x588610
+
+[[resource_parsers]]
+string = "shadereffcs.dat"
+string_addr = 0xb7d467
+xref_site = 0x8a371c
+func_entry = 0x8a36c0
+
+[[resource_parsers]]
+string = "SAVE:/SlotData_%d.dat"
+string_addr = 0xb7f8db
+xref_site = 0x9ca054
+func_entry = 0x9c9f30
+
+[[resource_parsers]]
+string = "SAVE:/SlotData_%d.dat"
+string_addr = 0xb7f8db
+xref_site = 0x9ca24c
+func_entry = 0x9ca220
+
+[[resource_parsers]]
+string = "SAVE:/SlotData_%d.dat"
+string_addr = 0xb7f8db
+xref_site = 0x9ca5fc
+func_entry = 0x9ca5d0
+
+[[resource_parsers]]
+string = "SAVE:/SlotData_%d.dat"
+string_addr = 0xb7f8db
+xref_site = 0x9ca8b8
+func_entry = 0x9ca890
+
+[[resource_parsers]]
+string = "--- shader.dat read ---"
+string_addr = 0xb8134f
+xref_site = 0x410bac
+func_entry = 0x410b70
+
+[[resource_parsers]]
+string = "font/Font_43.dat"
+string_addr = 0xb82688
+xref_site = 0x5886d8
+func_entry = 0x588610
+
+[[resource_parsers]]
+string = "ph%x/p%03x.dat"
+string_addr = 0xb8349e
+xref_site = 0x56152c
+func_entry = 0x5614a0
+
+[[resource_parsers]]
+string = "dummy.wmb"
+string_addr = 0xb83494
+xref_site = 0x560000
+func_entry = 0x55ffd0
+
+[[resource_parsers]]
+string = "camera_%02x_%03d.mot"
+string_addr = 0xb70fc2
+xref_site = 0x8bbd2c
+func_entry = 0x8bbce0
+
+[[resource_parsers]]
+string = ".mot"
+string_addr = 0xb72380
+xref_site = 0x8685cc
+func_entry = 0x868560
+
+[[resource_parsers]]
+string = ".mot"
+string_addr = 0xb72380
+xref_site = 0x8685f0
+func_entry = 0x868560
+
+[[resource_parsers]]
+string = ".mot"
+string_addr = 0xb72380
+xref_site = 0x8685f0
+func_entry = 0x868560
+
+[[resource_parsers]]
+string = ".mot"
+string_addr = 0xb72380
+xref_site = 0x8686c8
+func_entry = 0x868680
+
+[[resource_parsers]]
+string = ".mot"
+string_addr = 0xb72380
+xref_site = 0x8686e8
+func_entry = 0x868680
+
+[[resource_parsers]]
+string = ".mot"
+string_addr = 0xb72380
+xref_site = 0x8686e8
+func_entry = 0x868680
+
+[[resource_parsers]]
+string = ".mot"
+string_addr = 0xb72380
+xref_site = 0x869f7c
+func_entry = 0x869ed0
+
+[[resource_parsers]]
+string = ".mot"
+string_addr = 0xb72380
+xref_site = 0x869ffc
+func_entry = 0x869ed0
+
+[[resource_parsers]]
+string = ".mot"
+string_addr = 0xb72380
+xref_site = 0x86a010
+func_entry = 0x869ed0
+
+[[resource_parsers]]
+string = ".mot"
+string_addr = 0xb72380
+xref_site = 0x86a010
+func_entry = 0x869ed0
+
+[[resource_parsers]]
+string = ".mot"
+string_addr = 0xb72380
+xref_site = 0x86a038
+func_entry = 0x869ed0
+
+[[resource_parsers]]
+string = ".mot"
+string_addr = 0xb72380
+xref_site = 0x86a038
+func_entry = 0x869ed0
+
+[[resource_parsers]]
+string = "%s_%02x_%03d.mot"
+string_addr = 0xb80776
+xref_site = 0x8acc98
+func_entry = 0x8acc50
+
+[[resource_parsers]]
+string = "%s_%02x_%03d.mot"
+string_addr = 0xb80776
+xref_site = 0x8acd74
+func_entry = 0x8acd40
+
+[[resource_parsers]]
+string = "%s_%02x_%03d.mot"
+string_addr = 0xb80776
+xref_site = 0x8b91cc
+func_entry = 0x8b9080
+
+[[resource_parsers]]
+string = "%s_%02x_%03d.mot"
+string_addr = 0xb80776
+xref_site = 0x8b94d8
+func_entry = 0x8b9470
+
+[[resource_parsers]]
+string = "%s.mot"
+string_addr = 0xb818a1
+xref_site = 0x8bbc9c
+func_entry = 0x8bbc3c
+
+[[resource_parsers]]
+string = "QuestOrder_File%02d.csv"
+string_addr = 0xb61bdc
+xref_site = 0x498520
+func_entry = 0x4984f0
+
+[[resource_parsers]]
+string = "FileQuestInfoListRelease.csv"
+string_addr = 0xb61bf4
+xref_site = 0x49adbc
+func_entry = 0x49ad80
+
+[[resource_parsers]]
+string = "FileQuestInfoListRelease.csv"
+string_addr = 0xb61bf4
+xref_site = 0x49add8
+func_entry = 0x49ad80
+
+[[resource_parsers]]
+string = "FileQuestInfoListRelease.csv"
+string_addr = 0xb61bf4
+xref_site = 0x49add8
+func_entry = 0x49ad80
+
+[[resource_parsers]]
+string = "SummonSkillAtkCombo.csv"
+string_addr = 0xb61cd8
+xref_site = 0x4f4678
+func_entry = 0x4f4530
+
+[[resource_parsers]]
+string = "SummonSkillAtkCombo.csv"
+string_addr = 0xb61cd8
+xref_site = 0x4f4698
+func_entry = 0x4f4530
+
+[[resource_parsers]]
+string = "SummonSkillAtkCombo.csv"
+string_addr = 0xb61cd8
+xref_site = 0x4f4698
+func_entry = 0x4f4530
+
+[[resource_parsers]]
+string = "EnemyItemCategory.csv"
+string_addr = 0xb61d00
+xref_site = 0x4ffd6c
+func_entry = 0x4ffb30
+
+[[resource_parsers]]
+string = "EnemyItemCategory.csv"
+string_addr = 0xb61d00
+xref_site = 0x4ffd88
+func_entry = 0x4ffb30
+
+[[resource_parsers]]
+string = "EnemyItemCategory.csv"
+string_addr = 0xb61d00
+xref_site = 0x4ffd88
+func_entry = 0x4ffb30
+
+[[resource_parsers]]
+string = "PresetColor.csv"
+string_addr = 0xb61d37
+xref_site = 0x506168
+func_entry = 0x505fb0
+
+[[resource_parsers]]
+string = "PresetColor.csv"
+string_addr = 0xb61d37
+xref_site = 0x506184
+func_entry = 0x505fb0
+
+[[resource_parsers]]
+string = "PresetColor.csv"
+string_addr = 0xb61d37
+xref_site = 0x506184
+func_entry = 0x505fb0
+
+[[resource_parsers]]
+string = "NPCTalkEvent.csv"
+string_addr = 0xb61d89
+xref_site = 0x527580
+func_entry = 0x527550
+
+[[resource_parsers]]
+string = "NPCTalkEvent.csv"
+string_addr = 0xb61d89
+xref_site = 0x52759c
+func_entry = 0x527550
+
+[[resource_parsers]]
+string = "NPCTalkEvent.csv"
+string_addr = 0xb61d89
+xref_site = 0x52759c
+func_entry = 0x527550
+
+[[resource_parsers]]
+string = ".csv"
+string_addr = 0xb62f1e
+xref_site = 0x485210
+func_entry = 0x485170
+
+[[resource_parsers]]
+string = "AbilityMatrix.csv"
+string_addr = 0xb63068
+xref_site = 0x52b03c
+func_entry = 0x52af60
+
+[[resource_parsers]]
+string = "AbilityMatrix.csv"
+string_addr = 0xb63068
+xref_site = 0x52b058
+func_entry = 0x52af60
+
+[[resource_parsers]]
+string = "AbilityMatrix.csv"
+string_addr = 0xb63068
+xref_site = 0x52b058
+func_entry = 0x52af60
+
+[[resource_parsers]]
+string = "NpcInfoPl2000.csv"
+string_addr = 0xb63087
+xref_site = 0x533a80
+func_entry = 0x533a78
+
+[[resource_parsers]]
+string = "NpcInfoPl2007.csv"
+string_addr = 0xb63099
+xref_site = 0x533c00
+func_entry = 0x533a78
+
+[[resource_parsers]]
+string = "NpcInfoPl2007.csv"
+string_addr = 0xb63099
+xref_site = 0x533c30
+func_entry = 0x533a78
+
+[[resource_parsers]]
+string = "NpcInfoPl2008.csv"
+string_addr = 0xb64339
+xref_site = 0x533c48
+func_entry = 0x533a78
+
+[[resource_parsers]]
+string = "NpcInfoPl2008.csv"
+string_addr = 0xb64339
+xref_site = 0x533c78
+func_entry = 0x533a78
+
+[[resource_parsers]]
+string = "NpcInfoPl200b.csv"
+string_addr = 0xb6434b
+xref_site = 0x533d20
+func_entry = 0x533a78
+
+[[resource_parsers]]
+string = "NpcInfoPl200b.csv"
+string_addr = 0xb6434b
+xref_site = 0x533d50
+func_entry = 0x533a78
+
+[[resource_parsers]]
+string = "PlEquipBoots.csv"
+string_addr = 0xb65509
+xref_site = 0x532c0c
+func_entry = 0x532b30
+
+[[resource_parsers]]
+string = "PlEquipBoots.csv"
+string_addr = 0xb65509
+xref_site = 0x532d64
+func_entry = 0x532c64
+
+[[resource_parsers]]
+string = "LegionColorPreset.csv"
+string_addr = 0xb6567b
+xref_site = 0x664b0c
+func_entry = 0x664ae0
+
+[[resource_parsers]]
+string = "LegionColorPreset.csv"
+string_addr = 0xb6567b
+xref_site = 0x664b28
+func_entry = 0x664ae0
+
+[[resource_parsers]]
+string = "LegionColorPreset.csv"
+string_addr = 0xb6567b
+xref_site = 0x664b28
+func_entry = 0x664ae0
+
+[[resource_parsers]]
+string = "DamageRegist.csv"
+string_addr = 0xb665d7
+xref_site = 0x4f5950
+func_entry = 0x4f5920
+
+[[resource_parsers]]
+string = "DamageRegist.csv"
+string_addr = 0xb665d7
+xref_site = 0x4f596c
+func_entry = 0x4f5920
+
+[[resource_parsers]]
+string = "DamageRegist.csv"
+string_addr = 0xb665d7
+xref_site = 0x4f596c
+func_entry = 0x4f5920
+
+[[resource_parsers]]
+string = "EmColorData.csv"
+string_addr = 0xb665e8
+xref_site = 0x4f603c
+func_entry = 0x4f6010
+
+[[resource_parsers]]
+string = "EmColorData.csv"
+string_addr = 0xb665e8
+xref_site = 0x4f6058
+func_entry = 0x4f6010
+
+[[resource_parsers]]
+string = "EmColorData.csv"
+string_addr = 0xb665e8
+xref_site = 0x4f6058
+func_entry = 0x4f6010
+
+[[resource_parsers]]
+string = "ItemDropCategory.csv"
+string_addr = 0xb665f8
+xref_site = 0x4ffca0
+func_entry = 0x4ffb30
+
+[[resource_parsers]]
+string = "ItemDropCategory.csv"
+string_addr = 0xb665f8
+xref_site = 0x4ffcbc
+func_entry = 0x4ffb30
+
+[[resource_parsers]]
+string = "ItemDropCategory.csv"
+string_addr = 0xb665f8
+xref_site = 0x4ffcbc
+func_entry = 0x4ffb30
+
+[[resource_parsers]]
+string = "PlEquipShirt.csv"
+string_addr = 0xb66671
+xref_site = 0x532bf4
+func_entry = 0x532b30
+
+[[resource_parsers]]
+string = "PlEquipShirt.csv"
+string_addr = 0xb66671
+xref_site = 0x532cc8
+func_entry = 0x532c64
+
+[[resource_parsers]]
+string = "PlEquipFullFace.csv"
+string_addr = 0xb66682
+xref_site = 0x532c40
+func_entry = 0x532b30
+
+[[resource_parsers]]
+string = "PlEquipFullFace.csv"
+string_addr = 0xb66682
+xref_site = 0x532ecc
+func_entry = 0x532c64
+
+[[resource_parsers]]
+string = "%seminfo.csv"
+string_addr = 0xb6736b
+xref_site = 0x1afd74
+func_entry = 0x1afd10
+
+[[resource_parsers]]
+string = "%seminfo.csv"
+string_addr = 0xb6736b
+xref_site = 0x1afe04
+func_entry = 0x1afd10
+
+[[resource_parsers]]
+string = "PictureBook.csv"
+string_addr = 0xb67abb
+xref_site = 0x4b04e8
+func_entry = 0x4b04c0
+
+[[resource_parsers]]
+string = "PictureBook.csv"
+string_addr = 0xb67abb
+xref_site = 0x4b0504
+func_entry = 0x4b04c0
+
+[[resource_parsers]]
+string = "PictureBook.csv"
+string_addr = 0xb67abb
+xref_site = 0x4b0504
+func_entry = 0x4b04c0
+
+[[resource_parsers]]
+string = "HaveSkill.csv"
+string_addr = 0xb67b28
+xref_site = 0x4f649c
+func_entry = 0x4f6460
+
+[[resource_parsers]]
+string = "HaveSkill.csv"
+string_addr = 0xb67b28
+xref_site = 0x4f64b8
+func_entry = 0x4f6460
+
+[[resource_parsers]]
+string = "HaveSkill.csv"
+string_addr = 0xb67b28
+xref_site = 0x4f64b8
+func_entry = 0x4f6460
+
+[[resource_parsers]]
+string = "PlColorHair.csv"
+string_addr = 0xb67b70
+xref_site = 0x505ff0
+func_entry = 0x505fb0
+
+[[resource_parsers]]
+string = "PlColorHair.csv"
+string_addr = 0xb67b70
+xref_site = 0x50600c
+func_entry = 0x505fb0
+
+[[resource_parsers]]
+string = "PlColorHair.csv"
+string_addr = 0xb67b70
+xref_site = 0x50600c
+func_entry = 0x505fb0
+
+[[resource_parsers]]
+string = "NpcInfoPl2002.csv"
+string_addr = 0xb67c05
+xref_site = 0x533b28
+func_entry = 0x533a78
+
+[[resource_parsers]]
+string = "NpcInfoPl2002.csv"
+string_addr = 0xb67c05
+xref_site = 0x533b58
+func_entry = 0x533a78
+
+[[resource_parsers]]
+string = "NpcInfoPl2006.csv"
+string_addr = 0xb67c17
+xref_site = 0x533bb8
+func_entry = 0x533a78
+
+[[resource_parsers]]
+string = "NpcInfoPl2006.csv"
+string_addr = 0xb67c17
+xref_site = 0x533be8
+func_entry = 0x533a78
+
+[[resource_parsers]]
+string = "NpcInfoPl2011.csv"
+string_addr = 0xb67c29
+xref_site = 0x533df8
+func_entry = 0x533a78
+
+[[resource_parsers]]
+string = "NpcInfoPl2011.csv"
+string_addr = 0xb67c29
+xref_site = 0x533e28
+func_entry = 0x533a78
+
+[[resource_parsers]]
+string = "ScenarioCounter_File%02d.csv"
+string_addr = 0xb68e46
+xref_site = 0x5215d8
+func_entry = 0x521560
+
+[[resource_parsers]]
+string = "ScenarioCounter_File%02d.csv"
+string_addr = 0xb68e46
+xref_site = 0x521630
+func_entry = 0x521560
+
+[[resource_parsers]]
+string = "ScenarioCounter_File%02d.csv"
+string_addr = 0xb68e46
+xref_site = 0x52168c
+func_entry = 0x521560
+
+[[resource_parsers]]
+string = "ScenarioCounter_File%02d.csv"
+string_addr = 0xb68e46
+xref_site = 0x5216e4
+func_entry = 0x521560
+
+[[resource_parsers]]
+string = "ScenarioCounter_File%02d.csv"
+string_addr = 0xb68e46
+xref_site = 0x521740
+func_entry = 0x521560
+
+[[resource_parsers]]
+string = "ScenarioCounter_File%02d.csv"
+string_addr = 0xb68e46
+xref_site = 0x521798
+func_entry = 0x521560
+
+[[resource_parsers]]
+string = "ScenarioCounter_File%02d.csv"
+string_addr = 0xb68e46
+xref_site = 0x5217f4
+func_entry = 0x521560
+
+[[resource_parsers]]
+string = "ScenarioCounter_File%02d.csv"
+string_addr = 0xb68e46
+xref_site = 0x52184c
+func_entry = 0x521560
+
+[[resource_parsers]]
+string = "ScenarioCounter_File%02d.csv"
+string_addr = 0xb68e46
+xref_site = 0x5218a8
+func_entry = 0x521560
+
+[[resource_parsers]]
+string = "ScenarioCounter_File%02d.csv"
+string_addr = 0xb68e46
+xref_site = 0x521900
+func_entry = 0x521560
+
+[[resource_parsers]]
+string = "ScenarioCounter_File%02d.csv"
+string_addr = 0xb68e46
+xref_site = 0x52195c
+func_entry = 0x521560
+
+[[resource_parsers]]
+string = "ScenarioCounter_File%02d.csv"
+string_addr = 0xb68e46
+xref_site = 0x5219b4
+func_entry = 0x521560
+
+[[resource_parsers]]
+string = "ScenarioCounter_File%02d.csv"
+string_addr = 0xb68e46
+xref_site = 0x521a10
+func_entry = 0x521560
+
+[[resource_parsers]]
+string = "QuestMarker_File%02d.csv"
+string_addr = 0xb6a0f8
+xref_site = 0x4857ec
+func_entry = 0x485760
+
+[[resource_parsers]]
+string = "PlColorEquip.csv"
+string_addr = 0xb6a1eb
+xref_site = 0x5060cc
+func_entry = 0x505fb0
+
+[[resource_parsers]]
+string = "PlColorEquip.csv"
+string_addr = 0xb6a1eb
+xref_site = 0x5060e8
+func_entry = 0x505fb0
+
+[[resource_parsers]]
+string = "PlColorEquip.csv"
+string_addr = 0xb6a1eb
+xref_site = 0x5060e8
+func_entry = 0x505fb0
+
+[[resource_parsers]]
+string = "SkillNode.csv"
+string_addr = 0xb6a1fc
+xref_site = 0x506e44
+func_entry = 0x506df0
+
+[[resource_parsers]]
+string = "CharacterCustomizeColorSet.csv"
+string_addr = 0xb6b3dd
+xref_site = 0x4a6c1c
+func_entry = 0x4a6b60
+
+[[resource_parsers]]
+string = "CharacterCustomizeColorSet.csv"
+string_addr = 0xb6b3dd
+xref_site = 0x4a6c38
+func_entry = 0x4a6b60
+
+[[resource_parsers]]
+string = "CharacterCustomizeColorSet.csv"
+string_addr = 0xb6b3dd
+xref_site = 0x4a6c38
+func_entry = 0x4a6b60
+
+[[resource_parsers]]
+string = "TalkData_Common.csv"
+string_addr = 0xb6b507
+xref_site = 0x524d98
+func_entry = 0x524d10
+
+[[resource_parsers]]
+string = "TalkData_Common.csv"
+string_addr = 0xb6b507
+xref_site = 0x524db4
+func_entry = 0x524d10
+
+[[resource_parsers]]
+string = "TalkData_Common.csv"
+string_addr = 0xb6b507
+xref_site = 0x524db4
+func_entry = 0x524d10
+
+[[resource_parsers]]
+string = "PlEquipEar.csv"
+string_addr = 0xb6b531
+xref_site = 0x532c34
+func_entry = 0x532b30
+
+[[resource_parsers]]
+string = "PlEquipEar.csv"
+string_addr = 0xb6b531
+xref_site = 0x532e68
+func_entry = 0x532c64
+
+[[resource_parsers]]
+string = "NpcColor.csv"
+string_addr = 0xb6c51f
+xref_site = 0x50611c
+func_entry = 0x505fb0
+
+[[resource_parsers]]
+string = "NpcColor.csv"
+string_addr = 0xb6c51f
+xref_site = 0x506138
+func_entry = 0x505fb0
+
+[[resource_parsers]]
+string = "NpcColor.csv"
+string_addr = 0xb6c51f
+xref_site = 0x506138
+func_entry = 0x505fb0
+
+[[resource_parsers]]
+string = "NpcInfoPl2009.csv"
+string_addr = 0xb6c57f
+xref_site = 0x533c90
+func_entry = 0x533a78
+
+[[resource_parsers]]
+string = "NpcInfoPl2009.csv"
+string_addr = 0xb6c57f
+xref_site = 0x533cc0
+func_entry = 0x533a78
+
+[[resource_parsers]]
+string = "NpcInfoPl200E.csv"
+string_addr = 0xb6c591
+xref_site = 0x533d68
+func_entry = 0x533a78
+
+[[resource_parsers]]
+string = "NpcInfoPl200E.csv"
+string_addr = 0xb6c591
+xref_site = 0x533d98
+func_entry = 0x533a78
+
+[[resource_parsers]]
+string = "NpcInfoPl2012.csv"
+string_addr = 0xb6c5a3
+xref_site = 0x533e40
+func_entry = 0x533a78
+
+[[resource_parsers]]
+string = "NpcInfoPl2012.csv"
+string_addr = 0xb6c5a3
+xref_site = 0x533e70
+func_entry = 0x533a78
+
+[[resource_parsers]]
+string = "HiddenItem.csv"
+string_addr = 0xb6c5b5
+xref_site = 0x537500
+func_entry = 0x5374d0
+
+[[resource_parsers]]
+string = "HiddenItem.csv"
+string_addr = 0xb6c5b5
+xref_site = 0x53751c
+func_entry = 0x5374d0
+
+[[resource_parsers]]
+string = "HiddenItem.csv"
+string_addr = 0xb6c5b5
+xref_site = 0x53751c
+func_entry = 0x5374d0
+
+[[resource_parsers]]
+string = "SkillAbility.csv"
+string_addr = 0xb6d701
+xref_site = 0x52afe8
+func_entry = 0x52af60
+
+[[resource_parsers]]
+string = "SkillAbility.csv"
+string_addr = 0xb6d701
+xref_site = 0x52b004
+func_entry = 0x52af60
+
+[[resource_parsers]]
+string = "SkillAbility.csv"
+string_addr = 0xb6d701
+xref_site = 0x52b004
+func_entry = 0x52af60
+
+[[resource_parsers]]
+string = "PlEquipPouch.csv"
+string_addr = 0xb6d734
+xref_site = 0x532bfc
+func_entry = 0x532b30
+
+[[resource_parsers]]
+string = "PlEquipPouch.csv"
+string_addr = 0xb6d734
+xref_site = 0x532cfc
+func_entry = 0x532c64
+
+[[resource_parsers]]
+string = "BaseParam.csv"
+string_addr = 0xb6e676
+xref_site = 0x4fa054
+func_entry = 0x4fa020
+
+[[resource_parsers]]
+string = "BaseParam.csv"
+string_addr = 0xb6e676
+xref_site = 0x4fa070
+func_entry = 0x4fa020
+
+[[resource_parsers]]
+string = "BaseParam.csv"
+string_addr = 0xb6e676
+xref_site = 0x4fa070
+func_entry = 0x4fa020
+
+[[resource_parsers]]
+string = "AbilityData.csv"
+string_addr = 0xb6e706
+xref_site = 0x52b0d0
+func_entry = 0x52af60
+
+[[resource_parsers]]
+string = "AbilityData.csv"
+string_addr = 0xb6e706
+xref_site = 0x52b0ec
+func_entry = 0x52af60
+
+[[resource_parsers]]
+string = "AbilityData.csv"
+string_addr = 0xb6e706
+xref_site = 0x52b0ec
+func_entry = 0x52af60
+
+[[resource_parsers]]
+string = "PlEquipTie.csv"
+string_addr = 0xb6e735
+xref_site = 0x532c14
+func_entry = 0x532b30
+
+[[resource_parsers]]
+string = "PlEquipTie.csv"
+string_addr = 0xb6e735
+xref_site = 0x532d98
+func_entry = 0x532c64
+
+[[resource_parsers]]
+string = "AreaShortCut.csv"
+string_addr = 0xb6e9a0
+xref_site = 0x5ae44c
+func_entry = 0x5ae400
+
+[[resource_parsers]]
+string = "AreaShortCut.csv"
+string_addr = 0xb6e9a0
+xref_site = 0x5ae468
+func_entry = 0x5ae400
+
+[[resource_parsers]]
+string = "AreaShortCut.csv"
+string_addr = 0xb6e9a0
+xref_site = 0x5ae468
+func_entry = 0x5ae400
+
+[[resource_parsers]]
+string = "ResultData.csv"
+string_addr = 0xb6fa1d
+xref_site = 0x471098
+func_entry = 0x471000
+
+[[resource_parsers]]
+string = "PlEquipHead.csv"
+string_addr = 0xb6fb79
+xref_site = 0x532c24
+func_entry = 0x532b30
+
+[[resource_parsers]]
+string = "PlEquipHead.csv"
+string_addr = 0xb6fb79
+xref_site = 0x532e00
+func_entry = 0x532c64
+
+[[resource_parsers]]
+string = "ExData.csv"
+string_addr = 0xb70b13
+xref_site = 0x47106c
+func_entry = 0x471000
+
+[[resource_parsers]]
+string = "BaseSkillAtkCombo.csv"
+string_addr = 0xb70c6a
+xref_site = 0x4f4634
+func_entry = 0x4f4530
+
+[[resource_parsers]]
+string = "BaseSkillAtkCombo.csv"
+string_addr = 0xb70c6a
+xref_site = 0x4f4650
+func_entry = 0x4f4530
+
+[[resource_parsers]]
+string = "BaseSkillAtkCombo.csv"
+string_addr = 0xb70c6a
+xref_site = 0x4f4650
+func_entry = 0x4f4530
+
+[[resource_parsers]]
+string = "TransformSkillAtkCombo.csv"
+string_addr = 0xb70c80
+xref_site = 0x4f46c0
+func_entry = 0x4f4530
+
+[[resource_parsers]]
+string = "TransformSkillAtkCombo.csv"
+string_addr = 0xb70c80
+xref_site = 0x4f46dc
+func_entry = 0x4f4530
+
+[[resource_parsers]]
+string = "TransformSkillAtkCombo.csv"
+string_addr = 0xb70c80
+xref_site = 0x4f46dc
+func_entry = 0x4f4530
+
+[[resource_parsers]]
+string = "NpcInfoPl2014.csv"
+string_addr = 0xb70cd0
+xref_site = 0x533ed0
+func_entry = 0x533a78
+
+[[resource_parsers]]
+string = "NpcInfoPl2014.csv"
+string_addr = 0xb70cd0
+xref_site = 0x533f00
+func_entry = 0x533a78
+
+[[resource_parsers]]
+string = "ItemInfo2.csv"
+string_addr = 0xb71f34
+xref_site = 0x4ffbb0
+func_entry = 0x4ffb30
+
+[[resource_parsers]]
+string = "ItemInfo2.csv"
+string_addr = 0xb71f34
+xref_site = 0x4ffbcc
+func_entry = 0x4ffb30
+
+[[resource_parsers]]
+string = "ItemInfo2.csv"
+string_addr = 0xb71f34
+xref_site = 0x4ffbcc
+func_entry = 0x4ffb30
+
+[[resource_parsers]]
+string = "ScenarioCounter.csv"
+string_addr = 0xb71f8a
+xref_site = 0x52158c
+func_entry = 0x521560
+
+[[resource_parsers]]
+string = "ScenarioCounter.csv"
+string_addr = 0xb71f8a
+xref_site = 0x5215a8
+func_entry = 0x521560
+
+[[resource_parsers]]
+string = "ScenarioCounter.csv"
+string_addr = 0xb71f8a
+xref_site = 0x5215a8
+func_entry = 0x521560
+
+[[resource_parsers]]
+string = "ItemDropTbl.csv"
+string_addr = 0xb72f63
+xref_site = 0x4ffc34
+func_entry = 0x4ffb30
+
+[[resource_parsers]]
+string = "ItemDropTbl.csv"
+string_addr = 0xb72f63
+xref_site = 0x4ffc50
+func_entry = 0x4ffb30
+
+[[resource_parsers]]
+string = "ItemDropTbl.csv"
+string_addr = 0xb72f63
+xref_site = 0x4ffc50
+func_entry = 0x4ffb30
+
+[[resource_parsers]]
+string = "PlEquipPants.csv"
+string_addr = 0xb72fcd
+xref_site = 0x532c04
+func_entry = 0x532b30
+
+[[resource_parsers]]
+string = "PlEquipPants.csv"
+string_addr = 0xb72fcd
+xref_site = 0x532d30
+func_entry = 0x532c64
+
+[[resource_parsers]]
+string = "PlEquipHolo.csv"
+string_addr = 0xb7425f
+xref_site = 0x532be8
+func_entry = 0x532b30
+
+[[resource_parsers]]
+string = "PlEquipHolo.csv"
+string_addr = 0xb7425f
+xref_site = 0x532e9c
+func_entry = 0x532c64
+
+[[resource_parsers]]
+string = "NpcInfoPl2015.csv"
+string_addr = 0xb7426f
+xref_site = 0x533f18
+func_entry = 0x533a78
+
+[[resource_parsers]]
+string = "NpcInfoPl2015.csv"
+string_addr = 0xb7426f
+xref_site = 0x533f48
+func_entry = 0x533a78
+
+[[resource_parsers]]
+string = "SkillTree%d.csv"
+string_addr = 0xb75468
+xref_site = 0x506ed0
+func_entry = 0x506df0
+
+[[resource_parsers]]
+string = "SkillTree%d.csv"
+string_addr = 0xb75468
+xref_site = 0x506f64
+func_entry = 0x506df0
+
+[[resource_parsers]]
+string = "SkillTree%d.csv"
+string_addr = 0xb75468
+xref_site = 0x506ff8
+func_entry = 0x506df0
+
+[[resource_parsers]]
+string = "SkillTree%d.csv"
+string_addr = 0xb75468
+xref_site = 0x50708c
+func_entry = 0x506df0
+
+[[resource_parsers]]
+string = "SkillTree%d.csv"
+string_addr = 0xb75468
+xref_site = 0x507120
+func_entry = 0x506df0
+
+[[resource_parsers]]
+string = "NpcInfoPl200a.csv"
+string_addr = 0xb754d0
+xref_site = 0x533cd8
+func_entry = 0x533a78
+
+[[resource_parsers]]
+string = "NpcInfoPl200a.csv"
+string_addr = 0xb754d0
+xref_site = 0x533d08
+func_entry = 0x533a78
+
+[[resource_parsers]]
+string = "NpcInfoPl2120.csv"
+string_addr = 0xb754e2
+xref_site = 0x533f60
+func_entry = 0x533a78
+
+[[resource_parsers]]
+string = "NpcInfoPl2120.csv"
+string_addr = 0xb754e2
+xref_site = 0x533f90
+func_entry = 0x533a78
+
+[[resource_parsers]]
+string = "PlEquipEye.csv"
+string_addr = 0xb7676f
+xref_site = 0x532c1c
+func_entry = 0x532b30
+
+[[resource_parsers]]
+string = "PlEquipEye.csv"
+string_addr = 0xb7676f
+xref_site = 0x532dcc
+func_entry = 0x532c64
+
+[[resource_parsers]]
+string = "StartSkill.csv"
+string_addr = 0xb77786
+xref_site = 0x4f6b28
+func_entry = 0x4f6af0
+
+[[resource_parsers]]
+string = "StartSkill.csv"
+string_addr = 0xb77786
+xref_site = 0x4f6b44
+func_entry = 0x4f6af0
+
+[[resource_parsers]]
+string = "StartSkill.csv"
+string_addr = 0xb77786
+xref_site = 0x4f6b44
+func_entry = 0x4f6af0
+
+[[resource_parsers]]
+string = "ScenarioFlag.csv"
+string_addr = 0xb777e7
+xref_site = 0x523298
+func_entry = 0x523270
+
+[[resource_parsers]]
+string = "ScenarioFlag.csv"
+string_addr = 0xb777e7
+xref_site = 0x5232b4
+func_entry = 0x523270
+
+[[resource_parsers]]
+string = "ScenarioFlag.csv"
+string_addr = 0xb777e7
+xref_site = 0x5232b4
+func_entry = 0x523270
+
+[[resource_parsers]]
+string = "PlEquipJacket.csv"
+string_addr = 0xb77811
+xref_site = 0x532b64
+func_entry = 0x532b30
+
+[[resource_parsers]]
+string = "PlEquipMouth.csv"
+string_addr = 0xb77823
+xref_site = 0x532c2c
+func_entry = 0x532b30
+
+[[resource_parsers]]
+string = "PlEquipMouth.csv"
+string_addr = 0xb77823
+xref_site = 0x532e34
+func_entry = 0x532c64
+
+[[resource_parsers]]
+string = "NpcInfoPl200F.csv"
+string_addr = 0xb77834
+xref_site = 0x533db0
+func_entry = 0x533a78
+
+[[resource_parsers]]
+string = "NpcInfoPl200F.csv"
+string_addr = 0xb77834
+xref_site = 0x533de0
+func_entry = 0x533a78
+
+[[resource_parsers]]
+string = "HiddenBeastItem.csv"
+string_addr = 0xb77846
+xref_site = 0x53a050
+func_entry = 0x53a020
+
+[[resource_parsers]]
+string = "HiddenBeastItem.csv"
+string_addr = 0xb77846
+xref_site = 0x53a06c
+func_entry = 0x53a020
+
+[[resource_parsers]]
+string = "HiddenBeastItem.csv"
+string_addr = 0xb77846
+xref_site = 0x53a06c
+func_entry = 0x53a020
+
+[[resource_parsers]]
+string = "NotebookInfoCheck.csv"
+string_addr = 0xb77a4e
+xref_site = 0x6afa94
+func_entry = 0x6afa30
+
+[[resource_parsers]]
+string = "NotebookInfoCheck.csv"
+string_addr = 0xb77a4e
+xref_site = 0x6afab0
+func_entry = 0x6afa30
+
+[[resource_parsers]]
+string = "NotebookInfoCheck.csv"
+string_addr = 0xb77a4e
+xref_site = 0x6afab0
+func_entry = 0x6afa30
+
+[[resource_parsers]]
+string = "SubtitleInfo_%04x.csv"
+string_addr = 0xb78814
+xref_site = 0x471238
+func_entry = 0x471000
+
+[[resource_parsers]]
+string = "SubtitleInfo_Common.csv"
+string_addr = 0xb78983
+xref_site = 0x5281f0
+func_entry = 0x528170
+
+[[resource_parsers]]
+string = "SubtitleInfo_Common.csv"
+string_addr = 0xb78983
+xref_site = 0x52820c
+func_entry = 0x528170
+
+[[resource_parsers]]
+string = "SubtitleInfo_Common.csv"
+string_addr = 0xb78983
+xref_site = 0x52820c
+func_entry = 0x528170
+
+[[resource_parsers]]
+string = "%swepinfo.csv"
+string_addr = 0xb79596
+xref_site = 0x1b72a0
+func_entry = 0x1b7210
+
+[[resource_parsers]]
+string = "PlEquipChain.csv"
+string_addr = 0xb79ccc
+xref_site = 0x532c48
+func_entry = 0x532b30
+
+[[resource_parsers]]
+string = "PlEquipChain.csv"
+string_addr = 0xb79ccc
+xref_site = 0x532f00
+func_entry = 0x532c64
+
+[[resource_parsers]]
+string = "SpeechBalloon_%04x.csv"
+string_addr = 0xb7abaf
+xref_site = 0x4711e0
+func_entry = 0x471000
+
+[[resource_parsers]]
+string = "DrinkInfo.csv"
+string_addr = 0xb7adfc
+xref_site = 0x530cb4
+func_entry = 0x530c80
+
+[[resource_parsers]]
+string = "DrinkInfo.csv"
+string_addr = 0xb7adfc
+xref_site = 0x531150
+func_entry = 0x530c80
+
+[[resource_parsers]]
+string = "ResultScore.csv"
+string_addr = 0xb7ae0a
+xref_site = 0x5343d0
+func_entry = 0x5343a0
+
+[[resource_parsers]]
+string = "ResultScore.csv"
+string_addr = 0xb7ae0a
+xref_site = 0x5343ec
+func_entry = 0x5343a0
+
+[[resource_parsers]]
+string = "ResultScore.csv"
+string_addr = 0xb7ae0a
+xref_site = 0x5343ec
+func_entry = 0x5343a0
+
+[[resource_parsers]]
+string = "NotebookInfo.csv"
+string_addr = 0xb7afd2
+xref_site = 0x6afa58
+func_entry = 0x6afa30
+
+[[resource_parsers]]
+string = "NotebookInfo.csv"
+string_addr = 0xb7afd2
+xref_site = 0x6afa74
+func_entry = 0x6afa30
+
+[[resource_parsers]]
+string = "NotebookInfo.csv"
+string_addr = 0xb7afd2
+xref_site = 0x6afa74
+func_entry = 0x6afa30
+
+[[resource_parsers]]
+string = "NPCNameMap.csv"
+string_addr = 0xb7c068
+xref_site = 0x524dd8
+func_entry = 0x524d10
+
+[[resource_parsers]]
+string = "NPCNameMap.csv"
+string_addr = 0xb7c068
+xref_site = 0x524df4
+func_entry = 0x524d10
+
+[[resource_parsers]]
+string = "NPCNameMap.csv"
+string_addr = 0xb7c068
+xref_site = 0x524df4
+func_entry = 0x524d10
+
+[[resource_parsers]]
+string = "NpcInfoPl2001.csv"
+string_addr = 0xb7c086
+xref_site = 0x533ae0
+func_entry = 0x533a78
+
+[[resource_parsers]]
+string = "NpcInfoPl2001.csv"
+string_addr = 0xb7c086
+xref_site = 0x533b10
+func_entry = 0x533a78
+
+[[resource_parsers]]
+string = "NpcInfoPl2003.csv"
+string_addr = 0xb7c098
+xref_site = 0x533b70
+func_entry = 0x533a78
+
+[[resource_parsers]]
+string = "NpcInfoPl2003.csv"
+string_addr = 0xb7c098
+xref_site = 0x533ba0
+func_entry = 0x533a78
+
+[[resource_parsers]]
+string = "OrderReward1.csv"
+string_addr = 0xb7cfd3
+xref_site = 0x460794
+func_entry = 0x460750
+
+[[resource_parsers]]
+string = "OrderReward1.csv"
+string_addr = 0xb7cfd3
+xref_site = 0x4607b0
+func_entry = 0x460750
+
+[[resource_parsers]]
+string = "OrderReward1.csv"
+string_addr = 0xb7cfd3
+xref_site = 0x4607b0
+func_entry = 0x460750
+
+[[resource_parsers]]
+string = "PassivSkillAtkCombo.csv"
+string_addr = 0xb7d0d4
+xref_site = 0x4f52d4
+func_entry = 0x4f5280
+
+[[resource_parsers]]
+string = "PassivSkillAtkCombo.csv"
+string_addr = 0xb7d0d4
+xref_site = 0x4f52f0
+func_entry = 0x4f5280
+
+[[resource_parsers]]
+string = "PassivSkillAtkCombo.csv"
+string_addr = 0xb7d0d4
+xref_site = 0x4f52f0
+func_entry = 0x4f5280
+
+[[resource_parsers]]
+string = "PlColorEye.csv"
+string_addr = 0xb7d0ec
+xref_site = 0x506088
+func_entry = 0x505fb0
+
+[[resource_parsers]]
+string = "PlColorEye.csv"
+string_addr = 0xb7d0ec
+xref_site = 0x5060a4
+func_entry = 0x505fb0
+
+[[resource_parsers]]
+string = "PlColorEye.csv"
+string_addr = 0xb7d0ec
+xref_site = 0x5060a4
+func_entry = 0x505fb0
+
+[[resource_parsers]]
+string = "WeaponCustom.csv"
+string_addr = 0xb7d165
+xref_site = 0x52fd60
+func_entry = 0x52fd00
+
+[[resource_parsers]]
+string = "WeaponCustom.csv"
+string_addr = 0xb7d165
+xref_site = 0x52fd7c
+func_entry = 0x52fd00
+
+[[resource_parsers]]
+string = "WeaponCustom.csv"
+string_addr = 0xb7d165
+xref_site = 0x52fd7c
+func_entry = 0x52fd00
+
+[[resource_parsers]]
+string = "ss%03d.csv"
+string_addr = 0xb7d1da
+xref_site = 0x5691d4
+func_entry = 0x569130
+
+[[resource_parsers]]
+string = "ItemCollect.csv"
+string_addr = 0xb7e012
+xref_site = 0x4ffdcc
+func_entry = 0x4ffb30
+
+[[resource_parsers]]
+string = "ItemCollect.csv"
+string_addr = 0xb7e012
+xref_site = 0x4ffde8
+func_entry = 0x4ffb30
+
+[[resource_parsers]]
+string = "ItemCollect.csv"
+string_addr = 0xb7e012
+xref_site = 0x4ffde8
+func_entry = 0x4ffb30
+
+[[resource_parsers]]
+string = "ScenarioLinkFlagList.csv"
+string_addr = 0xb7f3d2
+xref_site = 0x522164
+func_entry = 0x522100
+
+[[resource_parsers]]
+string = "ScenarioLinkFlagList.csv"
+string_addr = 0xb7f3d2
+xref_site = 0x522180
+func_entry = 0x522100
+
+[[resource_parsers]]
+string = "ScenarioLinkFlagList.csv"
+string_addr = 0xb7f3d2
+xref_site = 0x522180
+func_entry = 0x522100
+
+[[resource_parsers]]
+string = "TreasureChests.csv"
+string_addr = 0xb7f408
+xref_site = 0x534c30
+func_entry = 0x534c00
+
+[[resource_parsers]]
+string = "TreasureChests.csv"
+string_addr = 0xb7f408
+xref_site = 0x534c4c
+func_entry = 0x534c00
+
+[[resource_parsers]]
+string = "TreasureChests.csv"
+string_addr = 0xb7f408
+xref_site = 0x534c4c
+func_entry = 0x534c00
+
+[[resource_parsers]]
+string = "PlannerAutoSaveList.csv"
+string_addr = 0xb7f41b
+xref_site = 0x53f750
+func_entry = 0x53f720
+
+[[resource_parsers]]
+string = "PlannerAutoSaveList.csv"
+string_addr = 0xb7f41b
+xref_site = 0x53f76c
+func_entry = 0x53f720
+
+[[resource_parsers]]
+string = "PlannerAutoSaveList.csv"
+string_addr = 0xb7f41b
+xref_site = 0x53f76c
+func_entry = 0x53f720
+
+[[resource_parsers]]
+string = "LegionColorSet.csv"
+string_addr = 0xb7f5fb
+xref_site = 0x664c24
+func_entry = 0x664ae0
+
+[[resource_parsers]]
+string = "LegionColorSet.csv"
+string_addr = 0xb7f5fb
+xref_site = 0x664c40
+func_entry = 0x664ae0
+
+[[resource_parsers]]
+string = "LegionColorSet.csv"
+string_addr = 0xb7f5fb
+xref_site = 0x664c40
+func_entry = 0x664ae0
+
+[[resource_parsers]]
+string = "WorkingEvalue.csv"
+string_addr = 0xb81573
+xref_site = 0x4b8a00
+func_entry = 0x4b89c0
+
+[[resource_parsers]]
+string = "WorkingEvalue.csv"
+string_addr = 0xb81573
+xref_site = 0x4b8a1c
+func_entry = 0x4b89c0
+
+[[resource_parsers]]
+string = "WorkingEvalue.csv"
+string_addr = 0xb81573
+xref_site = 0x4b8a1c
+func_entry = 0x4b89c0
+
+[[resource_parsers]]
+string = "EventReplayList.csv"
+string_addr = 0xb815fd
+xref_site = 0x5425c8
+func_entry = 0x542590
+
+[[resource_parsers]]
+string = "EventReplayList.csv"
+string_addr = 0xb815fd
+xref_site = 0x5425e4
+func_entry = 0x542590
+
+[[resource_parsers]]
+string = "EventReplayList.csv"
+string_addr = 0xb815fd
+xref_site = 0x5425e4
+func_entry = 0x542590
+
+[[resource_parsers]]
+string = "AreaName.csv"
+string_addr = 0xb81651
+xref_site = 0x56b940
+func_entry = 0x56b910
+
+[[resource_parsers]]
+string = "AreaName.csv"
+string_addr = 0xb81651
+xref_site = 0x56b95c
+func_entry = 0x56b910
+
+[[resource_parsers]]
+string = "AreaName.csv"
+string_addr = 0xb81651
+xref_site = 0x56b95c
+func_entry = 0x56b910
+
+[[resource_parsers]]
+string = "AreaName.csv"
+string_addr = 0xb81651
+xref_site = 0x5d3500
+func_entry = 0x5d34d0
+
+[[resource_parsers]]
+string = "AreaName.csv"
+string_addr = 0xb81651
+xref_site = 0x5d351c
+func_entry = 0x5d34d0
+
+[[resource_parsers]]
+string = "AreaName.csv"
+string_addr = 0xb81651
+xref_site = 0x5d351c
+func_entry = 0x5d34d0
+
+[[resource_parsers]]
+string = "color_customize_doc.csv"
+string_addr = 0xb817bf
+xref_site = 0x6e4790
+func_entry = 0x6e4760
+
+[[resource_parsers]]
+string = "color_customize_doc.csv"
+string_addr = 0xb817bf
+xref_site = 0x6e47ac
+func_entry = 0x6e4760
+
+[[resource_parsers]]
+string = "color_customize_doc.csv"
+string_addr = 0xb817bf
+xref_site = 0x6e47ac
+func_entry = 0x6e4760
+
+[[resource_parsers]]
+string = "%swepinfo%02x.csv"
+string_addr = 0xb81ed9
+xref_site = 0x1b7280
+func_entry = 0x1b7210
+
+[[resource_parsers]]
+string = "TalkCondition_%04x.csv"
+string_addr = 0xb82407
+xref_site = 0x47114c
+func_entry = 0x471000
+
+[[resource_parsers]]
+string = "TalkData_%04x.csv"
+string_addr = 0xb8241e
+xref_site = 0x471188
+func_entry = 0x471000
+
+[[resource_parsers]]
+string = "PlColorSkin.csv"
+string_addr = 0xb82546
+xref_site = 0x506034
+func_entry = 0x505fb0
+
+[[resource_parsers]]
+string = "PlColorSkin.csv"
+string_addr = 0xb82546
+xref_site = 0x506058
+func_entry = 0x505fb0
+
+[[resource_parsers]]
+string = "PlColorSkin.csv"
+string_addr = 0xb82546
+xref_site = 0x506058
+func_entry = 0x505fb0
+
+[[resource_parsers]]
+string = "NpcInfoPl2013.csv"
+string_addr = 0xb82594
+xref_site = 0x533e88
+func_entry = 0x533a78
+
+[[resource_parsers]]
+string = "NpcInfoPl2013.csv"
+string_addr = 0xb82594
+xref_site = 0x533eb8
+func_entry = 0x533a78
+
+[[resource_parsers]]
+string = "CameraInfo.csv"
+string_addr = 0xb833e1
+xref_site = 0x51493c
+func_entry = 0x514910
+
+[[resource_parsers]]
+string = "CameraInfo.csv"
+string_addr = 0xb833e1
+xref_site = 0x514958
+func_entry = 0x514910
+
+[[resource_parsers]]
+string = "CameraInfo.csv"
+string_addr = 0xb833e1
+xref_site = 0x514958
+func_entry = 0x514910
+
+[[resource_parsers]]
+string = "NewAbilityData.csv"
+string_addr = 0xb8340d
+xref_site = 0x52ed7c
+func_entry = 0x52ed10
+
+[[resource_parsers]]
+string = "NewAbilityData.csv"
+string_addr = 0xb8340d
+xref_site = 0x52ed98
+func_entry = 0x52ed10
+
+[[resource_parsers]]
+string = "NewAbilityData.csv"
+string_addr = 0xb8340d
+xref_site = 0x52ed98
+func_entry = 0x52ed10
+
+[[resource_parsers]]
+string = "QuestResultData.csv"
+string_addr = 0xb843b8
+xref_site = 0x4854e8
+func_entry = 0x4854b0
+
+[[resource_parsers]]
+string = "QuestResultData.csv"
+string_addr = 0xb843b8
+xref_site = 0x485504
+func_entry = 0x4854b0
+
+[[resource_parsers]]
+string = "QuestResultData.csv"
+string_addr = 0xb843b8
+xref_site = 0x485504
+func_entry = 0x4854b0
+
+[[resource_parsers]]
+string = "SpeechBalloon_Common.csv"
+string_addr = 0xb8444d
+xref_site = 0x52ab2c
+func_entry = 0x52aaa0
+
+[[resource_parsers]]
+string = "SpeechBalloon_Common.csv"
+string_addr = 0xb8444d
+xref_site = 0x52ab50
+func_entry = 0x52aaa0
+
+[[resource_parsers]]
+string = "SpeechBalloon_Common.csv"
+string_addr = 0xb8444d
+xref_site = 0x52ab50
+func_entry = 0x52aaa0
+
+[[resource_parsers]]
+string = "sound/Init.bnk"
+string_addr = 0xb680b0
+xref_site = 0x8dffe8
+func_entry = 0x8dffd0
+
+[[resource_parsers]]
+string = "sound/bgm/BGM.bnk"
+string_addr = 0xb7789e
+xref_site = 0x5723a8
+func_entry = 0x572390
+
+[[resource_parsers]]
+string = ".bnk"
+string_addr = 0xb8377e
+xref_site = 0x79db70
+func_entry = 0x79d9c0
+
+[[resource_parsers]]
+string = "%u.bnk"
+string_addr = 0xb83979
+xref_site = 0x9cecd0
+func_entry = 0x9ceccc
+
+[[resource_parsers]]
+string = "vo_%s.bnk"
+string_addr = 0xb84796
+xref_site = 0x8ef314
+func_entry = 0x8ef1e0
+
+[[resource_parsers]]
+string = "vo_%s.bnk"
+string_addr = 0xb84796
+xref_site = 0x8ef54c
+func_entry = 0x8ef4d0
+
+[[resource_parsers]]
+string = "vo_%s.bnk"
+string_addr = 0xb84796
+xref_site = 0x8ef6b4
+func_entry = 0x8ef680
+
+# -----------------------------------------------------------------------------
+# Discovered Engine Debug & Internal System Call Sites
+# -----------------------------------------------------------------------------
+
+[[engine_debug_sites]]
+string = "ERROR : Graphic::Startup() FAILED.
+No Graphic Memory"
+string_addr = 0xb8131a
+xref_site = 0x40df9c
+func_entry = 0x40df9c
+
+[[engine_debug_sites]]
+string = "ERROR : Graphic::Startup() FAILED.
+No Graphic Memory"
+string_addr = 0xb8131a
+xref_site = 0x4136b4
+func_entry = 0x4136b4
+
+[[engine_debug_sites]]
+string = "--- StartupShaderDataSet2 ---"
+string_addr = 0xb750ec
+xref_site = 0x410c10
+func_entry = 0x410b70
+
+[[engine_debug_sites]]
+string = "EffectShaderOcclusion"
+string_addr = 0xb6a6ca
+xref_site = 0x9276bc
+func_entry = 0x9276a0
+
+[[engine_debug_sites]]
+string = "EffectShaderOcclusion"
+string_addr = 0xb6a6ca
+xref_site = 0x927704
+func_entry = 0x9276a0
+
+[[engine_debug_sites]]
+string = "EffectShaderShellPolygonOutlineSkinning"
+string_addr = 0xb74fb9
+xref_site = 0x381cf4
+func_entry = 0x381c5c
+
+[[engine_debug_sites]]
+string = "EffectShaderShellPolygonOutlineSkinning"
+string_addr = 0xb74fb9
+xref_site = 0x381f50
+func_entry = 0x381ed8
+
+[[engine_debug_sites]]
+string = "EffectShaderShellPolygonOutlineSkinning"
+string_addr = 0xb74fb9
+xref_site = 0x3823e4
+func_entry = 0x381ed8
+
+[[engine_debug_sites]]
+string = "EspWorkEffectShaderModel::updateModule: pAnimationUnit == NULL [ef%04x]"
+string_addr = 0xb78566
+xref_site = 0x3d8474
+func_entry = 0x3d83b0
+
+[[engine_debug_sites]]
+string = "BehaviorSwordBreakPole"
+string_addr = 0xb63de3
+xref_site = 0x0ff670
+func_entry = 0x0ff440
+
+[[engine_debug_sites]]
+string = "EVENT_BOSS_CODE_%04x"
+string_addr = 0xb668bb
+xref_site = 0x588190
+func_entry = 0x588170
+
+[[engine_debug_sites]]
+string = "MENU_DATA_AREA_NAME_%04x"
+string_addr = 0xb6327d
+xref_site = 0x5ebbdc
+func_entry = 0x5eb9b0
+
+[[engine_debug_sites]]
+string = "MENU_DATA_AREA_NAME_%04x"
+string_addr = 0xb6327d
+xref_site = 0x660240
+func_entry = 0x6601f8
+
+[[engine_debug_sites]]
+string = "MENU_DATA_AREA_NAME_%04x"
+string_addr = 0xb6327d
+xref_site = 0x66450c
+func_entry = 0x66448c
+
+[[engine_debug_sites]]
+string = "CORE_MAP_AREA_%04x"
+string_addr = 0xb61e7c
+xref_site = 0x578c24
+func_entry = 0x578c10
+
+[[engine_debug_sites]]
+string = "CORE_MAP_AREA_%04x"
+string_addr = 0xb61e7c
+xref_site = 0x57a234
+func_entry = 0x57a1b0
+
+[[engine_debug_sites]]
+string = "CORE_MAP_AREA_%04x"
+string_addr = 0xb61e7c
+xref_site = 0x5d35cc
+func_entry = 0x5d34d0
+
+[[engine_debug_sites]]
+string = "CORE_MAP_AREA_%02x"
+string_addr = 0xb6a2d3
+xref_site = 0x578bd4
+func_entry = 0x578bc0
+
+[[engine_debug_sites]]
+string = "CORE_MAP_AREA_%02x"
+string_addr = 0xb6a2d3
+xref_site = 0x57a1e0
+func_entry = 0x57a1b0

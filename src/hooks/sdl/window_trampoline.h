@@ -218,6 +218,11 @@ static inline int extra_window_poll_events(
                     g_extra_config_dirty = 1;
                 } else if (e.key.key == SDLK_F10 && !e.key.repeat) {
                     extra_mouse_mode_toggle(g_sdl_window);
+                } else if (e.key.key == SDLK_F12 && !e.key.repeat) {
+                    int cur_no_hud = (g_extra_no_hud >= 0) ? g_extra_no_hud
+                                   : ((getenv("AC_HUD") && atoi(getenv("AC_HUD")) == 0) ? 1 : 0);
+                    g_extra_no_hud = cur_no_hud ? 0 : 1;
+                    g_extra_config_dirty = 1;
                 } else if ((e.key.key == SDLK_F4 && (e.key.mod & SDL_KMOD_ALT)) ||
                            (e.key.key == SDLK_Q && (e.key.mod & SDL_KMOD_CTRL))) {
                     extra_trigger_exit();
@@ -227,7 +232,7 @@ static inline int extra_window_poll_events(
                 break;
             case SDL_EVENT_KEY_UP:
                 if (key_cb && !menu && e.key.key != SDLK_F11 && e.key.key != SDLK_F10 &&
-                    e.key.key != SDLK_INSERT && e.key.key != SDLK_F8) {
+                    e.key.key != SDLK_F12 && e.key.key != SDLK_INSERT && e.key.key != SDLK_F8) {
                     key_cb(extra_sdl_to_vk(e.key.key), 0);
                 }
                 break;

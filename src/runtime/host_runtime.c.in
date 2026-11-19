@@ -205,6 +205,13 @@ static volatile LONG mapping_generation; // [extra]
 #include "kernel/svc_dispatch.h" // [extra]
 void rt_brk(Cpu*c,uint32_t imm,uint64_t pc) {boundary("brk",c,pc);}
 void rt_udf(Cpu*c,uint64_t pc) {boundary("udf",c,pc);}
+static void rt_spin_gate(Cpu *c, uint64_t head) { // [extra]
+ (void)c;
+ if (!parallel_mode) { extra_cpu_pause(); return; }
+#if !defined(_WIN32)
+ extra_spin_gate(head);
+#endif
+} // [extra]
 uint64_t rt_ticks(void) {
  static LARGE_INTEGER frequency;
  LARGE_INTEGER counter;

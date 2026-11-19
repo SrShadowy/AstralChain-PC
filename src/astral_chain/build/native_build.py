@@ -28,7 +28,7 @@ def target_flags(optimize=False):
         cpu = os.environ.get('AC_CPU_TARGET', PORTABLE_CPU_TARGET)
         return ['-target', target, opt, f'-mcpu={cpu}', '-mcx16']
     if optimize:
-        return ['-target', 'native', '-O2', '-mcpu=x86_64_v3', '-mcx16']
+        return ['-target', 'native', '-O2', '-mcpu=native', '-mcx16']
     return ['-target', 'native', opt, '-mcx16']
 
 
@@ -40,6 +40,7 @@ __attribute__((noreturn)) void native_boundary(const char*,Cpu*,uint64_t);
 extern unsigned thread_reschedule;
 int native_checkpoint(Cpu*,uint64_t);
 void native_trace_call(uint64_t,uint64_t);
+void native_spin_gate(Cpu*,uint64_t);
 void native_clear_pair(Cpu*);
 void native_load_pair(Cpu*,uint64_t,unsigned,unsigned,unsigned);
 uint32_t native_store_pair(Cpu*,uint64_t,unsigned,uint64_t,uint64_t);
@@ -47,6 +48,7 @@ uint32_t native_store_pair(Cpu*,uint64_t,unsigned,uint64_t,uint64_t);
 #define boundary native_boundary
 #define thread_checkpoint native_checkpoint
 #define trace_call native_trace_call
+#define rt_spin_gate native_spin_gate
 #define rt_clear_pair_monitor native_clear_pair
 #define rt_load_pair native_load_pair
 #define rt_store_pair native_store_pair
@@ -56,6 +58,7 @@ BRIDGE='''__thread uint64_t native_executed_steps;
 __attribute__((noreturn)) void native_boundary(const char*s,Cpu*c,uint64_t pc) {boundary(s,c,pc);}
 int native_checkpoint(Cpu*c,uint64_t step) {return thread_checkpoint(c,step);}
 void native_trace_call(uint64_t from,uint64_t to) {trace_call(from,to);}
+void native_spin_gate(Cpu*c,uint64_t head) {rt_spin_gate(c,head);}
 void native_clear_pair(Cpu*c) {rt_clear_pair_monitor(c);}
 void native_load_pair(Cpu*c,uint64_t address,unsigned width,unsigned first,unsigned second) {rt_load_pair(c,address,width,first,second);}
 uint32_t native_store_pair(Cpu*c,uint64_t address,unsigned width,uint64_t low,uint64_t high) {return rt_store_pair(c,address,width,low,high);}

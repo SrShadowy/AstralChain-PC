@@ -329,4 +329,36 @@ else
     fi
 fi
 
+echo "--- 15. Bidirectional Config Sync Self-Test (Launcher <-> INI <-> ImGui) ---"
+if ! command -v "$CXX" > /dev/null 2>&1; then
+    echo "SKIPPED: no C++ compiler (bidirectional config sync self-test)."
+else
+    CFG_BIN="$(mktemp -t ac-cfg-test.XXXXXX)"
+    if "$CXX" -std=c++20 -O1 -Wall -Wextra -Werror -Wno-unused-function -Isrc -Isrc/runtime/las -o "$CFG_BIN" \
+            src/additions/config/ac_ini_store.cpp src/additions/toggles/ac_toggles.c tools/qa/config_sync_test.cpp -lm > /dev/null 2>&1 \
+            && "$CFG_BIN"; then
+        rm -f "$CFG_BIN"
+    else
+        rm -f "$CFG_BIN"
+        echo "FAILED: bidirectional config sync self-test (tools/qa/config_sync_test.cpp)."
+        exit 1
+    fi
+fi
+
+echo "--- 16. ac_sdk Invariants & Structure Self-Test ---"
+if ! command -v "$CXX" > /dev/null 2>&1; then
+    echo "SKIPPED: no C++ compiler (ac_sdk self-test)."
+else
+    SDK_BIN="$(mktemp -t ac-sdk-test.XXXXXX)"
+    if "$CXX" -std=c++20 -O1 -Wall -Wextra -Werror -Isrc -o "$SDK_BIN" tools/qa/sdk_test.cpp src/additions/sdk/*/*.cpp > /dev/null 2>&1 \
+            && "$SDK_BIN" > /dev/null 2>&1; then
+        rm -f "$SDK_BIN"
+        echo "PASSED: ac_sdk C++20 header modularity and reverse-engineering invariants verified."
+    else
+        rm -f "$SDK_BIN"
+        echo "FAILED: ac_sdk self-test (tools/qa/sdk_test.cpp)."
+        exit 1
+    fi
+fi
+
 echo "=== All audits passed successfully! ==="

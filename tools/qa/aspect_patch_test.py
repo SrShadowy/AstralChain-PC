@@ -57,9 +57,26 @@ def main():
     assert res_sites[aspect_site] == SVC_B3_ENCODING, f"Invalid encoding at {aspect_site:#x}"
     assert rect_site in res_sites, f"Missing camera screen rect site {rect_site:#x}"
     assert res_sites[rect_site] == SVC_B3_ENCODING, f"Invalid encoding at {rect_site:#x}"
-    print("  [PASS] Camera aspect and screen rectangle sites encoded correctly (svc #0xB3)")
 
-    # 3. Mathematical validation of aspect and screen rectangle math
+    onda_b_sites = [
+        0x00575A30, 0x00575C94, 0x009ED178,
+        0x00551DF0, 0x00551E0C, 0x00551E28, 0x00551E44,
+        0x0055F0EC, 0x0055F134, 0x0055F17C, 0x0055F1C4,
+        0x009177EC, 0x00915EA0,
+    ]
+    for site in onda_b_sites:
+        assert site in res_sites, f"Missing Onda B site {site:#x}"
+        assert res_sites[site] == SVC_B3_ENCODING, f"Invalid encoding at {site:#x}"
+    print("  [PASS] Camera, 4K heaps, mip bias, draw distance & No-HUD sites encoded correctly (svc #0xB3)")
+
+    # 3. Mathematical validation of 32n x 18n grid, 4K heap budget, and aspect centering math
+    for w, h in ((1280, 720), (1600, 900), (1920, 1080), (2560, 1440), (3840, 2160)):
+        assert w % 32 == 0 and h % 18 == 0 and (w // 32) == (h // 18)
+    px_4k = 3840 * 2160
+    budget_4k = ((((87 << 20) + px_4k * 110) * 115 // 100) + 0xFFFFF) & ~0xFFFFF
+    gbuf_4k = (((px_4k - 1920 * 1080) * 8) + 0xFFFFF) & ~0xFFFFF
+    assert (budget_4k >> 20) in range(1090, 1110), f"Unexpected 4K budget: {budget_4k >> 20} MiB"
+    assert (gbuf_4k >> 20) == 48, f"Unexpected 4K gbuf extra: {gbuf_4k >> 20} MiB"
     test_cases = [
         # (width, height, expected_aspect, expected_rx_720p)
         (1920, 1080, 16.0 / 9.0, 0),        # 16:9 standard

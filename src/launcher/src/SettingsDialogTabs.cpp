@@ -69,6 +69,19 @@ QWidget* SettingsDialog::createGraphicsTab() {
 
     m_resolutionCombo = new QComboBox(page);
     m_resolutionCombo->addItems({"1280x720", "1600x900", "1920x1080", "2560x1440", "3840x2160"});
+    m_outputResCombo = new QComboBox(page);
+    m_outputResCombo->addItem("Auto (Janela) [Reinício]", "auto");
+    m_outputResCombo->addItem("1280x720 (HD) [Reinício]", "1280x720");
+    m_outputResCombo->addItem("1600x900 (Switch Docked Nativo) [Reinício]", "1600x900");
+    m_outputResCombo->addItem("1920x1080 (Full HD) [Reinício]", "1920x1080");
+    m_outputResCombo->addItem("2560x1440 (QHD) [Reinício]", "2560x1440");
+    m_outputResCombo->addItem("3840x2160 (4K UHD + Heaps 4K) [Reinício]", "3840x2160");
+    m_aspectCombo = new QComboBox(page);
+    m_aspectCombo->addItem("Auto (Janela) [Reinício]", "auto");
+    m_aspectCombo->addItem("16:9 (Padrão) [Reinício]", "16:9");
+    m_aspectCombo->addItem("16:10 (Steam Deck) [Reinício]", "16:10");
+    m_aspectCombo->addItem("21:9 (Ultrawide) [Reinício]", "21:9");
+    m_aspectCombo->addItem("32:9 (Super Ultrawide) [Reinício]", "32:9");
     m_fullscreenCheck = new QCheckBox("Tela Cheia Exclusiva / Sem Bordas (F11)", page);
     m_vsyncCheck = new QCheckBox("Ativar VSync", page);
 
@@ -110,10 +123,10 @@ QWidget* SettingsDialog::createGraphicsTab() {
     });
 
     m_scaleCombo = new QComboBox(page);
-    m_scaleCombo->addItem("0.50x (FSR Performance)", 0.50);
-    m_scaleCombo->addItem("0.58x (FSR Balanced)", 0.58);
-    m_scaleCombo->addItem("0.67x (FSR Quality)", 0.67);
-    m_scaleCombo->addItem("0.75x (FSR Ultra Quality)", 0.75);
+    m_scaleCombo->addItem("0.50x (Scene Performance) [Reinício]", 0.50);
+    m_scaleCombo->addItem("0.58x (Scene Balanced) [Reinício]", 0.58);
+    m_scaleCombo->addItem("0.67x (Scene Quality) [Reinício]", 0.67);
+    m_scaleCombo->addItem("0.75x (Scene Ultra Quality) [Reinício]", 0.75);
     m_scaleCombo->addItem("1.00x (Nativo / FSR 3.1 Native AA)", 1.00);
     m_scaleCombo->addItem("1.25x (SSAA Qualidade)", 1.25);
     m_scaleCombo->addItem("1.50x (SSAA Ultra)", 1.50);
@@ -136,36 +149,56 @@ QWidget* SettingsDialog::createGraphicsTab() {
     m_fsrSharpnessSpin->setDecimals(GraphicsSettings::kFsrSharpnessDecimals);
     m_frameGenCheck = new QCheckBox("AMD FSR 3.1 Frame Generation (Interpolação Óptica 2x FPS)", page);
 
-    m_textureQualityCombo = new QComboBox(page);
-    m_textureQualityCombo->addItem("Nativa (0 - novos samplers)", 0.0);
-    m_textureQualityCombo->addItem("Média (1)", 1.0);
-    m_textureQualityCombo->addItem("Baixa (2)", 2.0);
-    m_textureQualityCombo->addItem("Muito Baixa (3)", 3.0);
+    m_lodBiasSpin = new QDoubleSpinBox(page);
+    m_lodBiasSpin->setRange(GraphicsSettings::kDefaultLodBias, GraphicsSettings::kMaxLodBias);
+    m_lodBiasSpin->setSingleStep(GraphicsSettings::kLodSpinStep);
+    m_lodBiasSpin->setDecimals(1);
+    m_lodBiasSpin->setSpecialValueText("0.0 (Nativa - novos samplers)");
 
-    m_lodCombo = new QComboBox(page);
-    m_lodCombo->addItem("Desligado (0 - novos samplers)", 0.0);
-    m_lodCombo->addItem("1", 1.0);
-    m_lodCombo->addItem("2", 2.0);
-    m_lodCombo->addItem("3", 3.0);
-    m_lodCombo->addItem("4", 4.0);
+    m_lodMinSpin = new QDoubleSpinBox(page);
+    m_lodMinSpin->setRange(GraphicsSettings::kDefaultLodMin, GraphicsSettings::kMaxLodMin);
+    m_lodMinSpin->setSingleStep(GraphicsSettings::kLodSpinStep);
+    m_lodMinSpin->setDecimals(1);
+    m_lodMinSpin->setSpecialValueText("0.0 (Desligado - novos samplers)");
 
     m_noShadowCheck = new QCheckBox("Desativar Sombras (aplica a novos pipelines / mais FPS)", page);
 
-    layout->addRow("Resolução:", m_resolutionCombo);
+    m_shadowScaleCombo = new QComboBox(page);
+    m_shadowScaleCombo->addItem("1x (2048x2048 Nativo) [Reinício]", 1);
+    m_shadowScaleCombo->addItem("2x (4096x4096 Nítido) [Reinício]", 2);
+    m_shadowScaleCombo->addItem("4x (8192x8192 Ultra) [Reinício]", 4);
+
+    m_drawDistanceSpin = new QSpinBox(page);
+    m_drawDistanceSpin->setRange(GraphicsSettings::kMinDrawDistance, GraphicsSettings::kMaxDrawDistance);
+    m_drawDistanceSpin->setSingleStep(GraphicsSettings::kDrawDistanceStep);
+    m_drawDistanceSpin->setSuffix("% (Ao vivo)");
+
+    m_hudAreaCombo = new QComboBox(page);
+    m_hudAreaCombo->addItem("Centralizada 16:9 em Ultrawide (Ao vivo)", "16:9");
+    m_hudAreaCombo->addItem("Tela Cheia Borda a Borda (Ao vivo)", "screen");
+    m_hudHiddenCheck = new QCheckBox("Ocultar HUD em Jogo (Atalho F12 - Ao vivo)", page);
+
+    layout->addRow("Resolução da Janela:", m_resolutionCombo);
+    layout->addRow("Resolução Interna (Output):", m_outputResCombo);
+    layout->addRow("Proporção (Aspect):", m_aspectCombo);
     layout->addRow("", m_fullscreenCheck);
     layout->addRow("", m_vsyncCheck);
     layout->addRow("Modo de Sincronização:", m_presentModeCombo);
     layout->addRow("FPS Alvo:", m_fpsSpin);
     layout->addRow("", m_fpsUnlockedCheck);
-    layout->addRow("Escala / SSAA:", m_scaleCombo);
+    layout->addRow("Escala Scene / SSAA:", m_scaleCombo);
     layout->addRow("Upscaler:", m_upscalerCombo);
     layout->addRow("Antialiasing:", m_antialiasCombo);
     layout->addRow("", m_fsrJitterCheck);
     layout->addRow("Nitidez FSR (RCAS):", m_fsrSharpnessSpin);
     layout->addRow("", m_frameGenCheck);
-    layout->addRow("Qualidade de Textura (LOD Bias):", m_textureQualityCombo);
-    layout->addRow("Nível de LoD Mínimo:", m_lodCombo);
+    layout->addRow("Distância de Visão:", m_drawDistanceSpin);
+    layout->addRow("Sombras Solares (Shadow Scale):", m_shadowScaleCombo);
+    layout->addRow("Qualidade de Textura (LOD Bias):", m_lodBiasSpin);
+    layout->addRow("Nível de LoD Mínimo:", m_lodMinSpin);
     layout->addRow("", m_noShadowCheck);
+    layout->addRow("Área da HUD:", m_hudAreaCombo);
+    layout->addRow("", m_hudHiddenCheck);
     return page;
 }
 
@@ -204,12 +237,16 @@ QWidget* SettingsDialog::createAdvancedTab() {
     m_verboseLogCheck = new QCheckBox("Habilitar Log Detalhado do Motor (AC_VERBOSE=1 - Reinício)", page);
     m_cutscene30Check = new QCheckBox("Travar Cutscenes em 30 FPS nativo (A/V sync estrito - Ao vivo)", page);
     m_asyncSubmitCheck = new QCheckBox("Submissão Gráfica Assíncrona (Desligar ao vivo é one-way)", page);
+    m_vtxGuardCheck = new QCheckBox("Vertex Guard (Clamp de Explosão de Vértices - Ao vivo)", page);
+    m_vtxDebugCheck = new QCheckBox("Vertex Debug Logging (NaN/Inf em stderr - Ao vivo)", page);
 
     layout->addWidget(m_bc7Check);
     layout->addWidget(m_forceShadersCheck);
     layout->addWidget(m_verboseLogCheck);
     layout->addWidget(m_cutscene30Check);
     layout->addWidget(m_asyncSubmitCheck);
+    layout->addWidget(m_vtxGuardCheck);
+    layout->addWidget(m_vtxDebugCheck);
 
     auto* form = new QFormLayout();
     m_wrapperEdit = new QLineEdit(page);

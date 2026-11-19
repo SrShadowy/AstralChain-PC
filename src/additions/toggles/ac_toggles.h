@@ -15,6 +15,14 @@ extern "C" {
 #define EXTRA_KEY_ACTIONS          24
 #define EXTRA_MOUSE_CELL_DEFAULT   40.0f
 #define EXTRA_MOUSE_CURVE_DEFAULT  1.35
+#define EXTRA_DRAW_DISTANCE_MIN    100
+#define EXTRA_DRAW_DISTANCE_MAX    400
+#define EXTRA_DRAW_DISTANCE_DEFAULT 100
+#define EXTRA_SHADOW_SCALE_MIN     1
+#define EXTRA_SHADOW_SCALE_MAX     4
+#define EXTRA_SHADOW_SCALE_DEFAULT 1
+#define EXTRA_HUD_AREA_16_9        0
+#define EXTRA_HUD_AREA_SCREEN      1
 
 enum ExtraPromptMode {
     EXTRA_PROMPT_MODE_SWITCH = 0,
@@ -26,8 +34,15 @@ enum ExtraPromptMode {
 extern int g_extra_vtx_guard;        /* -1: LARECOMP_GUARD_VTX env; 0/1: forced */
 extern int g_extra_vtx_debug;        /* -1: LARECOMP_DEBUG_VTX env; 0/1: forced */
 extern int g_extra_fps_override;     /* -1: AC_FPS env; >=0: forced target fps (0=unlimited) */
+extern int g_extra_fps_unlocked;     /* -1: AC_FPS_UNLOCKED / derived; 0/1: Dynamic-Unlocked */
+extern int g_extra_vsync;            /* -1: derived from present_mode; 0/1: explicit VSync */
 extern int g_extra_async_kill;       /* 1: force async submission off for new submits */
 extern const char *g_extra_present_mode; /* NULL: LARECOMP_VK_PRESENT env; else fifo/mailbox/immediate/fifo_relaxed */
+extern int g_extra_parallel_threads; /* -1: AC_PARALLEL; 0/1: launcher INI parity [Reinício] */
+extern int g_extra_bc7_precompute;   /* -1: AC_BC7_PRECOMPUTE; 0/1: launcher INI parity [Reinício] */
+extern int g_extra_force_shaders;    /* -1: default 0; 0/1: launcher INI parity */
+extern int g_extra_verbose_log;      /* -1: AC_VERBOSE; 0/1: launcher INI parity [Reinício] */
+extern int g_extra_async_submit_cfg; /* -1: AC_ASYNC_SUBMIT; 0/1: launcher INI parity */
 
 /* Graphics overrides (texture quality / LoD / shadow): same -1 == "fall through to env" contract. */
 extern float g_extra_lod_bias;       /* -1: LARECOMP_LOD_BIAS env; >=0: forced global LOD bias */
@@ -39,6 +54,15 @@ extern int   g_extra_framegen;       /* -1: AC_FRAMEGEN / settings; 0/1: forced 
 extern int   g_extra_fsr_jitter;     /* -1: AC_FSR_JITTER / settings; 0/1: forced */
 extern float g_extra_fsr_sharpness;  /* <0: AC_FSR_SHARPNESS / settings; 0..1: forced */
 extern float g_extra_render_scale;   /* <=0: AC_RENDER_SCALE / settings; 0.5..2.0: forced */
+
+/* Onda B: Output/Scene resolution, Aspect, Draw Distance, Shadow Scale & HUD toggles. */
+extern char  g_extra_output_res[32]; /* "": env/INI/default; e.g. "3840x2160" / "auto" */
+extern char  g_extra_aspect_str[16]; /* "": env/INI/default; "auto"/"16:9"/"16:10"/"21:9"/"32:9" */
+extern int   g_extra_draw_distance;  /* -1: AC_DRAW_DISTANCE / settings; 100..400: forced */
+extern int   g_extra_shadow_scale;   /* -1: AC_SHADOW_SCALE / settings; 1..4: forced */
+extern int   g_extra_no_hud;         /* -1: AC_HUD / settings; 0: show, 1: hide hud2 */
+extern int   g_extra_hud_area;       /* -1: AC_HUD_AREA / settings; 0: 16:9, 1: full screen */
+extern int   g_extra_res_patch_active; /* 1 when guest SVC 0xB3 resolution patch responded */
 
 /* Window, prompts, focus, cutscene, audio, mouse & keybinding live overrides (shared across TUs). */
 extern int      g_extra_fullscreen_pending; /* -1: none; 0/1: apply fullscreen on SDL thread */

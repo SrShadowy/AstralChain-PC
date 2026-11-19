@@ -71,6 +71,8 @@ private:
 
     // Graphics
     QComboBox* m_resolutionCombo{nullptr};
+    QComboBox* m_outputResCombo{nullptr};
+    QComboBox* m_aspectCombo{nullptr};
     QCheckBox* m_fullscreenCheck{nullptr};
     QCheckBox* m_vsyncCheck{nullptr};
     QComboBox* m_presentModeCombo{nullptr};
@@ -82,9 +84,13 @@ private:
     QCheckBox* m_frameGenCheck{nullptr};
     QCheckBox* m_fsrJitterCheck{nullptr};
     QDoubleSpinBox* m_fsrSharpnessSpin{nullptr};
-    QComboBox* m_textureQualityCombo{nullptr};
-    QComboBox* m_lodCombo{nullptr};
+    QDoubleSpinBox* m_lodBiasSpin{nullptr};
+    QDoubleSpinBox* m_lodMinSpin{nullptr};
+    QComboBox* m_shadowScaleCombo{nullptr};
+    QSpinBox* m_drawDistanceSpin{nullptr};
     QCheckBox* m_noShadowCheck{nullptr};
+    QComboBox* m_hudAreaCombo{nullptr};
+    QCheckBox* m_hudHiddenCheck{nullptr};
 
     // Audio
     QSlider* m_volumeSlider{nullptr};
@@ -100,6 +106,8 @@ private:
     QCheckBox* m_verboseLogCheck{nullptr};
     QCheckBox* m_cutscene30Check{nullptr};
     QCheckBox* m_asyncSubmitCheck{nullptr};
+    QCheckBox* m_vtxGuardCheck{nullptr};
+    QCheckBox* m_vtxDebugCheck{nullptr};
     QLineEdit* m_wrapperEdit{nullptr};
     QLineEdit* m_customEnvEdit{nullptr};
 };

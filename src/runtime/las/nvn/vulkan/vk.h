@@ -95,6 +95,7 @@ typedef struct TexBackend {
     int tp;              // runtime/nvn/texpatch.c: 0 not checked yet, -1 none, else known UI texture + 1
     uint32_t tp_gen;     // texpatch_generation() it was last uploaded with
     int reg;  // slot in textures.c's live list + 1 (a reboot destroys them all)
+    uint32_t view_count; // [extra]
     // (Astral Chain) ASTC decoded ahead of use on a background thread (textures.c warm-up): every layer's levels as
     // RGBA8, in upload order, valid for guest data with hash pre_hash. pre_state: 0 none, 1 decoding, 2 ready.
     void *pre_rgba;

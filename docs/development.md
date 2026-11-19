@@ -206,12 +206,18 @@ Configuráveis ao vivo no menu ImGui (**Insert**) e persistidos em `larecomp.ini
 | `AC_FSR_SHARPNESS` | `0.80` (padrão) / `0.00..1.00` | Intensidade do estágio **RCAS** (Robust Contrast-Adaptive Sharpening) do FSR 3.1 |
 | `AC_FRAMEGEN` | `0` (padrão) / `1` | Ativa o **FSR 3.1 Frame Generation (2x FPS)** com vetores de movimento float16 suavizados (`fsr3_mv_smooth`), dilatação de máscara de HUD/texto translúcido e dupla apresentação cadenciada na Swapchain Vulkan |
 
-### C.3 Resolução Customizada, Ultrawide e Aspect Ratio
-Controla a geometria de projeção de tela e viewport via patch `resolution-1.0.1.pchtxt` e trampolim Vulkan:
+### C.3 Resolução Interna (Output/Scene 4K), Draw Distance, Shadow Scale, Ultrawide e HUD
+Controlam geometria de projeção, heaps internos via `resolution-1.0.1.pchtxt` (`SVC #0xB3` lockless) e composição Vulkan:
 | Variável | Valores / Padrão | Efeito |
 |---|---|---|
-| `AC_RESOLUTION` | `<width>x<height>` | Define a resolução interna/janela customizada (ex: `2560x1080`, `3440x1440`, `1280x800`). Emite resolução docked e níveis dinâmicos. |
-| `AC_ASPECT` | `auto` / `21:9` / `32:9` / `16:10` / `16:9` / `<float>` | Força aspect ratio da câmera 3D. Em `auto`, calcula `width/height`. Aplica `ui_box` centralizado 16:9 para HUD, menus e legendas. |
+| `AC_OUTPUT_RES` | `1600x900` (padrão) / `auto` / `1280x720..3840x2160` | Define a resolução Output/HUD do jogo alinhada em `32n x 18n` (até 4K UHD), ajustando automaticamente `0x40e0b0`, `BUFFER ROOT`, `GRAPHIC BUFFER`, headroom em `MEMORY_BUDGET` e `mipLodBias` |
+| `AC_RESOLUTION` | `<width>x<height>` | Fallback legado de `AC_OUTPUT_RES`; aceita tamanhos customizados não-16:9 (ex.: `2560x1080`) derivando o aspect ratio automaticamente |
+| `AC_ASPECT` | `auto` / `21:9` / `32:9` / `16:10` / `16:9` | Força aspect ratio da câmera 3D sem distorção. Em `auto`, acompanha a janela quando diferente de `16:9` |
+| `AC_RENDER_SCALE` | `1.00` (padrão) / `0.50..2.00` | Abaixo de `1.00` escala nativamente a **Scene Res** na Dynamic-Res ladder (`0x40f184..0x40f1dc`) alinhada em `32n x 18n` (mantendo UI/composite em `AC_OUTPUT_RES`); acima de `1.00` aplica SSAA no pós-processamento |
+| `AC_DRAW_DISTANCE` | `100` (padrão) / `100..400` | Multiplica ao vivo o alcance de LOD (`DistRate0..LostDistRate` em `0x551df0..e44` e `0x55f0ec..1c4`) para novos modelos carregados |
+| `AC_SHADOW_SCALE` | `1` (padrão) / `1..4` | Escala exclusivamente o mapa de sombras solar `2048x2048 D24S8` (`1x` a `4x`) em `textures.c`, preservando targets coloridos e `SUST`/`TLDS` |
+| `AC_HUD` | `1` (padrão) / `0` | `0` oculta ao vivo apenas os elementos do arquivo `hud2` (atalho `F12` in-game), mantendo menus, diálogos e telas de loading intactos |
+| `AC_HUD_AREA` | `16:9` (padrão) / `screen` | Controla se elementos de UI em janela ultrawide ficam centralizados em `16:9` (`ui_box`) ou estendidos de borda a borda (`screen`) |
 
 ### D. Input Determinístico e Controles
 - **`AC_INPUT_SCRIPT="t0-t1:mask[@period/duty];..."`**:

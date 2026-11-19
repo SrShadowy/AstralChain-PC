@@ -872,4 +872,90 @@ O repositório foi reorganizado em pastas por domínio/módulo, sem alteração 
     - Extraído o mapeamento de teclas e botões (`keyToVk`, `actionToAc` e constantes `kVk*`) para `src/launcher/include/ConfigKeyMap.hpp`.
     - Atualizado `src/launcher/CMakeLists.txt` para incluir o novo cabeçalho.
 
+#### 38. Refatoração Modular do Caminho de Draws (`draw.c`) e Redução de Overhead de CPU no Backend Vulkan
+- **Objetivo**: Decompor a função monolítica `draw_()` (~540 linhas) e reduzir o custo de CPU por draw na thread de renderização sem alterar a semântica de texturas (`vk_view`), `vcache` ou barreiras globais.
+- **Modularização (`src/runtime/las/nvn/vulkan/exec/commands/`, `src/astral_chain/gpu/nvn_build.py`)**:
+  - `draw.c` reduzido de `674` para `405` linhas, extraindo diagnósticos/watch/skip para `draw_diag.c` (`142` linhas), expansão/varredura de índices e binding de streams para `draw_geom.c` (`200` linhas) e contratos compartilhados para `draw_internal.h` (`35` linhas).
+  - Removidas chamadas a stubs neutros exclusivos de *Link's Awakening* (`mirror_draw`, `pot_*`, `pets_*`, `texpatch_*`, `escape_bottle_tint`, `widescreen_backdrop_seen`, `widescreen_effect_stretch` e laço morto de instâncias douradas), mantendo intacto `widescreen_scene_ubo` (usado pelo pass de motion vectors do FSR 3).
+- **Otimizações de CPU Seguras**:
+  - **Cache de hashes de shader em `Prog` (`exec_internal.h`, `program.c`)**: `stage_hash[2]` e `fs_short_hash` passam a ser armazenados uma única vez na criação de `Prog` em `get_program_ex()`, eliminando a re-execução de `stage_hash(st.program, 0)` (hash FNV-1a byte a byte de até 64 KB do bytecode de vertex shader) e `hmix(..., 0x200)` por draw (`prof_vtx` reduzido de `365 ms` para `39–45 ms` por janela de 2s em cena 3D com ~190k–199k draws).
+  - **Rastreamento monotônico de geração para `Prog`/`Pipe` (`exec.c`, `render_pass.c`, `draw.c`)**: Adicionados `prog_gen`, `pipe_gen` em `ExecState` e `pass_gen` em `begin_pass()`, permitindo reutilizar `Prog *` e `Pipe *` em `resolve_draw_program()` / `resolve_draw_pipeline()` quando nenhum estado relevante de pipeline mudou.
+  - **Alocação e descritores (`draw_geom.c`, `descriptors.c`)**: `expand_indices_transient()` grava direto no buffer mapeado de `vk_transient()` (eliminando `malloc`/`free`), `scan_max_index()` unifica os 3 laços duplicados de scan de índices, `cbuf_info(k==0)` zera apenas `size` bytes em `drv`, `stage_set()` percorre `p->nbinds` em passo único mantendo `rs` estático com limpeza apenas das faixas excedentes, e `getenv()` do hot-path (`LARECOMP_LOG_CLEARS`, `LARECOMP_LOG_FSHASH`, `LARECOMP_WATCH_DEBUG`, `LARECOMP_DEBUG_DATA`) foi cacheado.
+
+#### 39. Correção de *Open Addressing* e *Thrashing* em `view_tab` (`textures.c`, `vk.h`, `descriptors.c`)
+- **Causa-Raiz**: Em `textures.c`, `view_tab` (`16.384` slots, `16` probes) sofria de dois defeitos em cadeia: (1) ao esgotar os 16 probes em uma colisão, `vk_image_view()` gravava a nova view no índice `base + 16` (fora da janela `0..15` pesquisada pelo lookup), forçando recriação infinita da view e `vk_view_gen++` a cada quadro; (2) `views_forget()` limpava entradas com `NULL` em vez de *tombstone*, rompendo cadeias de sondagem de outras texturas, e incrementava `vk_view_gen++` mesmo quando `b` não possuía views. Como resultado, o cache `memo` em `descriptors.c` era invalidado continuamente (`~3.500–4.600` `views created` a cada 2s).
+- **Correção**:
+  - `vk.h` (`TexBackend`): Adicionado contador `view_count`.
+  - `textures.c`: Expandida `VIEW_TAB` para `65.536` slots e `VIEW_PROBE` para `64`; `views_forget()` sai imediatamente quando `view_count == 0` e usa `VIEW_TOMBSTONE`; `vk_image_view()` reutiliza tombstones e restringe qualquer *evict* ao intervalo `0..VIEW_PROBE - 1` (eliminando gravações fora da janela).
+  - `descriptors.c`: Ampliado `memo` de `1024` para `4096` entradas.
+  - **Resultado medido (`LARECOMP_VK_PROF=1`)**: `views created` caiu de `~3.500–4.600` para `0–40` por janela de 2s (`0` em regime estável), e `prof_tex` caiu de `~134–148 ms` para `~116–130 ms`.
+
+#### 40. Onda A: Desbloqueio de 60 FPS em Cenas 3D Densas (`romfs_storage.h`, `time_trampoline.h`, `native_trace.py`, `native_build.py`, `setup_game.py`, `descriptors/`, `draw.c`, `render_pass.c`, `textures.c`)
+- **I/O e Sleep**:
+  - `romfs_storage.h`: liberado `klock_release_all()` ao redor de `extra_romfs_overlay_read()` e `pread()` em `romfs_read()`, eliminando contenção de mutex global (`__lll_lock_wait_private` caiu de ~97–99% para ~1.4%).
+  - `time_trampoline.h`: removido busy-spin de 150 µs em `extra_svc_sleep_thread()` e adicionados `extra_spin_gate()` / `rt_spin_gate()` com backoff progressivo nos 33 back-edges de *spin-wait* em `main` 1.0.1 (`page_70003f3` caiu de `78.7%` para `4.6%`).
+- **Compilação & Tradutor (`native_trace.py`, `native_build.py`, `setup_game.py`)**:
+  - Habilitados `--restrict`, retorno direto pós-`BL` (`_DIRECT_CALL_TAIL`), correção em `try_fast_relink()` para preservar `-O2 -mcpu=native` (antes regredia para `-O1`), e correção da checagem de hash em `guest_fingerprint()`.
+- **Fast-Paths NVN->Vulkan (`descriptors/feedback.c`, `descriptors.c`, `draw.c`, `render_pass.c`, `textures.c`)**:
+  - Extraído subsistema de feedback em `feedback.c`; adicionados `zero_span_cached()`, `tex_memo` 2-way (`2048` buckets), `rscale_span()` por estágio e cache 2-way de `VkDescriptorSet` (`LARECOMP_VK_DESC_CACHE`) com elisão seletiva de `vkCmdBindDescriptorSets` (`bound_sets`); reduzida cadência periódica de checksum de texturas de `120` para `1800` frames (`Harmony Square`: `~47.9 → 57.3 → 63.8 fps`).
+
+#### 41. Onda B: Escalonamento Nativo 4K Output × Scene Res, Draw Distance, Shadow Scale & UX (`resolution-1.0.1.pchtxt`, `aspect_extra.h`, `svc_dispatch.h`, `heap_memory.h`, `textures.c`, `draw.c`, `overlay/`, `launcher/`, `config/`)
+- **Patches Convidado (`resolution-1.0.1.pchtxt`, `setup_game.py`, `aspect_patch_test.py`)**:
+  - Registrado `RES_PATCH` em `setup_game.py:active_patches()` e adicionados os sites v1.0.1 de `BUFFER ROOT` (`0x575a30`), `GRAPHIC BUFFER` (`0x575c94`), `mipmap bias` (`0x9ed178`), `Draw Distance` (`0x551df0..e44`, `0x55f0ec..1c4`) e `No-HUD hud2` (`0x9177ec`, `0x915ea0`), executados via `SVC #0xB3` *lockless* (`svc_dispatch.h`) com inicialização `_Atomic` thread-safe em `aspect_extra.h`.
+- **Output Res vs Scene Res e Orçamento 4K (`aspect_extra.h`, `heap_memory.h`, `textures.c`, `draw.c`)**:
+  - Output Res (`AC_OUTPUT_RES` / `auto`, até `3840x2160`) e Scene Res (`AC_RENDER_SCALE < 1.0` via `0x40f184..dc`) alinhados estritamente à grade `32n x 18n` (`extra_res_snap_grid_w()`), crescendo `MEMORY_BUDGET` até `HEAP_LIMIT` (`4 GiB`) para acomodar 4K sem `RESULT_OUT_OF_MEMORY` e preservando todos os render targets coloridos/`SUST`/`TLDS` sem escala forçada.
+  - `textures.c`: suporte opcional `AC_SHADOW_SCALE` (`1..4x`) restrito exclusivamente ao mapa de sombras solar `2048x2048 DEPTH24_STENCIL8` não-linear; `draw.c`: opção ao vivo `AC_HUD_AREA` (`16:9` vs `screen`).
+- **UX, Atalhos e Launcher Qt6 (`window_trampoline.h`, `ac_toggles.*`, `ac_config_*`, `ac_menu_gfx_helpers.h`, `ac_menu_tabs.cpp`, `launcher/`)**:
+  - Adicionado atalho `F12` (No-HUD em `hud2`), extraído `ac_menu_gfx_helpers.h` mantendo `ac_menu_tabs.cpp` < 350 linhas com badges `[Env]`/`[Reinício]`, e sincronizados `output_res`, `aspect`, `draw_distance`, `shadow_scale`, `hud_hidden` e `hud_area` no Config Sync e Qt6 Launcher.
+
+#### 42. Mini-SDK Nativo (`src/additions/sdk/`, `sdk/`, `SDK/`, `tools/qa/sdk_test.cpp`, `tools/qa/audit.sh`, `nvn_build.py`)
+- **Arquitetura C++20 Modular (.hpp / .cpp) Organizada em Subpastas por Domínio**:
+  - Reestruturado o mini-SDK sob `sdk/` e `src/additions/sdk/` com separação de pastas especializadas, eliminando código inline em headers e definindo arquivos `.hpp` (declarações) e `.cpp` (implementações):
+    - `sdk.hpp` / `ac_sdk.hpp`: headers agregadores de entrada raiz.
+    - `core/`:
+      - `types.hpp`: tipos vetoriais (`Vec3`, `Vec4`, `StickVector`) e enums.
+      - `memory.hpp` + `memory.cpp`: resolução de base (`0x7000010000ull`), validação de ponteiros de guest e templates seguros `read`, `write`, `read_deref`, `write_deref`.
+      - `time.hpp` + `time.cpp`: singleton `TimerManager` (`0xdcbfd0`), framerate target (`0xdc`), `delta_ms` real (`0xe0`) e escalas de tempo.
+    - `graphics/` (Motor Gráfico, Resolução & Vulkan):
+      - `patch.hpp` + `patch.cpp`: sites SVC #0xB3 para resolução dinâmica, aspect ratios (ultrawide/16:10) e cálculo de heaps VRAM.
+      - `pipeline.hpp` + `pipeline.cpp`: hashes de classificação de shaders 2D/UI vs 3D e atlas de substituição de glifos Xbox.
+    - `gameplay/` (Engine PlatinumGames, Câmera, Input & Estado):
+      - `camera.hpp` + `camera.cpp`: vtable (`0xd5b3d0`), dispatcher (`0x28b120`), free camera (`0x2bd8b0`), offsets de pitch (`0x1284`), deltas (`0x8d8`/`0x8e0`), orientação (`0xb50..0xb58`) e implementação de `inject_mouse_delta()`.
+      - `input.hpp` + `input.cpp`: polling de eixos analógicos (`0xdc2540`), tabela de jogadores (`0xdc2518`) e botões.
+      - `ui.hpp` + `ui.cpp`: detecção atômica de menu ativo (`0xd82d18`), rotinas de abertura/fechamento (`0x61bf00`/`0x61bed8`) e controle de cursor SDL3.
+      - `game_state.hpp` + `game_state.cpp`: slots de Save (`0xdb83d8`), Scene (`0xdb84c8`), Phase (`0xdb84f8`), Scenario (`0xdb8930`), PlayerTable (`0xdbb680`), Mission (`0xdbc420`), Boss ativo (`0xdbc928`), Áreas (`0xdbcf10`), Legiões e controle atômico de idioma de voz via dirty flags Wwise (`0xdc13b0..dc13c0`).
+  - Integrado em `src/astral_chain/gpu/nvn_build.py` via `sdk.rglob('*.cpp')` para compilação nativa recursiva de todas as subpastas do SDK.
+- **QA e Autoteste**:
+  - Atualizado `tools/qa/sdk_test.cpp` e integrado no Passo 16 de `tools/qa/audit.sh`, compilando os `.cpp` das subpastas do SDK com `-std=c++20 -O1 -Wall -Wextra -Werror` e validando o comportamento em tempo de execução.
+
+#### 43. Extrator Estático de Símbolos e Assinaturas — Fase 1 AC-SDK (`tools/qa/extract_symbols.py`, `docs/symbols.toml`, `docs/roadmap-ac-sdk.md`)
+- **Varredura e Descoberta de Assinaturas da Engine Platinum**:
+  - Criada a ferramenta [`tools/qa/extract_symbols.py`](tools/qa/extract_symbols.py) para mineração estática automatizada no binário NSO (`game/update-exefs/main` v1.0.1).
+  - Implementada indexação bitwise de pares `ADRP + ADD` em ARM64 e algoritmo retroativo de detecção de prólogos de funções (`sub sp`, `stp x29, x30`, barreiras de alinhamento `udf #0`).
+  - Constatada a ausência de strings de RTTI `_ZTS`/`_ZTI` no executável de produção (compilado com `-fno-rtti`).
+  - Catalogados **532 pontos de entrada de parsers de recursos** (`.uid`, `.bxm`, `.dat`, `.wmb`, `.csv`) e **19 sites de debug/sistema** (`Graphic::Startup`, `StartupShaderDataSet`, `callId`, etc.).
+  - Exportado o catálogo unificado [`docs/symbols.toml`](docs/symbols.toml) com todos os metadados do binário, slots do mini-SDK e funções de deserialização mapeadas.
+
+#### 44. Expansão via Engenharia Reversa — Símbolos Nucleares (`sdk/gameplay/`, `docs/symbols.toml`, `tools/qa/sdk_test.cpp`)
+- **CameraManager e Instância de Câmera Ativa (`camera.hpp`, `camera.cpp`)**:
+  - Localizado o slot global `SLOT_CAMERA_MANAGER = 0xdb83a0` (aponta para `0xdca490`) e a rotina de recuperação `GetCameraManager()` em `0x88fa20`.
+  - Mapeada a estrutura de `CameraManager`: `+0x10` posição da câmera, `+0x20` alvo/lookat, `+0x30` vetor UP, `+0x40` vetor RIGHT e `+0x58` ponteiro do controlador ativo (`cCameraGame` / Camera Director).
+  - Adicionadas funções `get_camera_manager()`, `get_active_camera()`, `get_camera_position()` e `get_camera_target()`.
+- **Bitflags de Pausa Global e Congelamento de Engine (`ui.hpp`, `ui.cpp`)**:
+  - Localizado o slot de estado global da engine `SLOT_ENGINE_STATE = 0xdb8398` (aponta para `0xdcba30`).
+  - Mapeados bits de suspensão/transição (`+0x00` bits [31:29]), flag de congelamento de câmera em `+0x13` bit 6 (`0x40`, verificado em `0x27f674` dentro de `METHOD_UPDATE_CAMERA`) e máscara de pausa de gameplay em `+0x30` (`0xe000`).
+  - Adicionadas funções `is_gameplay_paused()`, `is_camera_frozen()` e `is_engine_transitioning()`.
+- **Estrutura de Seleção de Itens de Menu / Foco (`ui.hpp`, `ui.cpp`)**:
+  - Localizado o slot de seleção de interface `SLOT_MENU_SELECTION = 0xdbef78` (aponta para `0xd83180`).
+  - Mapeados `+0x00` (ID do item de 64 bits), `+0x08` (índice da linha selecionada / row index), `+0x14` (sub-estado) e `+0x20` (flags).
+  - Adicionadas funções `get_selected_item_index()`, `get_selected_item_id()` e `has_selection()`.
+- **Ator do Jogador e Transformação no Mundo (`game_state.hpp`, `game_state.cpp`)**:
+  - Rastreando chamadas em `0x454890`, identificado o vetor de atores em `SLOT_PLAYER_TABLE = 0xdbb680` e a recuperação do jogador ativo via `*SLOT_PLAYER_TABLE`.
+  - Rastreando getters `0x381430` e `0x381450`, mapeados os offsets universais da classe Actor: `+0x50` vetor de posição no mundo (X, Y, Z) e `+0x90` vetor de rotação (Pitch, Yaw, Roll).
+  - Adicionadas funções `get_player_actor()`, `get_player_position()` e `get_player_rotation()`.
+
+
+
+
+
 

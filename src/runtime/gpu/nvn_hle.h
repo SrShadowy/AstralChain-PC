@@ -593,7 +593,8 @@ static void prof_attach(unsigned thread) {
  printf("PROFILE sampling the host thread of guest thread %u\n",thread);
 }
 #else // [extra]
-static void prof_attach(unsigned thread) { (void)thread; } // [extra]
+extern void ac_lprof_start(void); // [extra]
+static void prof_attach(unsigned thread) { if (thread == 0) ac_lprof_start(); } // [extra]
 #endif // [extra]
 static void prof_start(void) {prof_attach(0);}
 /* Park the calling guest thread until done(seq) (a GPU submission finished).

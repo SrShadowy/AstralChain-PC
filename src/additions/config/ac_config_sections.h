@@ -59,6 +59,9 @@ inline void ApplyGraphicsSection(const std::vector<IniEntry>& entries,
 
     const std::string* vpm = FindKey(entries, "Graphics", "present_mode", false);
     const std::string* vvs = FindKey(entries, "Graphics", "vsync", false);
+    if (vvs) {
+        g_extra_vsync = ParseBoolVal(*vvs, true) ? 1 : 0;
+    }
     if ((vpm || vvs) && (!boot || !EnvNonEmpty("LARECOMP_VK_PRESENT"))) {
         const char* want_pm = vpm ? CanonicalPresentMode(vpm->c_str())
                                   : (ParseBoolVal(*vvs, true) ? kPmFifo : kPmMailbox);
@@ -74,6 +77,11 @@ inline void ApplyGraphicsSection(const std::vector<IniEntry>& entries,
     if (const std::string* vfps = FindKey(entries, "Graphics", "fps_limit", false)) {
         if (!boot || (!EnvNonEmpty("AC_FPS") && !EnvNonEmpty("AC_TARGET_FPS"))) {
             g_extra_fps_override = std::clamp(ParseIntVal(*vfps, kDefaultFpsLimit), 0, kMaxFpsLimit);
+        }
+    }
+    if (const std::string* vfu = FindKey(entries, "Graphics", "fps_unlocked", false)) {
+        if (!boot || !EnvNonEmpty("AC_FPS_UNLOCKED")) {
+            g_extra_fps_unlocked = ParseBoolVal(*vfu, false) ? 1 : 0;
         }
     }
     if (const std::string* vup = FindKey(entries, "Graphics", "upscaler", legacy_fallback)) {
@@ -136,6 +144,40 @@ inline void ApplyGraphicsSection(const std::vector<IniEntry>& entries,
     if (const std::string* vns = FindKey(entries, "Graphics", "no_shadow", false)) {
         if (!boot || !EnvNonEmpty("LARECOMP_NO_SHADOW")) {
             g_extra_no_shadow = ParseBoolVal(*vns, false) ? 1 : 0;
+        }
+    }
+    if (const std::string* vor = FindKey(entries, "Graphics", "output_res", false)) {
+        if (!boot || (!EnvNonEmpty("AC_OUTPUT_RES") && !EnvNonEmpty("AC_RESOLUTION"))) {
+            std::snprintf(g_extra_output_res, sizeof(g_extra_output_res), "%s", vor->c_str());
+        }
+    }
+    if (const std::string* vasp = FindKey(entries, "Graphics", "aspect", false)) {
+        if (!boot || !EnvNonEmpty("AC_ASPECT")) {
+            std::snprintf(g_extra_aspect_str, sizeof(g_extra_aspect_str), "%s", vasp->c_str());
+        }
+    }
+    if (const std::string* vdd = FindKey(entries, "Graphics", "draw_distance", false)) {
+        if (!boot || !EnvNonEmpty("AC_DRAW_DISTANCE")) {
+            g_extra_draw_distance = std::clamp(
+                ParseIntVal(*vdd, EXTRA_DRAW_DISTANCE_DEFAULT),
+                EXTRA_DRAW_DISTANCE_MIN, EXTRA_DRAW_DISTANCE_MAX);
+        }
+    }
+    if (const std::string* vss = FindKey(entries, "Graphics", "shadow_scale", false)) {
+        if (!boot || !EnvNonEmpty("AC_SHADOW_SCALE")) {
+            g_extra_shadow_scale = std::clamp(
+                ParseIntVal(*vss, EXTRA_SHADOW_SCALE_DEFAULT),
+                EXTRA_SHADOW_SCALE_MIN, EXTRA_SHADOW_SCALE_MAX);
+        }
+    }
+    if (const std::string* vnh = FindKey(entries, "Graphics", "hud_hidden", false)) {
+        if (!boot || !EnvNonEmpty("AC_HUD")) {
+            g_extra_no_hud = ParseBoolVal(*vnh, false) ? 1 : 0;
+        }
+    }
+    if (const std::string* vha = FindKey(entries, "Graphics", "hud_area", false)) {
+        if (!boot || !EnvNonEmpty("AC_HUD_AREA")) {
+            g_extra_hud_area = (*vha == "screen") ? EXTRA_HUD_AREA_SCREEN : EXTRA_HUD_AREA_16_9;
         }
     }
 }

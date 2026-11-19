@@ -1,6 +1,12 @@
 #pragma once // [extra]
 /* Horizon OS guest memory management: heap reservation, resizing, and memory query. */
 #include "horizon_defs.h"
+#include "hooks/gpu/aspect_extra.h" // [extra]
+
+static inline uint64_t extra_memory_budget(void) { // [extra]
+    uint64_t total = MEMORY_BUDGET + extra_res_output_extra_bytes();
+    return (total > HEAP_LIMIT) ? HEAP_LIMIT : total;
+} // [extra]
 
 static void snapshot(void) {
     if (!snapshot_path) {
@@ -318,7 +324,8 @@ static uint32_t resize_heap(uint64_t size) {
     }
 
     uint64_t used = static_memory_size();
-    if (used > MEMORY_BUDGET || size > MEMORY_BUDGET - used) {
+    uint64_t budget = extra_memory_budget(); // [extra]
+    if (used > budget || size > budget - used) { // [extra]
         return RESULT_OUT_OF_MEMORY;
     }
     for (size_t i = 0; i < sizeof(regions) / sizeof(regions[0]); i++) {

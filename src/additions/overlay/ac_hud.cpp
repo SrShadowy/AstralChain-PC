@@ -320,7 +320,9 @@ void ac_perf_hud_dashboard_section(const char *present_mode) {
                             "Compacto (Barra Tática IRIS)\0Detalhado (Telemetria + Gráfico)\0Mínimo (Pílula FPS)\0");
     changed |= ImGui::Combo("Posição na Tela", &s_hud_corner,
                             "Superior Esquerdo\0Superior Direito\0Inferior Esquerdo\0Inferior Direito\0");
-    changed |= ImGui::SliderFloat("Opacidade do HUD", &s_hud_opacity, 0.30f, 1.00f, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+    changed |= ImGui::SliderFloat("Opacidade do HUD", &s_hud_opacity,
+                                  AC_PERF_HUD_OPACITY_MIN, AC_PERF_HUD_OPACITY_MAX,
+                                  "%.2f", ImGuiSliderFlags_AlwaysClamp);
     changed |= ImGui::Checkbox("Manter visível enquanto este menu estiver aberto (Prévia)", &s_hud_show_with_menu);
     ImGui::EndDisabled();
     if (changed) {
@@ -345,6 +347,7 @@ void ac_perf_hud_set_config(const AcPerfHudConfig *cfg) {
     s_hud_enabled = cfg->enabled;
     s_hud_mode = cfg->mode < 0 ? 0 : (cfg->mode > 2 ? 2 : cfg->mode);
     s_hud_corner = cfg->corner < 0 ? 0 : (cfg->corner > 3 ? 3 : cfg->corner);
-    s_hud_opacity = cfg->opacity < 0.30f ? 0.30f : (cfg->opacity > 1.00f ? 1.00f : cfg->opacity);
+    s_hud_opacity = cfg->opacity < AC_PERF_HUD_OPACITY_MIN ? AC_PERF_HUD_OPACITY_MIN
+                  : (cfg->opacity > AC_PERF_HUD_OPACITY_MAX ? AC_PERF_HUD_OPACITY_MAX : cfg->opacity);
     s_hud_show_with_menu = cfg->show_with_menu;
 }

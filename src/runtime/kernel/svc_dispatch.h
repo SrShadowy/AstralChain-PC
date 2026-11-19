@@ -7,6 +7,9 @@
 static void rt_svc_body(Cpu *c, uint32_t imm, uint64_t pc);
 static unsigned test_stall_ms;  /* (AC_CUTSCENE_STALL) slept after the kernel lock is released */
 
+/* Forward declaration for lockless SVC 0xB3 resolution/drawdist/HUD fast path. // [extra] */
+static void handle_resolution_aspect(Cpu *c, uint64_t pc); // [extra]
+
 /* Parallel mode: supervisor calls run under the kernel lock; any state change may wake other guest threads; a call
  * that leaves this thread waiting blocks its host thread (lock released while asleep); an exited thread ends. */
 void rt_svc(Cpu *c, uint32_t imm, uint64_t pc) {
@@ -25,6 +28,10 @@ void rt_svc(Cpu *c, uint32_t imm, uint64_t pc) {
         c->x[0] = RESULT_SUCCESS;
         return;
     }
+    if (imm == SVC_CUSTOM_RESOLUTION_ASPECT) { // [extra]
+        handle_resolution_aspect(c, pc);
+        return;
+    } // [extra]
 
     klock();
     threads_initialize();
@@ -337,19 +344,51 @@ static void handle_cutscene_carry(Cpu *c) {
 }
 
 // [extra]
-/* Handles custom resolution and aspect ratio injection (SVC 0xB3). */
+/* Scales draw-distance LOD threshold rate (default w9 float bits or named s0) and stores to [x8 + offset]. // [extra] */
+static inline void extra_drawdist_store_bits(Cpu *c, uint64_t off, uint32_t bits) { // [extra]
+    float factor = extra_draw_distance_factor();
+    if (factor > 1.0f) {
+        float rate;
+        memcpy(&rate, &bits, sizeof(float));
+        rate /= factor;
+        memcpy(&bits, &rate, sizeof(uint32_t));
+    }
+    memcpy((void *)(uintptr_t)(c->x[8] + off), &bits, sizeof(uint32_t));
+}
+
+static inline bool extra_hud_is_hud2(const uint8_t *inst) {
+    if (!inst) return false;
+    uint32_t arc = 0;
+    memcpy(&arc, inst + AC_UI_INST_ARCHIVE_OFF, sizeof(uint32_t));
+    const uint8_t *tab = *(const uint8_t *const *)(uintptr_t)(HORIZON_MAIN_MODULE_BASE + AC_UI_ARCHIVES_PTR_OFF);
+    const uint8_t *ents = tab ? *(const uint8_t *const *)(tab + 8) : NULL;
+    uint64_t count = tab ? *(const uint64_t *)(tab + 0x18) : 0;
+    for (uint64_t i = 0; ents && i < count && i < 256; i++) {
+        uint32_t entry_arc = 0;
+        memcpy(&entry_arc, ents + i * AC_UI_ARCHIVE_ENTRY_BYTES, sizeof(uint32_t));
+        if (entry_arc == arc) {
+            return strcmp((const char *)(ents + i * AC_UI_ARCHIVE_ENTRY_BYTES + 4), "hud2") == 0;
+        }
+    }
+    return false;
+}
+
+/* Handles custom resolution, 4K heaps, dynamic scene scaling, aspect ratio, draw distance & HUD (SVC 0xB3). */
 static void handle_resolution_aspect(Cpu *c, uint64_t pc) {
     AcResolutionConfig cfg;
     extra_aspect_query_config(&cfg);
-    int custom = cfg.is_custom ? 1 : 0;
+    g_extra_res_patch_active = 1;
     int32_t w = cfg.width;
     int32_t h = cfg.height;
-    int32_t l1w = custom ? w : AC_RES_DEFAULT_L1_WIDTH;
-    int32_t l1h = custom ? h : AC_RES_DEFAULT_L1_HEIGHT;
-    int32_t l2w = custom ? w : AC_RES_DEFAULT_L2_WIDTH;
+    int32_t sw = cfg.scene_w;
+    int32_t sh = cfg.scene_h;
+    int scene_custom = cfg.scene_custom ? 1 : 0;
+    int32_t l1w = scene_custom ? sw : AC_RES_DEFAULT_L1_WIDTH;
+    int32_t l1h = scene_custom ? sh : AC_RES_DEFAULT_L1_HEIGHT;
+    int32_t l2w = scene_custom ? sw : AC_RES_DEFAULT_L2_WIDTH;
     uint64_t at = pc - HORIZON_MAIN_MODULE_BASE;
-    int32_t tw = (w < AC_RES_DEFAULT_WIDTH) ? AC_RES_DEFAULT_WIDTH : w;
-    int32_t th = (w < AC_RES_DEFAULT_WIDTH) ? AC_RES_DEFAULT_HEIGHT : h;
+    int32_t tw = (w < AC_RES_MIN_OUTPUT_W) ? AC_RES_DEFAULT_WIDTH : w;
+    int32_t th = (w < AC_RES_MIN_OUTPUT_W) ? AC_RES_DEFAULT_HEIGHT : h;
     int docked = ((uint32_t)c->x[0] == (uint32_t)tw);
 
     switch (at) {
@@ -368,8 +407,8 @@ static void handle_resolution_aspect(Cpu *c, uint64_t pc) {
             c->x[9] = (uint32_t)th;
             return;
         case AC_SVC_B3_SITE_LEVEL_0:
-            c->x[1] = docked ? (uint32_t)w : (uint32_t)c->x[19];
-            c->x[2] = docked ? (uint32_t)h : (uint32_t)c->x[20];
+            c->x[1] = docked ? (uint32_t)sw : (uint32_t)c->x[19];
+            c->x[2] = docked ? (uint32_t)sh : (uint32_t)c->x[20];
             return;
         case AC_SVC_B3_SITE_LEVEL_1:
             c->x[20] = 630;
@@ -384,6 +423,20 @@ static void handle_resolution_aspect(Cpu *c, uint64_t pc) {
         case AC_SVC_B3_SITE_POOL_SIZE:
             c->x[8] = cfg.pool_size;
             return;
+        case AC_SVC_B3_SITE_BUFROOT:
+            c->x[1] = AC_RES_BUFROOT_BASE + cfg.gbuf_extra;
+            return;
+        case AC_SVC_B3_SITE_GBUF:
+            c->x[1] = AC_RES_GBUF_BASE + cfg.gbuf_extra;
+            return;
+        case AC_SVC_B3_SITE_MIP_BIAS: {
+            uint32_t bits = 0x3F800000u; /* 1.0f above 900p output */
+            if (tw <= AC_RES_DEFAULT_WIDTH) {
+                memcpy(&bits, (const void *)(uintptr_t)(c->x[9] + ((uint64_t)(uint32_t)c->x[8] << 2)), sizeof(uint32_t));
+            }
+            c->v[0] = bits;
+            return;
+        }
         case AC_SVC_B3_SITE_CAMERA_ASPECT: {
             float fw, fh;
             uint32_t bw = (uint32_t)c->v[3];
@@ -391,7 +444,7 @@ static void handle_resolution_aspect(Cpu *c, uint64_t pc) {
             memcpy(&fw, &bw, sizeof(float));
             memcpy(&fh, &bh, sizeof(float));
             float a = fw / fh;
-            if (custom && fw * 9.0f == fh * 16.0f) {
+            if ((cfg.is_custom || cfg.aspect_custom) && fw * 9.0f == fh * 16.0f) {
                 a = cfg.aspect;
             }
             uint32_t ba;
@@ -404,13 +457,38 @@ static void handle_resolution_aspect(Cpu *c, uint64_t pc) {
             int32_t ch = (int32_t)c->x[2];
             int32_t rx = 0;
             int32_t ry = 0;
-            if (custom && ch > 0 && (int64_t)cw * 9 == (int64_t)ch * 16 && cfg.aspect > AC_ASPECT_RATIO_16_9) {
+            if ((cfg.is_custom || cfg.aspect_custom) && ch > 0 && (int64_t)cw * 9 == (int64_t)ch * 16 &&
+                cfg.aspect > AC_ASPECT_RATIO_16_9) {
                 int32_t ww = (int32_t)((float)ch * cfg.aspect);
                 rx = (cw - ww) / 2;
                 c->x[1] = (uint32_t)ww;
             }
-            memcpy((void*)(uintptr_t)(c->x[8] + 0x260), &rx, sizeof(int32_t));
-            memcpy((void*)(uintptr_t)(c->x[8] + 0x264), &ry, sizeof(int32_t));
+            memcpy((void *)(uintptr_t)(c->x[8] + 0x260), &rx, sizeof(int32_t));
+            memcpy((void *)(uintptr_t)(c->x[8] + 0x264), &ry, sizeof(int32_t));
+            return;
+        }
+        case AC_SVC_B3_SITE_DR_DEF_0: extra_drawdist_store_bits(c, 0x0, (uint32_t)c->x[9]); return;
+        case AC_SVC_B3_SITE_DR_DEF_1: extra_drawdist_store_bits(c, 0x4, (uint32_t)c->x[9]); return;
+        case AC_SVC_B3_SITE_DR_DEF_2: extra_drawdist_store_bits(c, 0x8, (uint32_t)c->x[9]); return;
+        case AC_SVC_B3_SITE_DR_DEF_L: extra_drawdist_store_bits(c, 0xc, (uint32_t)c->x[9]); return;
+        case AC_SVC_B3_SITE_DR_MOD_0: extra_drawdist_store_bits(c, 0x0, (uint32_t)c->v[0]); return;
+        case AC_SVC_B3_SITE_DR_MOD_1: extra_drawdist_store_bits(c, 0x4, (uint32_t)c->v[0]); return;
+        case AC_SVC_B3_SITE_DR_MOD_2: extra_drawdist_store_bits(c, 0x8, (uint32_t)c->v[0]); return;
+        case AC_SVC_B3_SITE_DR_MOD_L: extra_drawdist_store_bits(c, 0xc, (uint32_t)c->v[0]); return;
+        case AC_SVC_B3_SITE_NOHUD_23: {
+            uint8_t vis = 0;
+            if (c->x[23]) {
+                memcpy(&vis, (const void *)(uintptr_t)(c->x[23] + 0xD1), sizeof(uint8_t));
+            }
+            c->x[8] = (extra_no_hud_active() && extra_hud_is_hud2((const uint8_t *)(uintptr_t)c->x[23])) ? 0u : vis;
+            return;
+        }
+        case AC_SVC_B3_SITE_NOHUD_22: {
+            uint64_t cnt = 0;
+            if (c->x[22]) {
+                memcpy(&cnt, (const void *)(uintptr_t)(c->x[22] + 0x160), sizeof(uint64_t));
+            }
+            c->x[8] = (extra_no_hud_active() && extra_hud_is_hud2((const uint8_t *)(uintptr_t)c->x[22])) ? 0ull : cnt;
             return;
         }
         default:
@@ -708,7 +786,7 @@ static void rt_svc_body(Cpu *c, uint32_t imm, uint64_t pc) {
                 break;
             case INFO_TOTAL_MEMORY_SIZE:
             case INFO_INITIAL_PROCESS_ID_RANGE:
-                result = MEMORY_BUDGET;
+                result = extra_memory_budget(); // [extra]
                 break;
             case INFO_USED_MEMORY_SIZE:
             case INFO_USER_EXCEPTION_CONTEXT_ADDRESS:

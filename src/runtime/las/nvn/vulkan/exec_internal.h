@@ -65,6 +65,8 @@ typedef struct Prog {
     bool vs_uses_vid;
     bool warmed, drawn;
     uint64_t ident;
+    uint64_t stage_hash[2]; // [extra]
+    uint64_t fs_short_hash; // [extra]
     VkPipeline vs_lib, fs_lib;
     _Atomic int state;
 } Prog;
@@ -203,6 +205,8 @@ typedef struct ExecState {
     bool prim_restart;
     uint32_t restart_index;
     uint64_t copy_row_stride, copy_image_stride;
+    uint64_t prog_gen; // [extra]
+    uint64_t pipe_gen; // [extra]
 } ExecState;
 
 extern ExecState st;
@@ -250,6 +254,8 @@ typedef struct StateFilter {
     VkRect2D sc;
     VkBuffer ib; VkDeviceSize io; VkIndexType it;
     VkBuffer vb[17]; VkDeviceSize vo[17];
+    VkPipelineLayout bound_layout; // [extra]
+    VkDescriptorSet bound_sets[2]; // [extra]
 } StateFilter;
 
 extern StateFilter ss;
@@ -270,6 +276,7 @@ extern uint32_t pass_ncolor, pass_samples, pass_w, pass_h;
 extern float pass_sx, pass_sy;
 extern float vp_sx, vp_sy, vp_ox, vp_oy;
 extern bool in_pass;
+extern uint64_t pass_gen; // [extra]
 extern int debug_pass_no;
 extern int prof;
 extern uint32_t prof_end_line[4096];
@@ -352,6 +359,8 @@ void snapshots_invalidate_reason(const char *reason, NvnTexture *t); // [extra]
 void feedback_clear(void); // [extra]
 NvnTexture *shader_texture_object(int stage, ShaderTexture *st_); // [extra]
 void resolve_feedback(Prog *pr); // [extra]
+extern int g_nfeedback; // [extra]
+VkImageView feedback_lookup(NvnTexture *t, int want_type, VkImageView cur); // [extra]
 void texture_info(int stage, ShaderInfo *si, int i, VkDescriptorImageInfo *out, float sc[2], uint32_t wh[2]); // [extra]
 VkDescriptorSet stage_set(Prog *p, VkDescriptorSetLayout layout, uint32_t set, int stage, ShaderInfo *si, const float *rscale_row0,
                          const float tint[8], uint32_t gx, uint32_t gy, uint32_t gz, const VkDescriptorImageInfo *pre_ii); // [extra]

@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <time.h>
 #include <string.h>
+#include <stdlib.h>
 
 #define EXTRA_TZ_NAME_LEN        32
 #define EXTRA_EINVAL_ERRNO       22
@@ -104,40 +105,74 @@ static inline void extra_plat_sleep_until_ns(uint64_t t) {
     }
 }
 
-/* Hybrid sleep for svc #0xB (SleepThread / yield).
- * Replaces the Windows-legacy polling loop that burned cores in sched_yield. */
+/* Blocking sleep for svc #0xB (SleepThread / yield).
+ * Horizon sleeps the calling thread in the scheduler rather than busy-spinning
+ * vDSO clock_gettime on sub-millisecond waits. */
 static inline void extra_svc_sleep_thread(int64_t ns) {
     if (ns <= 0) {
         sched_yield();
         return;
     }
-    struct timespec target_ts;
-    clock_gettime(CLOCK_MONOTONIC, &target_ts);
-    target_ts.tv_sec += (time_t)(ns / EXTRA_TIME_NS_PER_SEC);
-    target_ts.tv_nsec += (long)(ns % EXTRA_TIME_NS_PER_SEC);
-    if (target_ts.tv_nsec >= (long)EXTRA_TIME_NS_PER_SEC) {
-        target_ts.tv_sec += 1;
-        target_ts.tv_nsec -= (long)EXTRA_TIME_NS_PER_SEC;
+    struct timespec req;
+    req.tv_sec = (time_t)(ns / (int64_t)EXTRA_TIME_NS_PER_SEC);
+    req.tv_nsec = (long)(ns % (int64_t)EXTRA_TIME_NS_PER_SEC);
+    while (clock_nanosleep(CLOCK_MONOTONIC, 0, &req, &req) == EINTR) {}
+}
+
+#define EXTRA_SPIN_FAST_PASSES   16u
+#define EXTRA_SPIN_GAP_NS        20000ULL
+#define EXTRA_SPIN_HANDOFF_NS    50000ULL
+#define EXTRA_SPIN_SLEEP_NS      200000ULL
+#define EXTRA_SPIN_SLEEP_MAX_NS  250000ULL
+
+static inline uint64_t extra_monotonic_ns(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * EXTRA_TIME_NS_PER_SEC + (uint64_t)ts.tv_nsec;
+}
+
+static inline void extra_spin_gate(uint64_t head) {
+    extra_cpu_pause();
+    static int s_enabled = -1;
+    int on = __atomic_load_n(&s_enabled, __ATOMIC_RELAXED);
+    if (on < 0) {
+        const char *env = getenv("AC_SPIN");
+        on = !(env && env[0] == '0' && env[1] == '\0');
+        __atomic_store_n(&s_enabled, on, __ATOMIC_RELAXED);
+    }
+    if (!on) return;
+
+    static __thread uint64_t t_head, t_t0, t_last;
+    static __thread uint32_t t_hits;
+    if (head != t_head || t_hits < EXTRA_SPIN_FAST_PASSES) {
+        if (head != t_head) {
+            t_head = head;
+            t_hits = 1;
+            t_t0 = 0;
+            return;
+        }
+        t_hits++;
+        return;
     }
 
-    if ((uint64_t)ns > EXTRA_SPIN_WINDOW_NS) {
-        struct timespec sleep_ts = target_ts;
-        if (sleep_ts.tv_nsec >= (long)EXTRA_SPIN_WINDOW_NS) {
-            sleep_ts.tv_nsec -= (long)EXTRA_SPIN_WINDOW_NS;
-        } else {
-            sleep_ts.tv_sec -= 1;
-            sleep_ts.tv_nsec += ((long)EXTRA_TIME_NS_PER_SEC - (long)EXTRA_SPIN_WINDOW_NS);
-        }
-        while (clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &sleep_ts, NULL) == EINTR) {}
+    uint64_t now = extra_monotonic_ns();
+    if (!t_t0 || now - t_last > EXTRA_SPIN_GAP_NS) {
+        t_t0 = now;
+        t_last = now;
+        return;
     }
-
-    struct timespec now;
-    for (;;) {
-        clock_gettime(CLOCK_MONOTONIC, &now);
-        if (now.tv_sec > target_ts.tv_sec ||
-            (now.tv_sec == target_ts.tv_sec && now.tv_nsec >= target_ts.tv_nsec)) {
-            break;
-        }
-        extra_cpu_pause();
+    t_last = now;
+    uint64_t waited = now - t_t0;
+    if (waited >= EXTRA_SPIN_SLEEP_NS) {
+        uint64_t sleep_ns = waited >> 3;
+        if (sleep_ns > EXTRA_SPIN_SLEEP_MAX_NS) sleep_ns = EXTRA_SPIN_SLEEP_MAX_NS;
+        struct timespec req = {.tv_sec = 0, .tv_nsec = (long)sleep_ns};
+        while (clock_nanosleep(CLOCK_MONOTONIC, 0, &req, &req) == EINTR) {}
+        t_last = extra_monotonic_ns();
+        return;
+    }
+    if (waited >= EXTRA_SPIN_HANDOFF_NS) {
+        sched_yield();
+        t_last = extra_monotonic_ns();
     }
 }

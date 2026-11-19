@@ -54,6 +54,9 @@ VULKAN_LAYER = ('nvn/vulkan/device.c',
                 'nvn/vulkan/exec/commands/copy.c',
                 'nvn/vulkan/exec/commands/present.c',
                 'nvn/vulkan/exec/commands/draw.c',
+                'nvn/vulkan/exec/commands/draw_diag.c',
+                'nvn/vulkan/exec/commands/draw_geom.c',
+                'nvn/vulkan/exec/descriptors/feedback.c',
                 'nvn/vulkan/exec/descriptors/descriptors.c',
                 'nvn/vulkan/exec/submission/submission.c',
                 'nvn/vulkan/exec/submission/frame_stats.c',
@@ -67,13 +70,16 @@ def nvn_sources(backend):
     if backend not in BACKENDS:
         raise ValueError(f'unknown NVN backend {backend!r}')
     sources = [LAS/name for name in OBJECT_LAYER+BACKENDS[backend]]
-    # [extra] Runtime toggles overlay (src/additions/toggles/ac_toggles.c) rides in every
+    # [extra] Runtime toggles & POSIX sampler ride in every NVN build
     overlay = SRC/'additions'/'overlay'
     rpc = SRC/'additions'/'rpc'
     config = SRC/'additions'/'config'
+    sdk = SRC/'additions'/'sdk'
     sources.append(SRC/'additions'/'toggles'/'ac_toggles.c')
+    sources.append(SRC/'additions'/'perf'/'ac_lprof.c')
     if backend == 'vulkan':
         sources += sorted(IMGUI.glob('*.cpp'))
+        sources += sorted(sdk.rglob('*.cpp'))
         sources += [IMGUI/'backends'/'imgui_impl_sdl3.cpp', IMGUI/'backends'/'imgui_impl_vulkan.cpp',
                     overlay/'ac_overlay.cpp', overlay/'ac_vk_glue.cpp', overlay/'ac_hud.cpp',
                     overlay/'ac_menu.cpp', overlay/'ac_menu_tabs.cpp',

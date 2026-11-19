@@ -17,6 +17,24 @@
 0040FB14 611600D4 // svc #0xB3: w9 = height (was mov w9,#0x384)
 // main+0x40E0B0: the size of the render targets' memory pool (310 MB), larger for larger sizes
 0040E0B0 611600D4 // svc #0xB3: w8 = pool size (was mov w8,#0x13600000)
+// main+0x575A30 / 0x575C94: BUFFER ROOT (0xad60000) and GRAPHIC BUFFER (0x8f00000) heaps for >1080p outputs
+00575A30 611600D4 // svc #0xB3: w1 = BUFFER ROOT size (was mov w1,#0xad60000)
+00575C94 611600D4 // svc #0xB3: w1 = GRAPHIC BUFFER size (was mov w1,#0x8f00000)
+// main+0x9ED178: mipmap bias (1.0f above 900p output; original load [x9, x8, lsl #2] at <=900p)
+009ED178 611600D4 // svc #0xB3: s0 = mipmap bias (was ldr s0,[x9,x8,lsl #2])
+// main+0x551DF0..E44: model default DistRate0..LostDistRate stores (scaled live by AC_DRAW_DISTANCE)
+00551DF0 611600D4 // svc #0xB3: str w9,[x8] with draw-distance scaling
+00551E0C 611600D4 // svc #0xB3: str w9,[x8,#4] with draw-distance scaling
+00551E28 611600D4 // svc #0xB3: str w9,[x8,#8] with draw-distance scaling
+00551E44 611600D4 // svc #0xB3: str w9,[x8,#0xc] with draw-distance scaling
+// main+0x55F0EC..F1C4: named model DistRate0..LostDistRate stores (scaled live by AC_DRAW_DISTANCE)
+0055F0EC 611600D4 // svc #0xB3: str s0,[x8] with draw-distance scaling
+0055F134 611600D4 // svc #0xB3: str s0,[x8,#4] with draw-distance scaling
+0055F17C 611600D4 // svc #0xB3: str s0,[x8,#8] with draw-distance scaling
+0055F1C4 611600D4 // svc #0xB3: str s0,[x8,#0xc] with draw-distance scaling
+// main+0x9177EC / 0x915EA0: gameplay HUD (archive "hud2") visibility toggle (F12 / AC_HUD)
+009177EC 611600D4 // svc #0xB3: ldrb w8,[x23,#0xd1] -> 0 for hud2 when hidden
+00915EA0 611600D4 // svc #0xB3: ldr x8,[x22,#0x160] -> 0 for hud2 when hidden
 // main+0x40F184: dynamic resolution level 0 (w0 = the render target's width; w19/w20 = 1280/720)
 0040F184 611600D4 // svc #0xB3: w1, w2 = level 0 size (was cmp w0,#0x640)
 0040F188 1F2003D5 // nop (was mov w8,#0x384)

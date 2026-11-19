@@ -32,6 +32,30 @@ static void romfs_read(uint64_t offset,uint64_t length,uint64_t address) {
  if(!length) return;
  uint64_t t0=rt_ticks();
  guest_io_prepare(address,length);
+#if !defined(_WIN32) // [extra]
+ unsigned held=klock_release_all();
+ int served=extra_romfs_overlay_read((void*)romfs_file,offset,length,(void*)(uintptr_t)address);
+ if(!served) {
+  int fd=((ExtraHandle*)romfs_file)->file.fd;
+  uint64_t done=0;
+  uint8_t *dst=(uint8_t*)(uintptr_t)address;
+  while(done<length) {
+   ssize_t n=pread(fd,dst+done,(size_t)(length-done),(off_t)(offset+done));
+   if(n<0 && errno==EINTR) continue;
+   if(n<=0) {
+    klock_reacquire(held);
+    boundary("romfs-read-failed",&state,state.pc);
+   }
+   done+=(uint64_t)n;
+  }
+ }
+ klock_reacquire(held);
+ if(!served) {
+  uint64_t us=(rt_ticks()-t0)*10/192;
+  printf("ROMFS read offset=0x%llx size=0x%llx us=%llu thread=%u\n",(unsigned long long)offset,(unsigned long long)length,(unsigned long long)us,current_thread);
+ }
+ return;
+#endif // [extra]
  if (extra_romfs_overlay_read((void*)romfs_file, offset, length, (void*)(uintptr_t)address)) return; // [extra]
  LARGE_INTEGER position;position.QuadPart=(LONGLONG)offset;DWORD read=0;
  if(!SetFilePointerEx(romfs_file,position,NULL,FILE_BEGIN) || !ReadFile(romfs_file,(void*)(uintptr_t)address,(DWORD)length,&read,NULL) || read!=length)

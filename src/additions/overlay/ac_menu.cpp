@@ -28,7 +28,7 @@ extern "C" int extra_get_guest_voice_language(void);
 namespace {
 
 constexpr int kDefaultTargetFps = 60;
-constexpr int kSliderMaxFps = 240;
+constexpr int kSliderMaxFps = 360;
 constexpr int kHardMaxFps = 1000;
 constexpr float kMenuDefaultWidth = 540.0f;
 constexpr float kMenuDefaultHeight = 580.0f;
@@ -99,6 +99,21 @@ void render_top_banner(void) {
     ImGui::PopStyleColor();
 }
 
+bool eff_cfg_flag(int g_val, const char *env_a, const char *env_b, bool fallback) {
+    if (g_val >= 0) return g_val != 0;
+    return env_b ? (env_on(env_a, env_b) || fallback) : (getenv(env_a) ? env_on(env_a, nullptr) : fallback);
+}
+
+int eff_prompt_mode_val(void) {
+    if (g_extra_prompts_override >= 0) return g_extra_prompts_override;
+    const char *e = getenv("AC_PROMPTS");
+    if (!e || !*e) return EXTRA_PROMPT_MODE_AUTO;
+    if (!strcmp(e, "xbox") || !strcmp(e, "2")) return EXTRA_PROMPT_MODE_XBOX;
+    if (!strcmp(e, "switch") || !strcmp(e, "0")) return EXTRA_PROMPT_MODE_SWITCH;
+    if (!strcmp(e, "keyboard") || !strcmp(e, "1")) return EXTRA_PROMPT_MODE_KBM;
+    return EXTRA_PROMPT_MODE_AUTO;
+}
+
 void tab_performance(void) {
     ac_perf_hud_dashboard_section(kPresentModes[present_index()]);
 
@@ -107,26 +122,51 @@ void tab_performance(void) {
     if (ImGui::SliderInt("Limite de FPS", &cur_fps, 0, kSliderMaxFps,
                          cur_fps == 0 ? "Ilimitado (0)" : "%d FPS")) {
         g_extra_fps_override = std::clamp(cur_fps, 0, kHardMaxFps);
+        if (g_extra_fps_override == 0 || g_extra_fps_override > kDefaultTargetFps) {
+            g_extra_fps_unlocked = 1;
+        }
         ac_config_sync_save_hook();
     }
 
-    static const int kQuickFps[] = {0, 30, 60, 120, 144};
-    for (int i = 0; i < 5; i++) {
-        if (i > 0) {
-            ImGui::SameLine();
-        }
+    static const int kQuickFps[] = {0, 30, 60, 120, 144, 240};
+    for (int i = 0; i < 6; i++) {
+        if (i > 0) ImGui::SameLine();
         char label[24];
         snprintf(label, sizeof(label), kQuickFps[i] == 0 ? "Ilimitado" : "%d", kQuickFps[i]);
         if (ImGui::SmallButton(label)) {
             g_extra_fps_override = kQuickFps[i];
+            if (kQuickFps[i] == 0 || kQuickFps[i] > kDefaultTargetFps) {
+                g_extra_fps_unlocked = 1;
+            }
             ac_config_sync_save_hook();
         }
     }
 
+    bool unlocked = (g_extra_fps_unlocked >= 0) ? (g_extra_fps_unlocked != 0)
+                  : (env_on("AC_FPS_UNLOCKED", nullptr) || cur_fps == 0 || cur_fps > kDefaultTargetFps);
+    if (ImGui::Checkbox("Desbloquear teto 60 FPS (Dynamic-Unlocked) [Reinício]", &unlocked)) {
+        g_extra_fps_unlocked = unlocked ? 1 : 0;
+        ac_config_sync_save_hook();
+    }
+
     int pm = present_index();
+    bool vsync_on = (g_extra_vsync >= 0) ? (g_extra_vsync != 0) : (pm != 3);
+    if (ImGui::Checkbox("Ativar VSync", &vsync_on)) {
+        g_extra_vsync = vsync_on ? 1 : 0;
+        if (!vsync_on && pm == 1) {
+            g_extra_present_mode = kPresentModes[0];
+            g_extra_present_pending = 1;
+        } else if (vsync_on && pm == 3) {
+            g_extra_present_mode = kPresentModes[1];
+            g_extra_present_pending = 1;
+        }
+        ac_config_sync_save_hook();
+    }
+
     if (ImGui::Combo("Modo VSync (Swapchain)", &pm,
                      "Mailbox (Baixa Latência)\0FIFO (VSync Estrito)\0FIFO Relaxed (Adaptativo)\0Immediate (Sem Limite)\0")) {
         g_extra_present_mode = kPresentModes[pm];
+        g_extra_vsync = (pm != 3) ? 1 : 0;
         g_extra_present_pending = 1;
         ac_config_sync_save_hook();
     }
@@ -178,14 +218,11 @@ void tab_game_and_rpc(void) {
         EXTRA_PROMPT_MODE_SWITCH,
         EXTRA_PROMPT_MODE_KBM
     };
+    int cur_pm = eff_prompt_mode_val();
     int prompt_idx = 0;
-    if (g_extra_prompts_override == EXTRA_PROMPT_MODE_XBOX) {
-        prompt_idx = 1;
-    } else if (g_extra_prompts_override == EXTRA_PROMPT_MODE_SWITCH) {
-        prompt_idx = 2;
-    } else if (g_extra_prompts_override == EXTRA_PROMPT_MODE_KBM) {
-        prompt_idx = 3;
-    }
+    if (cur_pm == EXTRA_PROMPT_MODE_XBOX) prompt_idx = 1;
+    else if (cur_pm == EXTRA_PROMPT_MODE_SWITCH) prompt_idx = 2;
+    else if (cur_pm == EXTRA_PROMPT_MODE_KBM) prompt_idx = 3;
     if (ImGui::Combo("Prompts de Botões (HUD)", &prompt_idx, prompt_items)) {
         extra_set_prompts_override(kPromptModes[prompt_idx]);
         ac_config_sync_save_hook();
@@ -193,6 +230,28 @@ void tab_game_and_rpc(void) {
     bool confirm_a = extra_gamepad_confirm_a_enabled() != 0;
     if (ImGui::Checkbox("Confirmar com Botão A (Inverter B -> A no Controle)", &confirm_a)) {
         extra_set_gamepad_confirm_a(confirm_a ? 1 : 0);
+        ac_config_sync_save_hook();
+    }
+
+    ac_ui_section_header("MOTOR & COMPILAÇÃO [REINÍCIO]", "// SYS.ENG");
+    bool par = (g_extra_parallel_threads >= 0) ? (g_extra_parallel_threads != 0) : (!getenv("AC_PARALLEL") || env_on("AC_PARALLEL", nullptr));
+    if (ImGui::Checkbox("Execução Paralela de Threads [Reinício]", &par)) {
+        g_extra_parallel_threads = par ? 1 : 0;
+        ac_config_sync_save_hook();
+    }
+    bool bc7 = eff_cfg_flag(g_extra_bc7_precompute, "AC_BC7_PRECOMPUTE", "LARECOMP_BC7", false);
+    if (ImGui::Checkbox("Pré-computar Texturas BC7 [Reinício]", &bc7)) {
+        g_extra_bc7_precompute = bc7 ? 1 : 0;
+        ac_config_sync_save_hook();
+    }
+    bool fsh = (g_extra_force_shaders > 0);
+    if (ImGui::Checkbox("Forçar Recompilação de Shaders [Próx. Comp.]", &fsh)) {
+        g_extra_force_shaders = fsh ? 1 : 0;
+        ac_config_sync_save_hook();
+    }
+    bool vrb = eff_cfg_flag(g_extra_verbose_log, "AC_VERBOSE", nullptr, false);
+    if (ImGui::Checkbox("Log Detalhado do Motor (AC_VERBOSE) [Reinício]", &vrb)) {
+        g_extra_verbose_log = vrb ? 1 : 0;
         ac_config_sync_save_hook();
     }
 
@@ -204,20 +263,23 @@ void tab_diagnostics(void) {
     bool guard = eff_guard();
     if (ImGui::Checkbox("Vertex Guard (Clamp de Explosão de Vértices)", &guard)) {
         g_extra_vtx_guard = guard ? 1 : 0;
+        ac_config_sync_save_hook();
     }
     bool dbg = eff_debug();
     if (ImGui::Checkbox("Vertex Debug Logging (NaN/Inf em stderr)", &dbg)) {
         g_extra_vtx_debug = dbg ? 1 : 0;
-    }
-
-    bool async_env = env_on("AC_ASYNC_SUBMIT", nullptr);
-    bool async_on = async_env && !g_extra_async_kill;
-    ImGui::BeginDisabled(!async_env);
-    if (ImGui::Checkbox("Async Submit Worker (Desligamento instantâneo / One-way)", &async_on) && !async_on) {
-        extra_async_submit_kill();
         ac_config_sync_save_hook();
     }
-    ImGui::EndDisabled();
+
+    bool async_cfg = (g_extra_async_submit_cfg >= 0) ? (g_extra_async_submit_cfg != 0) : env_on("AC_ASYNC_SUBMIT", nullptr);
+    bool async_on = !g_extra_async_kill && async_cfg;
+    if (ImGui::Checkbox("Submissão Gráfica Assíncrona (Desligar ao vivo é one-way)", &async_on)) {
+        g_extra_async_submit_cfg = async_on ? 1 : 0;
+        if (!async_on && env_on("AC_ASYNC_SUBMIT", nullptr)) {
+            extra_async_submit_kill();
+        }
+        ac_config_sync_save_hook();
+    }
 
     ac_ui_section_header("ENGENHARIA REVERSA & CAPTURA", "// SYS.RE");
     bool reinfo = ac_reinfo_visible() != 0;
@@ -231,7 +293,7 @@ void tab_diagnostics(void) {
 
     ac_ui_section_header("ATALHOS DO TERMINAL", "// KEYS");
     ImGui::BulletText("Insert / L3+R3 (2s): Terminal | F8: RE Info | F9: Frame Dump");
-    ImGui::BulletText("LB / RB (Controle): Abas | F10: Mouse Capture | F11: Tela Cheia");
+    ImGui::BulletText("LB / RB (Controle): Abas | F10: Mouse | F11: Tela Cheia | F12: HUD");
 }
 
 } // namespace

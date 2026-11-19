@@ -251,6 +251,9 @@ Prog *get_program_ex(NvnProgram *np, ShaderKey *vkey, ShaderKey *fkey, bool from
     p->vkey = *vkey;
     p->fkey = *fkey;
     uint64_t sh[2] = {stage_hash(np, 0), stage_hash(np, 1)};
+    p->stage_hash[0] = sh[0]; // [extra]
+    p->stage_hash[1] = sh[1]; // [extra]
+    p->fs_short_hash = p->code[1] ? hmix(1469598103934665603ull, (const void *)(uintptr_t)(p->code[1] + 0x30), 0x200) : 0; // [extra]
     p->ident = hmix(hmix(hmix(0xcbf29ce484222325ull, sh, sizeof sh), vkey, sizeof *vkey), fkey, sizeof *fkey);
     pipe_warm_add(p);
     p->warmed = !from_draw;

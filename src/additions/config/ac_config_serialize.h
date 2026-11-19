@@ -35,9 +35,45 @@ inline void ApplyGameSection(const std::vector<IniEntry>& entries,
     if (boot) {
         const char* as = EnvStr("AC_ASYNC_SUBMIT");
         st.boot_async_env = (as && std::atoi(as) > 0);
-    } else if (const std::string* vas = FindKey(entries, "Game", "async_submit", false)) {
-        if (!ParseBoolVal(*vas, true) && st.boot_async_env && !g_extra_async_kill) {
+        if (as) {
+            g_extra_async_submit_cfg = (std::atoi(as) > 0) ? 1 : 0;
+        }
+    }
+    if (const std::string* vas = FindKey(entries, "Game", "async_submit", false)) {
+        bool want = ParseBoolVal(*vas, true);
+        if (!boot || !EnvNonEmpty("AC_ASYNC_SUBMIT")) {
+            g_extra_async_submit_cfg = want ? 1 : 0;
+        }
+        if (!boot && !want && st.boot_async_env && !g_extra_async_kill) {
             extra_async_submit_kill();
+        }
+    }
+    if (const std::string* vpt = FindKey(entries, "Game", "parallel_threads", false)) {
+        if (!boot || !EnvNonEmpty("AC_PARALLEL")) {
+            g_extra_parallel_threads = ParseBoolVal(*vpt, true) ? 1 : 0;
+        }
+    }
+    if (const std::string* vbc = FindKey(entries, "Game", "bc7_precompute", false)) {
+        if (!boot || (!EnvNonEmpty("AC_BC7_PRECOMPUTE") && !EnvNonEmpty("LARECOMP_BC7"))) {
+            g_extra_bc7_precompute = ParseBoolVal(*vbc, false) ? 1 : 0;
+        }
+    }
+    if (const std::string* vfs = FindKey(entries, "Game", "force_shaders", false)) {
+        g_extra_force_shaders = ParseBoolVal(*vfs, false) ? 1 : 0;
+    }
+    if (const std::string* vvl = FindKey(entries, "Game", "verbose_log", false)) {
+        if (!boot || !EnvNonEmpty("AC_VERBOSE")) {
+            g_extra_verbose_log = ParseBoolVal(*vvl, false) ? 1 : 0;
+        }
+    }
+    if (const std::string* vvg = FindKey(entries, "Game", "vtx_guard", false)) {
+        if (!boot || (!EnvNonEmpty("LARECOMP_GUARD_VTX") && !EnvNonEmpty("AC_GUARD_VTX"))) {
+            g_extra_vtx_guard = ParseBoolVal(*vvg, false) ? 1 : 0;
+        }
+    }
+    if (const std::string* vvd = FindKey(entries, "Game", "vtx_debug", false)) {
+        if (!boot || (!EnvNonEmpty("LARECOMP_DEBUG_VTX") && !EnvNonEmpty("AC_DEBUG_VTX"))) {
+            g_extra_vtx_debug = ParseBoolVal(*vvd, false) ? 1 : 0;
         }
     }
     if (const std::string* vif = FindKey(entries, "Game", "ignore_focus", false)) {
@@ -220,13 +256,34 @@ inline std::vector<IniEntry> BuildIniUpdates(const SyncState& st) {
     const float eff_lb = g_extra_lod_bias >= 0.0f ? g_extra_lod_bias : (EnvNonEmpty("LARECOMP_LOD_BIAS") ? static_cast<float>(std::atof(EnvStr("LARECOMP_LOD_BIAS"))) : 0.0f);
     const float eff_lm = g_extra_lod_min >= 0.0f ? g_extra_lod_min : (EnvNonEmpty("LARECOMP_LOD_MIN") ? static_cast<float>(std::atof(EnvStr("LARECOMP_LOD_MIN"))) : 0.0f);
     const bool eff_ns = (g_extra_no_shadow >= 0 ? g_extra_no_shadow != 0 : EnvNonEmpty("LARECOMP_NO_SHADOW"));
+    const char* eff_out_res = g_extra_output_res[0] ? g_extra_output_res
+                            : (EnvStr("AC_OUTPUT_RES") ? EnvStr("AC_OUTPUT_RES")
+                            : (EnvStr("AC_RESOLUTION") ? EnvStr("AC_RESOLUTION") : "1600x900"));
+    const char* eff_aspect = g_extra_aspect_str[0] ? g_extra_aspect_str
+                           : (EnvStr("AC_ASPECT") ? EnvStr("AC_ASPECT") : "auto");
+    const int eff_dd = g_extra_draw_distance >= EXTRA_DRAW_DISTANCE_MIN ? g_extra_draw_distance
+                     : (EnvNonEmpty("AC_DRAW_DISTANCE") ? std::clamp(std::atoi(EnvStr("AC_DRAW_DISTANCE")), EXTRA_DRAW_DISTANCE_MIN, EXTRA_DRAW_DISTANCE_MAX) : EXTRA_DRAW_DISTANCE_DEFAULT);
+    const int eff_ss = g_extra_shadow_scale >= EXTRA_SHADOW_SCALE_MIN ? g_extra_shadow_scale
+                     : (EnvNonEmpty("AC_SHADOW_SCALE") ? std::clamp(std::atoi(EnvStr("AC_SHADOW_SCALE")), EXTRA_SHADOW_SCALE_MIN, EXTRA_SHADOW_SCALE_MAX) : EXTRA_SHADOW_SCALE_DEFAULT);
+    const bool eff_nh = g_extra_no_hud >= 0 ? (g_extra_no_hud != 0)
+                      : (EnvNonEmpty("AC_HUD") && std::atoi(EnvStr("AC_HUD")) == 0);
+    const bool eff_ha_screen = g_extra_hud_area >= 0 ? (g_extra_hud_area == EXTRA_HUD_AREA_SCREEN)
+                             : (EnvNonEmpty("AC_HUD_AREA") && std::strcmp(EnvStr("AC_HUD_AREA"), "screen") == 0);
+
+    const bool eff_vs = g_extra_vsync >= 0 ? (g_extra_vsync != 0) : (std::strcmp(eff_pm, kPmImmediate) != 0);
+    const bool eff_fu = g_extra_fps_unlocked >= 0 ? (g_extra_fps_unlocked != 0)
+                      : (EnvNonEmpty("AC_FPS_UNLOCKED") ? ParseBoolVal(EnvStr("AC_FPS_UNLOCKED"), false)
+                                                        : (eff_fps == 0 || eff_fps > kDefaultFpsLimit));
 
     push("Graphics", "width", std::to_string(eff_w));
     push("Graphics", "height", std::to_string(eff_h));
+    push("Graphics", "output_res", eff_out_res);
+    push("Graphics", "aspect", eff_aspect);
     push("Graphics", "fullscreen", FormatBoolVal(eff_fs));
-    push("Graphics", "vsync", FormatBoolVal(std::strcmp(eff_pm, kPmImmediate) != 0));
+    push("Graphics", "vsync", FormatBoolVal(eff_vs));
     push("Graphics", "present_mode", eff_pm);
     push("Graphics", "fps_limit", std::to_string(eff_fps));
+    push("Graphics", "fps_unlocked", FormatBoolVal(eff_fu));
     push("Graphics", "render_scale", FormatCompactDouble(eff_rs));
     push("Graphics", "upscaler", ustr);
     push("Graphics", "antialias", g_settings.antialias == AA_SMAA ? "smaa" : "off");
@@ -236,6 +293,10 @@ inline std::vector<IniEntry> BuildIniUpdates(const SyncState& st) {
     push("Graphics", "lod_bias", FormatCompactDouble(eff_lb));
     push("Graphics", "lod_min", FormatCompactDouble(eff_lm));
     push("Graphics", "no_shadow", FormatBoolVal(eff_ns));
+    push("Graphics", "draw_distance", std::to_string(eff_dd));
+    push("Graphics", "shadow_scale", std::to_string(eff_ss));
+    push("Graphics", "hud_hidden", FormatBoolVal(eff_nh));
+    push("Graphics", "hud_area", eff_ha_screen ? "screen" : "16:9");
 
     const int eff_vol = g_extra_audio_volume >= 0 ? g_extra_audio_volume
                       : (EnvNonEmpty("AC_MASTER_VOLUME") ? std::atoi(EnvStr("AC_MASTER_VOLUME")) : kDefaultAudioVolume);
@@ -258,14 +319,28 @@ inline std::vector<IniEntry> BuildIniUpdates(const SyncState& st) {
 
     const int lidx = (g_settings.language >= 0 && g_settings.language < N_LANGUAGES) ? g_settings.language : 0;
     const char* vlang = g_settings.voice_language == 1 ? "ja" : (g_settings.voice_language == 2 ? "en" : "auto");
-    const char* pm_str = g_extra_prompts_override == EXTRA_PROMPT_MODE_XBOX ? "xbox"
-                       : g_extra_prompts_override == EXTRA_PROMPT_MODE_SWITCH ? "switch"
-                       : g_extra_prompts_override == EXTRA_PROMPT_MODE_KBM ? "keyboard" : "auto";
+    const int eff_pm_val = (g_extra_prompts_override >= 0) ? g_extra_prompts_override
+                         : (EnvNonEmpty("AC_PROMPTS") ? ParsePromptModeStr(EnvStr("AC_PROMPTS")) : EXTRA_PROMPT_MODE_AUTO);
+    const char* pm_str = eff_pm_val == EXTRA_PROMPT_MODE_XBOX ? "xbox"
+                       : eff_pm_val == EXTRA_PROMPT_MODE_SWITCH ? "switch"
+                       : eff_pm_val == EXTRA_PROMPT_MODE_KBM ? "keyboard" : "auto";
     const bool eff_igf = g_extra_ignore_focus >= 0 ? (g_extra_ignore_focus != 0) : EnvNonEmpty("AC_IGNORE_FOCUS");
     const bool eff_c30 = g_extra_cutscene_30fps >= 0 ? (g_extra_cutscene_30fps != 0)
                        : (EnvNonEmpty("AC_CUTSCENE_FPS") && std::atoi(EnvStr("AC_CUTSCENE_FPS")) == kCutsceneBaseFps);
     const bool eff_xca = g_extra_gamepad_confirm_a >= 0 ? (g_extra_gamepad_confirm_a != 0)
                        : (!EnvNonEmpty("AC_XBOX_CONFIRM_A") || EnvStr("AC_XBOX_CONFIRM_A")[0] != '0');
+    const bool eff_par = g_extra_parallel_threads >= 0 ? (g_extra_parallel_threads != 0)
+                       : (!EnvNonEmpty("AC_PARALLEL") || ParseBoolVal(EnvStr("AC_PARALLEL"), true));
+    const bool eff_bc7 = g_extra_bc7_precompute >= 0 ? (g_extra_bc7_precompute != 0)
+                       : (EnvNonEmpty("AC_BC7_PRECOMPUTE") || EnvNonEmpty("LARECOMP_BC7"));
+    const bool eff_fsh = g_extra_force_shaders > 0;
+    const bool eff_vrb = g_extra_verbose_log >= 0 ? (g_extra_verbose_log != 0) : EnvNonEmpty("AC_VERBOSE");
+    const bool eff_asb = g_extra_async_kill ? false
+                       : (g_extra_async_submit_cfg >= 0 ? (g_extra_async_submit_cfg != 0) : st.boot_async_env);
+    const bool eff_vg = g_extra_vtx_guard >= 0 ? (g_extra_vtx_guard != 0)
+                      : (EnvNonEmpty("LARECOMP_GUARD_VTX") || EnvNonEmpty("AC_GUARD_VTX"));
+    const bool eff_vd = g_extra_vtx_debug >= 0 ? (g_extra_vtx_debug != 0)
+                      : (EnvNonEmpty("LARECOMP_DEBUG_VTX") || EnvNonEmpty("AC_DEBUG_VTX"));
 
     push("Game", "language", g_language_codes[lidx]);
     push("Game", "voice_language", vlang);
@@ -273,9 +348,13 @@ inline std::vector<IniEntry> BuildIniUpdates(const SyncState& st) {
     push("Game", "xbox_confirm_a", FormatBoolVal(eff_xca));
     push("Game", "ignore_focus", FormatBoolVal(eff_igf));
     push("Game", "cutscene_30fps", FormatBoolVal(eff_c30));
-    if (st.boot_async_env || g_extra_async_kill) {
-        push("Game", "async_submit", FormatBoolVal(!g_extra_async_kill));
-    }
+    push("Game", "parallel_threads", FormatBoolVal(eff_par));
+    push("Game", "bc7_precompute", FormatBoolVal(eff_bc7));
+    push("Game", "force_shaders", FormatBoolVal(eff_fsh));
+    push("Game", "verbose_log", FormatBoolVal(eff_vrb));
+    push("Game", "async_submit", FormatBoolVal(eff_asb));
+    push("Game", "vtx_guard", FormatBoolVal(eff_vg));
+    push("Game", "vtx_debug", FormatBoolVal(eff_vd));
 
     AcPerfHudConfig hud{};
     ac_perf_hud_get_config(&hud);
